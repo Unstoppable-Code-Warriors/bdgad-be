@@ -20,12 +20,32 @@ export class StaffService {
   ) {}
 
   async handleUploadInfo(files: UploadedFiles) {
-    const storePath =
+    // Use absolute path resolution to avoid path issues
+    const configuredStorePath =
       this.configService.get<string>('STORE_PATH') || './uploads';
+    const storePath = path.isAbsolute(configuredStorePath)
+      ? configuredStorePath
+      : path.resolve(process.cwd(), configuredStorePath);
+
+    this.logger.log(`Using storage path: ${storePath}`);
 
     // Ensure the storage directory exists
-    if (!fs.existsSync(storePath)) {
-      fs.mkdirSync(storePath, { recursive: true });
+    try {
+      if (!fs.existsSync(storePath)) {
+        this.logger.log('Storage directory does not exist, creating it');
+        fs.mkdirSync(storePath, { recursive: true });
+        this.logger.log('Storage directory created successfully');
+      }
+
+      // Verify directory is writable
+      fs.accessSync(storePath, fs.constants.W_OK);
+      this.logger.log('Storage directory is writable');
+    } catch (error) {
+      this.logger.error(
+        `Failed to create or access storage directory: ${storePath}`,
+        error,
+      );
+      throw new Error(`Storage directory is not accessible: ${error.message}`);
     }
 
     // Process Medical Test Requisition file
@@ -40,10 +60,20 @@ export class StaffService {
       medicalTestRequisitionFilename,
     );
 
-    fs.writeFileSync(
-      medicalTestRequisitionPath,
-      files.medicalTestRequisition.buffer,
-    );
+    try {
+      fs.writeFileSync(
+        medicalTestRequisitionPath,
+        files.medicalTestRequisition.buffer,
+      );
+      this.logger.log(
+        `Medical test requisition file saved: ${medicalTestRequisitionFilename}`,
+      );
+    } catch (error) {
+      this.logger.error('Failed to save medical test requisition file', error);
+      throw new Error(
+        `Failed to save medical test requisition file: ${error.message}`,
+      );
+    }
 
     // Process Sales Invoice file
     const salesInvoiceSuffix =
@@ -52,7 +82,13 @@ export class StaffService {
     const salesInvoiceFilename = `sales-invoice-${salesInvoiceSuffix}${salesInvoiceExt}`;
     const salesInvoicePath = path.join(storePath, salesInvoiceFilename);
 
-    fs.writeFileSync(salesInvoicePath, files.salesInvoice.buffer);
+    try {
+      fs.writeFileSync(salesInvoicePath, files.salesInvoice.buffer);
+      this.logger.log(`Sales invoice file saved: ${salesInvoiceFilename}`);
+    } catch (error) {
+      this.logger.error('Failed to save sales invoice file', error);
+      throw new Error(`Failed to save sales invoice file: ${error.message}`);
+    }
 
     const savedFiles = {
       medicalTestRequisition: {
@@ -82,17 +118,46 @@ export class StaffService {
   async handleMedicalTestRequisitionUpload(file: Express.Multer.File) {
     this.logger.log('Starting Medical Test Requisition upload process');
 
-    const storePath =
+    // Use absolute path resolution to avoid path issues
+    const configuredStorePath =
       this.configService.get<string>('STORE_PATH') || './uploads';
+    const storePath = path.isAbsolute(configuredStorePath)
+      ? configuredStorePath
+      : path.resolve(process.cwd(), configuredStorePath);
+
     this.logger.log(`Using storage path: ${storePath}`);
+    this.logger.log(`Current working directory: ${process.cwd()}`);
+    this.logger.log(`Configured store path: ${configuredStorePath}`);
+
+    // Validate file input
+    if (!file || !file.buffer) {
+      this.logger.error('Invalid file: no file or buffer provided');
+      throw new Error('Invalid file provided');
+    }
+
+    this.logger.log(
+      `File details - Name: ${file.originalname}, Size: ${file.size}, Type: ${file.mimetype}`,
+    );
 
     // Ensure the storage directory exists
-    if (!fs.existsSync(storePath)) {
-      this.logger.log('Storage directory does not exist, creating it');
-      fs.mkdirSync(storePath, { recursive: true });
-      this.logger.log('Storage directory created successfully');
-    } else {
-      this.logger.log('Storage directory already exists');
+    try {
+      if (!fs.existsSync(storePath)) {
+        this.logger.log('Storage directory does not exist, creating it');
+        fs.mkdirSync(storePath, { recursive: true });
+        this.logger.log('Storage directory created successfully');
+      } else {
+        this.logger.log('Storage directory already exists');
+      }
+
+      // Verify directory is writable
+      fs.accessSync(storePath, fs.constants.W_OK);
+      this.logger.log('Storage directory is writable');
+    } catch (error) {
+      this.logger.error(
+        `Failed to create or access storage directory: ${storePath}`,
+        error,
+      );
+      throw new Error(`Storage directory is not accessible: ${error.message}`);
     }
 
     // Process Medical Test Requisition file
@@ -107,13 +172,35 @@ export class StaffService {
 
     this.logger.log(`Saving file as: ${medicalTestRequisitionFilename}`);
     this.logger.log(`Full file path: ${medicalTestRequisitionPath}`);
+    this.logger.log(`File buffer size: ${file.buffer.length} bytes`);
 
     try {
       fs.writeFileSync(medicalTestRequisitionPath, file.buffer);
       this.logger.log('File saved successfully to storage');
+
+      // Verify file was actually written
+      if (fs.existsSync(medicalTestRequisitionPath)) {
+        const savedFileStats = fs.statSync(medicalTestRequisitionPath);
+        this.logger.log(`File verified - Size: ${savedFileStats.size} bytes`);
+
+        if (savedFileStats.size !== file.buffer.length) {
+          this.logger.warn(
+            `File size mismatch - Expected: ${file.buffer.length}, Actual: ${savedFileStats.size}`,
+          );
+        }
+      } else {
+        this.logger.error(
+          'File was not created despite successful write operation',
+        );
+        throw new Error(
+          'File verification failed - file does not exist after write',
+        );
+      }
     } catch (error) {
       this.logger.error('Failed to save file to storage', error);
-      throw new Error('Failed to save file');
+      this.logger.error(`Error details: ${error.message}`);
+      this.logger.error(`Error code: ${error.code}`);
+      throw new Error(`Failed to save file: ${error.message}`);
     }
 
     const savedFile = {

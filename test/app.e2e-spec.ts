@@ -4,7 +4,7 @@ import * as request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
-describe('AppController (e2e)', () => {
+describe('Staff API (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
@@ -16,10 +16,13 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('/staff/upload-medical-test-requisition (POST) - should require file', () => {
     return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+      .post('/staff/upload-medical-test-requisition')
+      .expect(400);
+  });
+
+  it('/staff/upload-info (POST) - should require files', () => {
+    return request(app.getHttpServer()).post('/staff/upload-info').expect(400);
   });
 });

@@ -41,29 +41,19 @@ jobs:
     needs: build
 
     steps:
-      - name: Add SSH key
-        uses: webfactory/ssh-agent@v0.5.3
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
       - name: Deploy to Server
-        env:
-          HOST: ${{ secrets.VM_HOST }}
-          USER: ${{ secrets.VM_USER }}
-          ENV_PATH: ${{ secrets.ENV_PATH }}
-          SERVICE_NAME: ${{ vars.SERVICE_NAME }}
-          SERVICE_PORT: ${{ vars.SERVICE_PORT }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          ssh -o StrictHostKeyChecking=no $USER@$HOST << 'EOF'
-            sudo docker pull $DOCKER_USERNAME/${SERVICE_NAME}:latest
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/${{ vars.SERVICE_NAME }}:latest
 
-            sudo docker stop $SERVICE_NAME || true
-            sudo docker rm $SERVICE_NAME || true
+            sudo docker stop ${{ vars.SERVICE_NAME }} || true
+            sudo docker rm ${{ vars.SERVICE_NAME }} || true
             sudo docker system prune -f
 
-            sudo docker run -d --name $SERVICE_NAME \
-              --env-file $ENV_PATH \
-              -p $SERVICE_PORT:$SERVICE_PORT $DOCKER_USERNAME/${SERVICE_NAME}:latest
-          EOF
+            sudo docker run -d --name ${{ vars.SERVICE_NAME }} \
+              --env-file ${{ secrets.ENV_PATH }} \
+              -p ${{ vars.SERVICE_PORT }}:${{ vars.SERVICE_PORT }} ${{ secrets.DOCKER_USERNAME }}/${{ vars.SERVICE_NAME }}:latest

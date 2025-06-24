@@ -1,9 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
-import { LabSessionWithFastqResponseDto } from './dto/lab-session-response.dto';
+import {
+  LabSessionWithFastqResponseDto,
+  LabSessionWithAllFastqResponseDto,
+} from './dto/lab-session-response.dto';
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
@@ -160,5 +163,71 @@ export class LabTestService {
       limit,
       total,
     );
+  }
+
+  async findSessionById(
+    id: number,
+  ): Promise<LabSessionWithAllFastqResponseDto> {
+    // Find the session with related data using a single query with joins
+    const session = await this.labSessionRepository.findOne({
+      where: { id },
+      relations: {
+        patient: true,
+        doctor: true,
+        fastqFiles: {
+          creator: true,
+        },
+      },
+      select: {
+        id: true,
+        labcode: true,
+        barcode: true,
+        requestDate: true,
+        createdAt: true,
+        metadata: true,
+        patient: {
+          id: true,
+          fullName: true,
+          dateOfBirth: true,
+          phone: true,
+          address: true,
+          personalId: true,
+          healthInsuranceCode: true,
+          createdAt: true,
+        },
+        doctor: {
+          id: true,
+          name: true,
+          email: true,
+          metadata: true,
+        },
+        fastqFiles: {
+          id: true,
+          filePath: true,
+          createdAt: true,
+          status: true,
+          redoReason: true,
+          creator: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      order: {
+        fastqFiles: {
+          createdAt: 'DESC',
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Session with ID ${id} not found`);
+    }
+
+    return {
+      ...session,
+      fastqFiles: session.fastqFiles || [],
+    };
   }
 }

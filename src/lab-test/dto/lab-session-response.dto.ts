@@ -43,3 +43,7 @@ export class LabSessionResponseDto {
 export class LabSessionWithFastqResponseDto extends LabSessionResponseDto {
   latestFastqFile: FastqFileResponseDto | null;
 }
+
+export class LabSessionWithAllFastqResponseDto extends LabSessionResponseDto {
+  fastqFiles: FastqFileResponseDto[];
+}

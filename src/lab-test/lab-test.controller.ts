@@ -4,9 +4,14 @@ import {
   Query,
   UsePipes,
   ValidationPipe,
+  Param,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { LabTestService } from './lab-test.service';
-import { LabSessionWithFastqResponseDto } from './dto/lab-session-response.dto';
+import {
+  LabSessionWithFastqResponseDto,
+  LabSessionWithAllFastqResponseDto,
+} from './dto/lab-session-response.dto';
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
@@ -22,5 +27,12 @@ export class LabTestController {
     @Query() query: PaginationQueryDto,
   ): Promise<PaginatedResponseDto<LabSessionWithFastqResponseDto>> {
     return this.labTestService.findAllSession(query);
+  }
+
+  @Get('sessions/:id')
+  async findSessionById(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<LabSessionWithAllFastqResponseDto> {
+    return this.labTestService.findSessionById(id);
   }
 }

@@ -5,6 +5,7 @@ import { DbModule } from './db/db.module';
 import * as Joi from 'joi';
 import { Env } from './utils/constant';
 import { StaffModule } from './staff/staff.module';
+import { LabTestModule } from './lab-test/lab-test.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { StaffModule } from './staff/staff.module';
     }),
     StaffModule,
     DbModule,
+    LabTestModule,
   ],
   controllers: [],
   providers: [],

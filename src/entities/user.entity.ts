@@ -9,6 +9,7 @@ import {
   JoinTable,
 } from 'typeorm';
 import { Role } from './role.entity';
+import { PasswordResetToken } from './password-reset-token.entity';
 
 @Entity('users')
 export class User {
@@ -23,12 +24,6 @@ export class User {
 
   @Column()
   name: string;
-
-  @Column()
-  phone: string;
-
-  @Column()
-  address: string;
 
   @Column({
     type: 'jsonb',
@@ -55,4 +50,10 @@ export class User {
     inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
   })
   roles: Role[];
+
+  @OneToMany(
+    () => PasswordResetToken,
+    (passwordResetToken) => passwordResetToken.user,
+  )
+  passwordResetTokens: PasswordResetToken[];
 }

@@ -52,9 +52,7 @@ export class EtlResult {
   @Column({ name: 'comment_by' })
   commentBy: number;
 
-  @ManyToOne(() => LabSession, (labSession) => labSession.etlResults, {
-    cascade: true,
-  })
+  @ManyToOne(() => LabSession, (labSession) => labSession.etlResults)
   @JoinColumn({ name: 'session_id' })
   session: LabSession;
 

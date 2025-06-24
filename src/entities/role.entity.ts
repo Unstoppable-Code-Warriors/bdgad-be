@@ -35,8 +35,6 @@ export class Role {
   })
   updatedAt: Date;
 
-  @ManyToMany(() => User, (user) => user.roles, {
-    cascade: true,
-  })
+  @ManyToMany(() => User, (user) => user.roles)
   users: User[];
 }

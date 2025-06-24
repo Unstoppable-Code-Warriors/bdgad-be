@@ -45,9 +45,7 @@ export class LabSession {
   @Column({ name: 'doctor_id' })
   doctorId: number;
 
-  @ManyToOne(() => Patient, (patient) => patient.labSessions, {
-    cascade: true,
-  })
+  @ManyToOne(() => Patient, (patient) => patient.labSessions)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 

@@ -36,9 +36,7 @@ export class PasswordResetToken {
   })
   createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.passwordResetTokens, {
-    cascade: true,
-  })
+  @ManyToOne(() => User, (user) => user.passwordResetTokens)
   @JoinColumn({ name: 'user_id' })
   user: User;
 }

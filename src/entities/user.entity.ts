@@ -25,6 +25,9 @@ export class User {
   @Column()
   name: string;
 
+  @Column({ nullable: true, default: 'active' })
+  status: string;
+
   @Column({
     type: 'jsonb',
     default: {},

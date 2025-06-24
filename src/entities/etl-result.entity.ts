@@ -52,15 +52,21 @@ export class EtlResult {
   @Column({ name: 'comment_by' })
   commentBy: number;
 
-  @ManyToOne(() => LabSession, (labSession) => labSession.etlResults)
+  @ManyToOne(() => LabSession, (labSession) => labSession.etlResults, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'session_id' })
   session: LabSession;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'reject_by' })
   rejector: User;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'comment_by' })
   commenter: User;
 }

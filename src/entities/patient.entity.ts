@@ -36,6 +36,8 @@ export class Patient {
   })
   createdAt: Date;
 
-  @OneToMany(() => LabSession, (labSession) => labSession.patient)
+  @OneToMany(() => LabSession, (labSession) => labSession.patient, {
+    cascade: true,
+  })
   labSessions: LabSession[];
 }

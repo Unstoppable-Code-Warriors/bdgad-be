@@ -41,11 +41,15 @@ export class PatientFile {
   })
   uploadedAt: Date;
 
-  @ManyToOne(() => LabSession, (labSession) => labSession.patientFiles)
+  @ManyToOne(() => LabSession, (labSession) => labSession.patientFiles, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'session_id' })
   session: LabSession;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'uploaded_by' })
   uploader: User;
 }

@@ -43,7 +43,9 @@ export class User {
   })
   updatedAt: Date;
 
-  @ManyToMany(() => Role, (role) => role.users)
+  @ManyToMany(() => Role, (role) => role.users, {
+    cascade: true,
+  })
   @JoinTable({
     name: 'user_roles',
     joinColumn: { name: 'user_id', referencedColumnName: 'id' },
@@ -54,6 +56,9 @@ export class User {
   @OneToMany(
     () => PasswordResetToken,
     (passwordResetToken) => passwordResetToken.user,
+    {
+      cascade: true,
+    },
   )
   passwordResetTokens: PasswordResetToken[];
 }

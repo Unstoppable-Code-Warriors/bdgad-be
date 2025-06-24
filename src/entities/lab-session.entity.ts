@@ -45,20 +45,30 @@ export class LabSession {
   @Column({ name: 'doctor_id' })
   doctorId: number;
 
-  @ManyToOne(() => Patient, (patient) => patient.labSessions)
+  @ManyToOne(() => Patient, (patient) => patient.labSessions, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'doctor_id' })
   doctor: User;
 
-  @OneToMany(() => PatientFile, (patientFile) => patientFile.session)
+  @OneToMany(() => PatientFile, (patientFile) => patientFile.session, {
+    cascade: true,
+  })
   patientFiles: PatientFile[];
 
-  @OneToMany(() => FastqFile, (fastqFile) => fastqFile.session)
+  @OneToMany(() => FastqFile, (fastqFile) => fastqFile.session, {
+    cascade: true,
+  })
   fastqFiles: FastqFile[];
 
-  @OneToMany(() => EtlResult, (etlResult) => etlResult.session)
+  @OneToMany(() => EtlResult, (etlResult) => etlResult.session, {
+    cascade: true,
+  })
   etlResults: EtlResult[];
 }

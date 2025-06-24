@@ -30,7 +30,9 @@ export class MasterFile {
   })
   uploadedAt: Date;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
   @JoinColumn({ name: 'uploaded_by' })
   uploader: User;
 }

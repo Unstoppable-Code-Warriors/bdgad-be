@@ -187,12 +187,12 @@ export class LabTestService {
     );
   }
 
-  async findSessionByPersonalId(
-    personalId: string,
+  async findSessionById(
+    id: number,
   ): Promise<LabSessionWithAllFastqResponseDto> {
     // Find the session with related data using a single query with joins
     const session = await this.labSessionRepository.findOne({
-      where: { patient: { personalId } },
+      where: { id },
       relations: {
         patient: true,
         doctor: true,
@@ -244,9 +244,7 @@ export class LabTestService {
     });
 
     if (!session) {
-      throw new NotFoundException(
-        `Session with personalId ${personalId} not found`,
-      );
+      throw new NotFoundException(`Session with id ${id} not found`);
     }
 
     return {

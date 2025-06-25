@@ -46,7 +46,7 @@ export class FastqFile {
   @Column({ name: 'redo_reason', nullable: true })
   redoReason: string;
 
-  @Column({ name: 'reject_by' })
+  @Column({ name: 'reject_by', nullable: true })
   rejectBy: number;
 
   @ManyToOne(() => LabSession, (labSession) => labSession.fastqFiles)

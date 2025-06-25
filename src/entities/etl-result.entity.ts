@@ -43,13 +43,13 @@ export class EtlResult {
   @Column({ name: 'redo_reason', nullable: true })
   redoReason: string;
 
-  @Column({ name: 'reject_by' })
+  @Column({ name: 'reject_by', nullable: true })
   rejectBy: number;
 
   @Column({ nullable: true })
   comment: string;
 
-  @Column({ name: 'comment_by' })
+  @Column({ name: 'comment_by', nullable: true })
   commentBy: number;
 
   @ManyToOne(() => LabSession, (labSession) => labSession.etlResults)

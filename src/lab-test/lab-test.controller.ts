@@ -29,10 +29,10 @@ export class LabTestController {
     return this.labTestService.findAllSession(query);
   }
 
-  @Get('sessions/:id')
-  async findSessionById(
-    @Param('id', ParseIntPipe) id: number,
+  @Get('sessions/:personalId')
+  async findSessionByPersonalId(
+    @Param('personalId') personalId: string,
   ): Promise<LabSessionWithAllFastqResponseDto> {
-    return this.labTestService.findSessionById(id);
+    return this.labTestService.findSessionByPersonalId(personalId);
   }
 }

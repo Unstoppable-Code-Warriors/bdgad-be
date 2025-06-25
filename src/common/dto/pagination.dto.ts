@@ -7,6 +7,7 @@ import {
   IsString,
   IsIn,
   IsObject,
+  IsDateString,
 } from 'class-validator';
 
 export class PaginationMetaDto {
@@ -85,6 +86,14 @@ export class PaginationQueryDto {
     return value || {};
   })
   filter?: Record<string, any>;
+
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
 
   constructor() {
     this.page = this.page && this.page > 0 ? this.page : 1;

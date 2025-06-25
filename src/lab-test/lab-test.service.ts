@@ -24,7 +24,16 @@ export class LabTestService {
   async findAllSession(
     query: PaginationQueryDto,
   ): Promise<PaginatedResponseDto<LabSessionWithFastqResponseDto>> {
-    const { search, filter, sortBy, sortOrder, page = 1, limit = 10 } = query;
+    const {
+      search,
+      filter,
+      sortBy,
+      sortOrder,
+      page = 1,
+      limit = 10,
+      dateFrom,
+      dateTo,
+    } = query;
 
     // Create query builder for more complex queries
     const queryBuilder: SelectQueryBuilder<LabSession> =
@@ -60,6 +69,19 @@ export class LabTestService {
         '(LOWER(patient.personalId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
         { search: searchTerm },
       );
+    }
+
+    // Apply date range filtering on requestDate
+    if (dateFrom) {
+      queryBuilder.andWhere('labSession.requestDate >= :dateFrom', {
+        dateFrom: new Date(dateFrom),
+      });
+    }
+
+    if (dateTo) {
+      queryBuilder.andWhere('labSession.requestDate <= :dateTo', {
+        dateTo: new Date(dateTo),
+      });
     }
 
     // Apply filter functionality (filter by status from FastqFile)

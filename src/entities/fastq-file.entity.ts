@@ -13,8 +13,7 @@ export enum FastqFileStatus {
   PENDING = 'pending',
   PROCESSING = 'processing',
   COMPLETED = 'completed',
-  FAILED = 'failed',
-  REJECTED = 'rejected',
+  REDO = 'redo',
 }
 
 @Entity('fastq_files')

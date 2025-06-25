@@ -10,10 +10,10 @@ import { LabSession } from './lab-session.entity';
 import { User } from './user.entity';
 
 export enum FastqFileStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  REDO = 'redo',
+  UPLOADED = 'uploaded',
+  WAIT_FOR_APPROVAL = 'wait_for_approval',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
 }
 
 @Entity('fastq_files')
@@ -24,7 +24,7 @@ export class FastqFile {
   @Column({ name: 'session_id' })
   sessionId: number;
 
-  @Column({ name: 'file_path', type: 'text' })
+  @Column({ name: 'file_path', type: 'text', nullable: true })
   filePath: string;
 
   @CreateDateColumn({
@@ -39,7 +39,8 @@ export class FastqFile {
   @Column({
     type: 'enum',
     enum: FastqFileStatus,
-    default: FastqFileStatus.PENDING,
+    nullable: true,
+    default: null,
   })
   status: FastqFileStatus;
 

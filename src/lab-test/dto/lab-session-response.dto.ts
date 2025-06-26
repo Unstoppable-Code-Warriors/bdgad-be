@@ -27,6 +27,11 @@ export class FastqFileResponseDto {
     name: string;
     email: string;
   };
+  rejector?: {
+    id: number;
+    name: string;
+    email: string;
+  };
 }
 
 export class LabSessionResponseDto {

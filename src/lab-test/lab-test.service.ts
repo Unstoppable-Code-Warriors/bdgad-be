@@ -48,6 +48,13 @@ export class LabTestService {
         name: fastqFile.creator.name,
         email: fastqFile.creator.email,
       },
+      rejector: fastqFile.rejector
+        ? {
+            id: fastqFile.rejector.id,
+            name: fastqFile.rejector.name,
+            email: fastqFile.rejector.email,
+          }
+        : undefined,
     };
   }
 
@@ -207,6 +214,7 @@ export class LabTestService {
           where: { sessionId: session.id },
           relations: {
             creator: true,
+            rejector: true,
           },
           select: {
             id: true,
@@ -215,6 +223,11 @@ export class LabTestService {
             status: true,
             redoReason: true,
             creator: {
+              id: true,
+              name: true,
+              email: true,
+            },
+            rejector: {
               id: true,
               name: true,
               email: true,
@@ -253,6 +266,7 @@ export class LabTestService {
         doctor: true,
         fastqFiles: {
           creator: true,
+          rejector: true,
         },
       },
       select: {
@@ -285,6 +299,11 @@ export class LabTestService {
           status: true,
           redoReason: true,
           creator: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          rejector: {
             id: true,
             name: true,
             email: true,

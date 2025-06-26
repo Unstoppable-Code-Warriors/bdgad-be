@@ -189,7 +189,7 @@ export class AnalysisService {
                 FastqFileStatus.APPROVED,
               ]),
             },
-            relations: { creator: true },
+            relations: { creator: true, rejector: true },
             select: {
               id: true,
               filePath: true,
@@ -197,6 +197,7 @@ export class AnalysisService {
               status: true,
               redoReason: true,
               creator: { id: true, name: true, email: true },
+              rejector: { id: true, name: true, email: true },
             },
             order: { createdAt: 'DESC' },
           }),
@@ -260,6 +261,7 @@ export class AnalysisService {
         doctor: true,
         fastqFiles: {
           creator: true,
+          rejector: true,
         },
         etlResults: {
           rejector: true,
@@ -296,6 +298,11 @@ export class AnalysisService {
           status: true,
           redoReason: true,
           creator: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          rejector: {
             id: true,
             name: true,
             email: true,

@@ -42,13 +42,13 @@ export class FastqFile {
     nullable: true,
     default: null,
   })
-  status: FastqFileStatus;
+  status: FastqFileStatus | null;
 
   @Column({ name: 'redo_reason', nullable: true })
-  redoReason: string;
+  redoReason: string | null;
 
   @Column({ name: 'reject_by', nullable: true })
-  rejectBy: number;
+  rejectBy: number | null;
 
   @ManyToOne(() => LabSession, (labSession) => labSession.fastqFiles)
   @JoinColumn({ name: 'session_id' })

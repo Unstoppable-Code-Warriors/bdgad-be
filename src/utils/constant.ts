@@ -17,6 +17,7 @@ export enum Env {
 // S3 Bucket Constants
 export enum S3Bucket {
   FASTQ_FILE = 'fastq-file',
+  ANALYSIS_RESULTS = 'analysis-results',
 }
 
 export enum Role {

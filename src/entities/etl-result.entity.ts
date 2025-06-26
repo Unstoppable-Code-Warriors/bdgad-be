@@ -9,11 +9,12 @@ import { LabSession } from './lab-session.entity';
 import { User } from './user.entity';
 
 export enum EtlResultStatus {
-  PENDING = 'pending',
   PROCESSING = 'processing',
   COMPLETED = 'completed',
   FAILED = 'failed',
+  WAIT_FOR_APPROVAL = 'wait_for_approval',
   REJECTED = 'rejected',
+  APPROVED = 'approved',
 }
 
 @Entity('etl_results')
@@ -36,15 +37,16 @@ export class EtlResult {
   @Column({
     type: 'enum',
     enum: EtlResultStatus,
-    default: EtlResultStatus.PENDING,
+    nullable: true,
+    default: null,
   })
-  status: EtlResultStatus;
+  status: EtlResultStatus | null;
 
   @Column({ name: 'redo_reason', nullable: true })
-  redoReason: string;
+  redoReason: string | null;
 
   @Column({ name: 'reject_by', nullable: true })
-  rejectBy: number;
+  rejectBy: number | null;
 
   @Column({ nullable: true })
   comment: string;

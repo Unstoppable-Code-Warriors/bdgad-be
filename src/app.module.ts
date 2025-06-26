@@ -7,6 +7,7 @@ import { Env } from './utils/constant';
 import { StaffModule } from './staff/staff.module';
 import { LabTestModule } from './lab-test/lab-test.module';
 import { AuthModule } from './auth/auth.module';
+import { AnalysisModule } from './analysis/analysis.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AuthModule } from './auth/auth.module';
     StaffModule,
     DbModule,
     LabTestModule,
+    AnalysisModule,
   ],
   controllers: [],
   providers: [],

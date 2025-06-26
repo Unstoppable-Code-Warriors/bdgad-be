@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Repository, SelectQueryBuilder, In } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
@@ -48,7 +48,7 @@ export class AnalysisService {
       dateTo,
     } = query;
 
-    // Create query builder for lab sessions that have FastQ files with approved status
+    // Create query builder for lab sessions that have FastQ files with specific statuses
     const queryBuilder: SelectQueryBuilder<LabSession> =
       this.labSessionRepository
         .createQueryBuilder('labSession')
@@ -74,12 +74,18 @@ export class AnalysisService {
           'doctor.email',
           'doctor.metadata',
         ])
-        // Only include sessions that have approved FastQ files
+        // Include sessions that have FastQ files with WAIT_FOR_APPROVAL, REJECTED, or APPROVED status
         .innerJoin(
           'labSession.fastqFiles',
-          'approvedFastq',
-          'approvedFastq.status = :approvedStatus',
-          { approvedStatus: FastqFileStatus.APPROVED },
+          'fastqFile',
+          'fastqFile.status IN (:...allowedStatuses)',
+          {
+            allowedStatuses: [
+              FastqFileStatus.WAIT_FOR_APPROVAL,
+              FastqFileStatus.REJECTED,
+              FastqFileStatus.APPROVED,
+            ],
+          },
         );
 
     // Apply search functionality (search by patient personalId and fullName)
@@ -138,10 +144,30 @@ export class AnalysisService {
       if (sortField) {
         queryBuilder.orderBy(sortField, sortOrder);
       } else {
-        queryBuilder.orderBy('labSession.createdAt', 'DESC');
+        // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
+        queryBuilder
+          .addSelect('fastqFile.status', 'fastqStatus')
+          .orderBy(
+            `CASE fastqFile.status 
+             WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1 
+             WHEN '${FastqFileStatus.REJECTED}' THEN 2 
+             WHEN '${FastqFileStatus.APPROVED}' THEN 3 
+             ELSE 4 END`,
+          )
+          .addOrderBy('labSession.createdAt', 'DESC');
       }
     } else {
-      queryBuilder.orderBy('labSession.createdAt', 'DESC');
+      // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
+      queryBuilder
+        .addSelect('fastqFile.status', 'fastqStatus')
+        .orderBy(
+          `CASE fastqFile.status 
+           WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1 
+           WHEN '${FastqFileStatus.REJECTED}' THEN 2 
+           WHEN '${FastqFileStatus.APPROVED}' THEN 3 
+           ELSE 4 END`,
+        )
+        .addOrderBy('labSession.createdAt', 'DESC');
     }
 
     // Apply pagination
@@ -155,7 +181,14 @@ export class AnalysisService {
       sessions.map(async (session) => {
         const [latestFastqFile, latestEtlResult] = await Promise.all([
           this.fastqFileRepository.findOne({
-            where: { sessionId: session.id },
+            where: {
+              sessionId: session.id,
+              status: In([
+                FastqFileStatus.WAIT_FOR_APPROVAL,
+                FastqFileStatus.REJECTED,
+                FastqFileStatus.APPROVED,
+              ]),
+            },
             relations: { creator: true },
             select: {
               id: true,
@@ -198,6 +231,28 @@ export class AnalysisService {
   async findAnalysisSessionById(
     id: number,
   ): Promise<AnalysisSessionDetailResponseDto> {
+    // First check if the session has FastQ files with allowed statuses
+    const sessionWithFastq = await this.labSessionRepository.findOne({
+      where: {
+        id,
+        fastqFiles: {
+          status: In([
+            FastqFileStatus.WAIT_FOR_APPROVAL,
+            FastqFileStatus.REJECTED,
+            FastqFileStatus.APPROVED,
+          ]),
+        },
+      },
+      relations: { fastqFiles: true },
+      select: { id: true, fastqFiles: { status: true } },
+    });
+
+    if (!sessionWithFastq) {
+      throw new NotFoundException(
+        `Analysis session with ID ${id} not found or no FastQ files with valid status`,
+      );
+    }
+
     const session = await this.labSessionRepository.findOne({
       where: { id },
       relations: {
@@ -271,11 +326,36 @@ export class AnalysisService {
       throw new NotFoundException(`Analysis session with ID ${id} not found`);
     }
 
-    // Sort FastQ files and ETL results by creation date
-    session.fastqFiles.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    // Filter FastQ files to only include allowed statuses
+    session.fastqFiles = session.fastqFiles.filter(
+      (file) =>
+        file.status &&
+        [
+          FastqFileStatus.WAIT_FOR_APPROVAL,
+          FastqFileStatus.REJECTED,
+          FastqFileStatus.APPROVED,
+        ].includes(file.status),
     );
+
+    // Sort FastQ files by status priority first, then by creation date
+    session.fastqFiles.sort((a, b) => {
+      const statusPriority = {
+        [FastqFileStatus.WAIT_FOR_APPROVAL]: 1,
+        [FastqFileStatus.REJECTED]: 2,
+        [FastqFileStatus.APPROVED]: 3,
+      };
+
+      const aPriority = a.status ? statusPriority[a.status] || 4 : 4;
+      const bPriority = b.status ? statusPriority[b.status] || 4 : 4;
+
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    // Sort ETL results by completion date
     session.etlResults.sort(
       (a, b) =>
         new Date(b.etlCompletedAt).getTime() -

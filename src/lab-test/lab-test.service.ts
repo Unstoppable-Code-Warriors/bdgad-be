@@ -71,6 +71,7 @@ export class LabTestService {
         .createQueryBuilder('labSession')
         .leftJoinAndSelect('labSession.patient', 'patient')
         .leftJoinAndSelect('labSession.doctor', 'doctor')
+        .leftJoin('labSession.fastqFiles', 'fastqFile')
         .select([
           'labSession.id',
           'labSession.labcode',
@@ -163,12 +164,34 @@ export class LabTestService {
       if (sortField) {
         queryBuilder.orderBy(sortField, sortOrder);
       } else {
-        // Default sorting if invalid sortBy is provided
-        queryBuilder.orderBy('labSession.createdAt', 'DESC');
+        // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
+        queryBuilder
+          .addSelect('fastqFile.status', 'fastqStatus')
+          .orderBy(
+            `CASE 
+             WHEN fastqFile.status IS NULL THEN 1 
+             WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2 
+             WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3 
+             WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4 
+             WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5 
+             ELSE 6 END`,
+          )
+          .addOrderBy('labSession.createdAt', 'DESC');
       }
     } else {
-      // Default sorting
-      queryBuilder.orderBy('labSession.createdAt', 'DESC');
+      // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
+      queryBuilder
+        .addSelect('fastqFile.status', 'fastqStatus')
+        .orderBy(
+          `CASE 
+           WHEN fastqFile.status IS NULL THEN 1 
+           WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2 
+           WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3 
+           WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4 
+           WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5 
+           ELSE 6 END`,
+        )
+        .addOrderBy('labSession.createdAt', 'DESC');
     }
 
     // Apply pagination
@@ -268,22 +291,49 @@ export class LabTestService {
           },
         },
       },
-      order: {
-        fastqFiles: {
-          createdAt: 'DESC',
-        },
-      },
     });
 
     if (!session) {
       throw new NotFoundException(`Session with id ${id} not found`);
     }
 
+    // Sort FastQ files by status priority first, then by creation date
+    const sortedFastqFiles = session.fastqFiles
+      ? session.fastqFiles.sort((a, b) => {
+          const getStatusPriority = (
+            status: FastqFileStatus | null,
+          ): number => {
+            if (status === null) return 1;
+            switch (status) {
+              case FastqFileStatus.UPLOADED:
+                return 2;
+              case FastqFileStatus.REJECTED:
+                return 3;
+              case FastqFileStatus.WAIT_FOR_APPROVAL:
+                return 4;
+              case FastqFileStatus.APPROVED:
+                return 5;
+              default:
+                return 6;
+            }
+          };
+
+          const aPriority = getStatusPriority(a.status);
+          const bPriority = getStatusPriority(b.status);
+
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        })
+      : [];
+
     return {
       ...session,
-      fastqFiles: session.fastqFiles
-        ? session.fastqFiles.map((file) => this.mapFastqFileToDto(file))
-        : [],
+      fastqFiles: sortedFastqFiles.map((file) => this.mapFastqFileToDto(file)),
     };
   }
 

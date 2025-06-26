@@ -7,4 +7,22 @@ export enum Env {
   DB_USER = 'DB_USER',
   DB_PASS = 'DB_PASS',
   DB_NAME = 'DB_NAME',
+  AUTH_SERVICE = 'AUTH_SERVICE',
+  S3_API = 'S3_API',
+  S3_ENDPOINT = 'S3_ENDPOINT',
+  S3_ACCESS_KEY_ID = 'S3_ACCESS_KEY_ID',
+  S3_SECRET_ACCESS_KEY = 'S3_SECRET_ACCESS_KEY',
+}
+
+// S3 Bucket Constants
+export enum S3Bucket {
+  FASTQ_FILE = 'fastq-file',
+}
+
+export enum Role {
+  STAFF = 1,
+  LAB_TESTING_TECHNICIAN = 2,
+  ANALYSIS_TECHNICIAN = 3,
+  VALIDATION_TECHNICIAN = 4,
+  DOCTOR = 5,
 }

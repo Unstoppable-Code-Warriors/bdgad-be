@@ -5,18 +5,27 @@ import {
   UploadedFiles,
   UploadedFile,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
   FileInterceptor,
 } from '@nestjs/platform-express';
 import { StaffService } from './staff.service';
+import { AuthGuard } from '../auth/guards/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { AuthZ } from '../auth/decorators/authz.decorator';
+import { User } from '../auth/decorators/user.decorator';
+import { AuthenticatedUser } from '../auth/types/user.types';
+import { Role } from '../utils/constant';
 
 @Controller('staff')
+@UseGuards(AuthGuard, RolesGuard)
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
   @Post('/upload-info')
+  @AuthZ([Role.STAFF])
   @UseInterceptors(
     FileFieldsInterceptor(
       [
@@ -43,6 +52,7 @@ export class StaffController {
       medicalTestRequisition?: Express.Multer.File[];
       salesInvoice?: Express.Multer.File[];
     },
+    @User() user: AuthenticatedUser,
   ) {
     if (
       !files.medicalTestRequisition ||
@@ -62,6 +72,7 @@ export class StaffController {
   }
 
   @Post('/upload-medical-test-requisition')
+  @AuthZ([Role.STAFF])
   @UseInterceptors(
     FileInterceptor('medicalTestRequisition', {
       fileFilter: (req, file, cb) => {
@@ -78,6 +89,7 @@ export class StaffController {
   )
   async uploadMedicalTestRequisition(
     @UploadedFile() file: Express.Multer.File,
+    @User() user: AuthenticatedUser,
   ) {
     if (!file) {
       throw new BadRequestException(

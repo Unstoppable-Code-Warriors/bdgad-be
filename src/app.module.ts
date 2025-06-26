@@ -6,6 +6,7 @@ import * as Joi from 'joi';
 import { Env } from './utils/constant';
 import { StaffModule } from './staff/staff.module';
 import { LabTestModule } from './lab-test/lab-test.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -20,12 +21,14 @@ import { LabTestModule } from './lab-test/lab-test.module';
         DB_USER: Joi.string().required(),
         DB_PASS: Joi.string().required(),
         DB_NAME: Joi.string().required(),
+        AUTH_SERVICE: Joi.string().required(),
       }),
     }),
     HttpModule.register({
       timeout: 30000,
       maxRedirects: 5,
     }),
+    AuthModule,
     StaffModule,
     DbModule,
     LabTestModule,

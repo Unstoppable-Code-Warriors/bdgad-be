@@ -6,10 +6,11 @@ import { FastqFile } from '../entities/fastq-file.entity';
 import { LabSession } from '../entities/lab-session.entity';
 import { User } from 'src/entities/user.entity';
 import { Patient } from 'src/entities/patient.entity';
+import { S3Service } from '../utils/s3.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([FastqFile, LabSession, User, Patient])],
   controllers: [LabTestController],
-  providers: [LabTestService],
+  providers: [LabTestService, S3Service],
 })
 export class LabTestModule {}

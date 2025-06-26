@@ -11,10 +11,16 @@ import {
   PaginatedResponseDto,
   PaginationQueryDto,
 } from '../common/dto/pagination.dto';
+import { ConfigService } from '@nestjs/config';
+import { AuthenticatedUser } from '../auth/types/user.types';
+import { User } from '../entities/user.entity';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class LabTestService {
   constructor(
+    private readonly configService: ConfigService,
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(FastqFile)
@@ -251,5 +257,46 @@ export class LabTestService {
       ...session,
       fastqFiles: session.fastqFiles || [],
     };
+  }
+
+  async uploadFastQ(
+    id: number,
+    file: Express.Multer.File,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    const session = await this.labSessionRepository.findOne({
+      where: { id },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Session with id ${id} not found`);
+    }
+
+    // Create directory if it doesn't exist
+    const storePath =
+      this.configService.get<string>('STORE_PATH') || './uploads';
+    const sessionDir = path.join(storePath, 'fastq', id.toString());
+
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const filename = `${timestamp}_${file.originalname}`;
+    const filePath = path.join(sessionDir, filename);
+
+    // Save file to disk
+    fs.writeFileSync(filePath, file.buffer);
+
+    // Create FastqFile record
+    const fastqFile = this.fastqFileRepository.create({
+      sessionId: id,
+      filePath: filePath,
+      status: FastqFileStatus.UPLOADED,
+      createdBy: user.id,
+    });
+
+    await this.fastqFileRepository.save(fastqFile);
   }
 }

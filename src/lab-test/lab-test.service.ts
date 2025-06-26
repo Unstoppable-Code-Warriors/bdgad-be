@@ -265,6 +265,30 @@ export class LabTestService {
     file: Express.Multer.File,
     user: AuthenticatedUser,
   ): Promise<void> {
+    // Validate file
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    // Validate file size (100MB limit)
+    const maxSize = 100 * 1024 * 1024; // 100MB
+    if (file.size > maxSize) {
+      throw new Error(
+        `File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of 100MB`,
+      );
+    }
+
+    // Validate file extension
+    const allowedExtensions = ['.fastq', '.fq', '.fastq.gz', '.fq.gz'];
+    const hasValidExtension = allowedExtensions.some((ext) =>
+      file.originalname.toLowerCase().endsWith(ext),
+    );
+    if (!hasValidExtension) {
+      throw new Error(
+        `Invalid file type. Only FastQ files (.fastq, .fq, .fastq.gz, .fq.gz) are allowed`,
+      );
+    }
+
     const session = await this.labSessionRepository.findOne({
       where: { id },
     });

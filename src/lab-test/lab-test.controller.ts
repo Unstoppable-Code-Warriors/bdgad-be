@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFile,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { LabTestService } from './lab-test.service';
 import {
@@ -57,13 +58,60 @@ export class LabTestController {
   // upload fastq file from form-data
   @Post('session/:id/fastq')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
-  @UseInterceptors(FileInterceptor('fastq'))
+  @UseInterceptors(
+    FileInterceptor('fastq', {
+      fileFilter: (req, file, cb) => {
+        // Accept FastQ file types
+        const allowedMimeTypes = [
+          'text/plain', // .fastq, .fq
+          'application/octet-stream', // .fastq.gz, .fq.gz
+          'application/gzip', // .gz files
+          'application/x-gzip', // alternative gzip mime type
+        ];
+
+        const allowedExtensions = ['.fastq', '.fq', '.fastq.gz', '.fq.gz'];
+        const hasValidExtension = allowedExtensions.some((ext) =>
+          file.originalname.toLowerCase().endsWith(ext),
+        );
+
+        if (allowedMimeTypes.includes(file.mimetype) || hasValidExtension) {
+          cb(null, true);
+        } else {
+          cb(
+            new Error(
+              'Only FastQ files (.fastq, .fq, .fastq.gz, .fq.gz) are allowed',
+            ),
+            false,
+          );
+        }
+      },
+      limits: {
+        fileSize: 100 * 1024 * 1024, // 100MB limit for FastQ files
+      },
+    }),
+  )
   async uploadFastQ(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
     @User() user: AuthenticatedUser,
   ): Promise<void> {
-    return this.labTestService.uploadFastQ(id, file, user);
+    if (!file) {
+      throw new BadRequestException(
+        'No file provided. Please select a FastQ file to upload.',
+      );
+    }
+
+    try {
+      return this.labTestService.uploadFastQ(id, file, user);
+    } catch (error) {
+      if (error.message.includes('Only FastQ files')) {
+        throw new BadRequestException(error.message);
+      }
+      if (error.message.includes('exceeds maximum allowed size')) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   // download fastq file - returns presigned URL

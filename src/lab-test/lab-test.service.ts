@@ -10,6 +10,7 @@ import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
 import {
   LabSessionWithFastqResponseDto,
   LabSessionWithAllFastqResponseDto,
+  FastqFileResponseDto,
 } from './dto/lab-session-response.dto';
 import {
   PaginatedResponseDto,
@@ -31,6 +32,24 @@ export class LabTestService {
     @InjectRepository(FastqFile)
     private fastqFileRepository: Repository<FastqFile>,
   ) {}
+
+  /**
+   * Helper method to map FastqFile entity to FastqFileResponseDto
+   */
+  private mapFastqFileToDto(fastqFile: FastqFile): FastqFileResponseDto {
+    return {
+      id: fastqFile.id,
+      filePath: fastqFile.filePath,
+      createdAt: fastqFile.createdAt,
+      status: fastqFile.status || 'unknown', // Handle null status
+      redoReason: fastqFile.redoReason || '', // Handle null redoReason
+      creator: {
+        id: fastqFile.creator.id,
+        name: fastqFile.creator.name,
+        email: fastqFile.creator.email,
+      },
+    };
+  }
 
   async findAllSession(
     query: PaginationQueryDto,
@@ -185,7 +204,9 @@ export class LabTestService {
 
         return {
           ...session,
-          latestFastqFile,
+          latestFastqFile: latestFastqFile
+            ? this.mapFastqFileToDto(latestFastqFile)
+            : null,
         };
       }),
     );
@@ -260,7 +281,9 @@ export class LabTestService {
 
     return {
       ...session,
-      fastqFiles: session.fastqFiles || [],
+      fastqFiles: session.fastqFiles
+        ? session.fastqFiles.map((file) => this.mapFastqFileToDto(file))
+        : [],
     };
   }
 

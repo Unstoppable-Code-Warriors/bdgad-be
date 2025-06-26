@@ -344,6 +344,7 @@ export class LabTestService {
             return aPriority - bPriority;
           }
 
+          // Sort by createdAt in descending order (newest first)
           return (
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );

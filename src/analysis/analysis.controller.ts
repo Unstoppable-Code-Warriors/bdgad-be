@@ -8,6 +8,8 @@ import {
   ParseIntPipe,
   Post,
   UseGuards,
+  Body,
+  Put,
 } from '@nestjs/common';
 import { AnalysisService } from './analysis.service';
 import {
@@ -15,6 +17,7 @@ import {
   AnalysisSessionDetailResponseDto,
   EtlResultDownloadResponseDto,
 } from './dto/analysis-response.dto';
+import { RejectFastqDto } from './dto/analysis-request.dto';
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
@@ -32,7 +35,7 @@ export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
 
   @Get('sessions')
-  @AuthZ([Role.ANALYSIS_TECHNICIAN, Role.VALIDATION_TECHNICIAN, Role.DOCTOR])
+  @AuthZ([Role.ANALYSIS_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
   async findAllAnalysisSessions(
     @Query() query: PaginationQueryDto,
@@ -42,7 +45,7 @@ export class AnalysisController {
   }
 
   @Get('sessions/:id')
-  @AuthZ([Role.ANALYSIS_TECHNICIAN, Role.VALIDATION_TECHNICIAN, Role.DOCTOR])
+  @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async findAnalysisSessionById(
     @Param('id', ParseIntPipe) id: number,
     @User() user: AuthenticatedUser,
@@ -59,8 +62,23 @@ export class AnalysisController {
     return this.analysisService.processAnalysis(fastqFileId, user);
   }
 
+  @Put('fastq/:fastqFileId/reject')
+  @AuthZ([Role.ANALYSIS_TECHNICIAN])
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async rejectFastq(
+    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @Body() rejectDto: RejectFastqDto,
+    @User() user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    return this.analysisService.rejectFastq(
+      fastqFileId,
+      rejectDto.redoReason,
+      user,
+    );
+  }
+
   @Get('etl-result/:etlResultId/download')
-  @AuthZ([Role.ANALYSIS_TECHNICIAN, Role.VALIDATION_TECHNICIAN, Role.DOCTOR])
+  @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async downloadEtlResult(
     @Param('etlResultId', ParseIntPipe) etlResultId: number,
     @User() user: AuthenticatedUser,

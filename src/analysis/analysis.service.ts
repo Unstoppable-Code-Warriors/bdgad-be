@@ -453,4 +453,53 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     return downloadUrl;
   }
+
+  async rejectFastq(
+    fastqFileId: number,
+    redoReason: string,
+    user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    // Find the FastQ file that's pending approval or approved
+    const fastqFile = await this.fastqFileRepository.findOne({
+      where: {
+        id: fastqFileId,
+        status: FastqFileStatus.WAIT_FOR_APPROVAL,
+      },
+      relations: { session: true },
+    });
+
+    if (!fastqFile) {
+      throw new NotFoundException(
+        `FastQ file with ID ${fastqFileId} not found or not in wait_for_approval status`,
+      );
+    }
+
+    // Update FastQ file status to rejected with redo reason
+    fastqFile.status = FastqFileStatus.REJECTED;
+    fastqFile.redoReason = redoReason;
+    fastqFile.rejectBy = user.id;
+
+    await this.fastqFileRepository.save(fastqFile);
+
+    // If there are any pending or processing ETL results for this session, mark them as failed
+    const pendingEtlResults = await this.etlResultRepository.find({
+      where: {
+        sessionId: fastqFile.sessionId,
+        status: EtlResultStatus.PROCESSING,
+      },
+    });
+
+    if (pendingEtlResults.length > 0) {
+      for (const etlResult of pendingEtlResults) {
+        etlResult.status = EtlResultStatus.FAILED;
+        etlResult.comment = `Analysis cancelled due to FastQ file rejection: ${redoReason}`;
+        etlResult.rejectBy = user.id;
+        await this.etlResultRepository.save(etlResult);
+      }
+    }
+
+    return {
+      message: `FastQ file rejected successfully. Reason: ${redoReason}`,
+    };
+  }
 }

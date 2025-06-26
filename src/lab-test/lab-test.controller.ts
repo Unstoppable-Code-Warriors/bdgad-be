@@ -150,4 +150,17 @@ export class LabTestController {
       message: 'FastQ file deleted successfully',
     };
   }
+
+  // send fastq file to analysis - updates status to 'wait_for_approval'
+  @Post('fastq/:fastqFileId/send-to-analysis')
+  @AuthZ([Role.LAB_TESTING_TECHNICIAN])
+  async sendToAnalysis(
+    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @User() user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    await this.labTestService.sendToAnalysis(fastqFileId, user);
+    return {
+      message: 'FastQ file sent to analysis successfully',
+    };
+  }
 }

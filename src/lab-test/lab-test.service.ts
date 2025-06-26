@@ -405,4 +405,37 @@ export class LabTestService {
       throw new Error(`Failed to delete FastQ file: ${error.message}`);
     }
   }
+
+  async sendToAnalysis(
+    fastqFileId: number,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    // Find the FastQ file record
+    const fastqFile = await this.fastqFileRepository.findOne({
+      where: { id: fastqFileId },
+    });
+
+    if (!fastqFile) {
+      throw new NotFoundException(
+        `FastQ file with id ${fastqFileId} not found`,
+      );
+    }
+
+    // Check if the file status allows sending to analysis (only UPLOADED status can be sent)
+    if (fastqFile.status !== FastqFileStatus.UPLOADED) {
+      throw new BadRequestException(
+        `Cannot send FastQ file to analysis. Only files with status 'uploaded' can be sent to analysis. Current status: ${fastqFile.status}`,
+      );
+    }
+
+    try {
+      // Update the status to WAIT_FOR_APPROVAL
+      fastqFile.status = FastqFileStatus.WAIT_FOR_APPROVAL;
+      await this.fastqFileRepository.save(fastqFile);
+    } catch (error) {
+      throw new Error(
+        `Failed to send FastQ file to analysis: ${error.message}`,
+      );
+    }
+  }
 }

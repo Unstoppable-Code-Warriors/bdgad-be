@@ -15,6 +15,7 @@ import { LabTestService } from './lab-test.service';
 import {
   LabSessionWithFastqResponseDto,
   LabSessionWithAllFastqResponseDto,
+  FastqDownloadResponseDto,
 } from './dto/lab-session-response.dto';
 import {
   PaginatedResponseDto,
@@ -63,5 +64,28 @@ export class LabTestController {
     @User() user: AuthenticatedUser,
   ): Promise<void> {
     return this.labTestService.uploadFastQ(id, file, user);
+  }
+
+  // download fastq file - returns presigned URL
+  @Get('fastq/:fastqFileId/download')
+  @AuthZ([
+    Role.LAB_TESTING_TECHNICIAN,
+    Role.ANALYSIS_TECHNICIAN,
+    Role.VALIDATION_TECHNICIAN,
+    Role.DOCTOR,
+  ])
+  async downloadFastQ(
+    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @User() user: AuthenticatedUser,
+  ): Promise<FastqDownloadResponseDto> {
+    const downloadUrl = await this.labTestService.downloadFastQ(fastqFileId);
+    const expiresIn = 3600; // 1 hour in seconds
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    return {
+      downloadUrl,
+      expiresIn,
+      expiresAt,
+    };
   }
 }

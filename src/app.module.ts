@@ -22,6 +22,9 @@ import { AuthModule } from './auth/auth.module';
         DB_PASS: Joi.string().required(),
         DB_NAME: Joi.string().required(),
         AUTH_SERVICE: Joi.string().required(),
+        S3_ENDPOINT: Joi.string().required(),
+        S3_ACCESS_KEY_ID: Joi.string().required(),
+        S3_SECRET_ACCESS_KEY: Joi.string().required(),
       }),
     }),
     HttpModule.register({

@@ -47,3 +47,9 @@ export class LabSessionWithFastqResponseDto extends LabSessionResponseDto {
 export class LabSessionWithAllFastqResponseDto extends LabSessionResponseDto {
   fastqFiles: FastqFileResponseDto[];
 }
+
+export class FastqDownloadResponseDto {
+  downloadUrl: string;
+  expiresIn: number;
+  expiresAt: Date;
+}

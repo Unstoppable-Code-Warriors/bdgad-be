@@ -14,13 +14,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { User } from '../entities/user.entity';
-import * as fs from 'fs';
-import * as path from 'path';
+import { S3Service } from '../utils/s3.service';
+import { S3Bucket } from '../utils/constant';
 
 @Injectable()
 export class LabTestService {
   constructor(
     private readonly configService: ConfigService,
+    private readonly s3Service: S3Service,
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(FastqFile)
@@ -272,31 +273,69 @@ export class LabTestService {
       throw new NotFoundException(`Session with id ${id} not found`);
     }
 
-    // Create directory if it doesn't exist
-    const storePath =
-      this.configService.get<string>('STORE_PATH') || './uploads';
-    const sessionDir = path.join(storePath, 'fastq', id.toString());
-
-    if (!fs.existsSync(sessionDir)) {
-      fs.mkdirSync(sessionDir, { recursive: true });
-    }
-
-    // Generate unique filename
+    // Generate unique filename for S3
     const timestamp = Date.now();
-    const filename = `${timestamp}_${file.originalname}`;
-    const filePath = path.join(sessionDir, filename);
+    const fileExtension = file.originalname.split('.').pop();
+    const s3Key = `fastq/${id}/${timestamp}_${file.originalname}`;
 
-    // Save file to disk
-    fs.writeFileSync(filePath, file.buffer);
+    try {
+      // Upload file to S3 (Cloudflare R2)
+      const s3Url = await this.s3Service.uploadFile(
+        S3Bucket.FASTQ_FILE,
+        s3Key,
+        file.buffer,
+        file.mimetype,
+      );
 
-    // Create FastqFile record
-    const fastqFile = this.fastqFileRepository.create({
-      sessionId: id,
-      filePath: filePath,
-      status: FastqFileStatus.UPLOADED,
-      createdBy: user.id,
+      // Create FastqFile record with S3 URL
+      const fastqFile = this.fastqFileRepository.create({
+        sessionId: id,
+        filePath: s3Url,
+        status: FastqFileStatus.UPLOADED,
+        createdBy: user.id,
+      });
+
+      await this.fastqFileRepository.save(fastqFile);
+    } catch (error) {
+      throw new Error(`Failed to upload file to S3: ${error.message}`);
+    }
+  }
+
+  async downloadFastQ(fastqFileId: number): Promise<string> {
+    // Find the FastQ file record
+    const fastqFile = await this.fastqFileRepository.findOne({
+      where: { id: fastqFileId },
     });
 
-    await this.fastqFileRepository.save(fastqFile);
+    if (!fastqFile) {
+      throw new NotFoundException(
+        `FastQ file with id ${fastqFileId} not found`,
+      );
+    }
+
+    if (!fastqFile.filePath) {
+      throw new NotFoundException(
+        `No file path found for FastQ file with id ${fastqFileId}`,
+      );
+    }
+
+    try {
+      // Extract the S3 key from the stored S3 URL
+      const s3Key = this.s3Service.extractKeyFromUrl(
+        fastqFile.filePath,
+        S3Bucket.FASTQ_FILE,
+      );
+
+      // Generate presigned download URL (valid for 1 hour)
+      const presignedUrl = await this.s3Service.generatePresignedDownloadUrl(
+        S3Bucket.FASTQ_FILE,
+        s3Key,
+        3600, // 1 hour expiration
+      );
+
+      return presignedUrl;
+    } catch (error) {
+      throw new Error(`Failed to generate download URL: ${error.message}`);
+    }
   }
 }

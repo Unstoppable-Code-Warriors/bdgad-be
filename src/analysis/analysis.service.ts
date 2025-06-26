@@ -318,8 +318,7 @@ export class AnalysisService {
     // Create ETL result entry with pending status
     const etlResult = this.etlResultRepository.create({
       sessionId: fastqFile.sessionId,
-      status: null,
-      resultPath: '', // Will be set after processing
+      resultPath: '',
       etlCompletedAt: new Date(),
     });
 

@@ -40,13 +40,13 @@ export class EtlResult {
     nullable: true,
     default: null,
   })
-  status: EtlResultStatus | null;
+  status: EtlResultStatus;
 
   @Column({ name: 'redo_reason', nullable: true })
-  redoReason: string | null;
+  redoReason: string;
 
   @Column({ name: 'reject_by', nullable: true })
-  rejectBy: number | null;
+  rejectBy: number;
 
   @Column({ nullable: true })
   comment: string;
@@ -60,12 +60,14 @@ export class EtlResult {
 
   @ManyToOne(() => User, {
     cascade: true,
+    nullable: true,
   })
   @JoinColumn({ name: 'reject_by' })
   rejector: User;
 
   @ManyToOne(() => User, {
     cascade: true,
+    nullable: true,
   })
   @JoinColumn({ name: 'comment_by' })
   commenter: User;

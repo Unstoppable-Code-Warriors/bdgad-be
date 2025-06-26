@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
@@ -360,6 +364,45 @@ export class LabTestService {
       return presignedUrl;
     } catch (error) {
       throw new Error(`Failed to generate download URL: ${error.message}`);
+    }
+  }
+
+  async deleteFastQ(
+    fastqFileId: number,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    // Find the FastQ file record
+    const fastqFile = await this.fastqFileRepository.findOne({
+      where: { id: fastqFileId },
+    });
+
+    if (!fastqFile) {
+      throw new NotFoundException(
+        `FastQ file with id ${fastqFileId} not found`,
+      );
+    }
+
+    // Check if the file status allows deletion (only UPLOADED status can be deleted)
+    if (fastqFile.status !== FastqFileStatus.UPLOADED) {
+      throw new BadRequestException(
+        `Cannot delete FastQ file. Only files with status 'uploaded' can be deleted. Current status: ${fastqFile.status}`,
+      );
+    }
+
+    try {
+      // Delete file from S3 if it exists
+      if (fastqFile.filePath) {
+        const s3Key = this.s3Service.extractKeyFromUrl(
+          fastqFile.filePath,
+          S3Bucket.FASTQ_FILE,
+        );
+        await this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3Key);
+      }
+
+      // Delete the database record
+      await this.fastqFileRepository.remove(fastqFile);
+    } catch (error) {
+      throw new Error(`Failed to delete FastQ file: ${error.message}`);
     }
   }
 }

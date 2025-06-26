@@ -11,6 +11,7 @@ import {
   UploadedFile,
   UseGuards,
   BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import { LabTestService } from './lab-test.service';
 import {
@@ -134,6 +135,19 @@ export class LabTestController {
       downloadUrl,
       expiresIn,
       expiresAt,
+    };
+  }
+
+  // delete fastq file - only allowed when status is 'uploaded'
+  @Delete('fastq/:fastqFileId')
+  @AuthZ([Role.LAB_TESTING_TECHNICIAN])
+  async deleteFastQ(
+    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @User() user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    await this.labTestService.deleteFastQ(fastqFileId, user);
+    return {
+      message: 'FastQ file deleted successfully',
     };
   }
 }

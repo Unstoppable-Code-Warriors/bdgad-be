@@ -292,14 +292,10 @@ export class ValidationService {
       );
     }
 
-    // Extract key from result path and generate presigned URL
-    const key = this.s3Service.extractKeyFromUrl(
-      etlResult.resultPath,
-      S3Bucket.ANALYSIS_RESULTS,
-    );
+    // Use resultPath directly as the key (it's already stored as a key, not a full URL)
     return this.s3Service.generatePresignedDownloadUrl(
       S3Bucket.ANALYSIS_RESULTS,
-      key,
+      etlResult.resultPath,
     );
   }
 

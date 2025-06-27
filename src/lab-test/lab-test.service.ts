@@ -18,7 +18,6 @@ import {
 } from '../common/dto/pagination.dto';
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
-import { User } from '../entities/user.entity';
 import { S3Service } from '../utils/s3.service';
 import { S3Bucket } from '../utils/constant';
 
@@ -370,7 +369,6 @@ export class LabTestService {
 
     // Generate unique filename for S3
     const timestamp = Date.now();
-    const fileExtension = file.originalname.split('.').pop();
     const s3Key = `fastq/${id}/${timestamp}_${file.originalname}`;
 
     try {

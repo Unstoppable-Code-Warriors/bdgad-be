@@ -648,6 +648,28 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       );
     }
 
+    // Find and update the latest FastQ file status to APPROVED
+    const latestFastqFile = await this.fastqFileRepository.findOne({
+      where: {
+        sessionId: etlResult.sessionId,
+        status: In([
+          FastqFileStatus.WAIT_FOR_APPROVAL,
+          FastqFileStatus.REJECTED,
+          FastqFileStatus.APPROVED,
+        ]),
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (
+      latestFastqFile &&
+      latestFastqFile.status !== FastqFileStatus.APPROVED
+    ) {
+      latestFastqFile.status = FastqFileStatus.APPROVED;
+      latestFastqFile.approveBy = user.id;
+      await this.fastqFileRepository.save(latestFastqFile);
+    }
+
     // Reset the ETL result for retry
     etlResult.status = EtlResultStatus.PROCESSING;
     etlResult.resultPath = '';

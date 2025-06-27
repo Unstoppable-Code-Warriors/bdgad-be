@@ -38,21 +38,17 @@ export class ValidationService {
     } = query;
     const offset = (page - 1) * limit;
 
-    // Build query to get lab sessions with latest ETL results
-    const queryBuilder = this.labSessionRepository
+    // Build base query
+    let queryBuilder = this.labSessionRepository
       .createQueryBuilder('session')
       .leftJoinAndSelect('session.patient', 'patient')
       .leftJoinAndSelect('session.doctor', 'doctor')
-      .leftJoinAndSelect(
-        'session.etlResults',
-        'latestEtlResult',
-        'latestEtlResult.id = (SELECT MAX(er.id) FROM etl_results er WHERE er.session_id = session.id)',
-      )
-      .leftJoinAndSelect('latestEtlResult.rejector', 'rejector')
-      .leftJoinAndSelect('latestEtlResult.commenter', 'commenter');
+      .leftJoinAndSelect('session.etlResults', 'etlResult')
+      .leftJoinAndSelect('etlResult.rejector', 'rejector')
+      .leftJoinAndSelect('etlResult.commenter', 'commenter');
 
     // Filter by ETL result status priority: WAIT_FOR_APPROVAL, REJECTED, APPROVED
-    queryBuilder.where('latestEtlResult.status IN (:...statuses)', {
+    queryBuilder = queryBuilder.where('etlResult.status IN (:...statuses)', {
       statuses: [
         EtlResultStatus.WAIT_FOR_APPROVAL,
         EtlResultStatus.REJECTED,
@@ -62,7 +58,7 @@ export class ValidationService {
 
     // Add search functionality
     if (search) {
-      queryBuilder.andWhere(
+      queryBuilder = queryBuilder.andWhere(
         '(patient.fullName ILIKE :search OR patient.personalId ILIKE :search OR session.labcode ILIKE :search OR session.barcode ILIKE :search)',
         { search: `%${search}%` },
       );
@@ -76,27 +72,76 @@ export class ValidationService {
       'barcode',
     ];
     const column = allowedSortColumns.includes(sortBy) ? sortBy : 'createdAt';
-    queryBuilder.orderBy(`session.${column}`, sortOrder as 'ASC' | 'DESC');
+    queryBuilder = queryBuilder.orderBy(
+      `session.${column}`,
+      sortOrder as 'ASC' | 'DESC',
+    );
 
     // Add secondary sort by ETL result status priority
-    queryBuilder.addOrderBy(
+    queryBuilder = queryBuilder.addOrderBy(
       `CASE 
-        WHEN latestEtlResult.status = '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1
-        WHEN latestEtlResult.status = '${EtlResultStatus.REJECTED}' THEN 2
-        WHEN latestEtlResult.status = '${EtlResultStatus.APPROVED}' THEN 3
+        WHEN etlResult.status = '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1
+        WHEN etlResult.status = '${EtlResultStatus.REJECTED}' THEN 2
+        WHEN etlResult.status = '${EtlResultStatus.APPROVED}' THEN 3
         ELSE 4
       END`,
       'ASC',
     );
 
-    // Get total count
-    const totalItems = await queryBuilder.getCount();
+    // Add sorting by ETL result ID to get the latest one
+    queryBuilder = queryBuilder.addOrderBy('etlResult.id', 'DESC');
+
+    // Get total count (using a separate count query to avoid issues)
+    const countQuery = this.labSessionRepository
+      .createQueryBuilder('session')
+      .leftJoin('session.etlResults', 'etlResult')
+      .where('etlResult.status IN (:...statuses)', {
+        statuses: [
+          EtlResultStatus.WAIT_FOR_APPROVAL,
+          EtlResultStatus.REJECTED,
+          EtlResultStatus.APPROVED,
+        ],
+      });
+
+    if (search) {
+      countQuery.leftJoin('session.patient', 'patient');
+      countQuery.andWhere(
+        '(patient.fullName ILIKE :search OR patient.personalId ILIKE :search OR session.labcode ILIKE :search OR session.barcode ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const totalItems = await countQuery.getCount();
 
     // Apply pagination
     const sessions = await queryBuilder.skip(offset).take(limit).getMany();
 
+    // Process the results to get only the latest ETL result per session
+    const sessionMap = new Map();
+    sessions.forEach((session) => {
+      if (!sessionMap.has(session.id)) {
+        // Get the latest ETL result (first one due to ordering)
+        const latestEtlResult = session.etlResults
+          .filter((etl) =>
+            [
+              EtlResultStatus.WAIT_FOR_APPROVAL,
+              EtlResultStatus.REJECTED,
+              EtlResultStatus.APPROVED,
+            ].includes(etl.status),
+          )
+          .sort((a, b) => b.id - a.id)[0];
+
+        sessionMap.set(session.id, {
+          ...session,
+          etlResults: latestEtlResult ? [latestEtlResult] : [],
+        });
+      }
+    });
+
+    const processedSessions = Array.from(sessionMap.values());
+
     // Transform data
-    const data = sessions.map((session) => ({
+    const data = processedSessions.map((session) => ({
       id: session.id,
       labcode: session.labcode,
       barcode: session.barcode,

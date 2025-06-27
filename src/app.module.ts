@@ -8,6 +8,7 @@ import { StaffModule } from './staff/staff.module';
 import { LabTestModule } from './lab-test/lab-test.module';
 import { AuthModule } from './auth/auth.module';
 import { AnalysisModule } from './analysis/analysis.module';
+import { ValidationModule } from './validation/validation.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AnalysisModule } from './analysis/analysis.module';
     DbModule,
     LabTestModule,
     AnalysisModule,
+    ValidationModule,
   ],
   controllers: [],
   providers: [],

@@ -228,6 +228,47 @@ export class ValidationService {
     };
   }
 
+  async findOne(
+    id: number,
+  ): Promise<ValidationSessionWithLatestEtlResponseDto> {
+    const validation = await this.labSessionRepository.findOne({
+      where: { id },
+      relations: { patient: true, doctor: true, etlResults: true },
+    });
+
+    if (!validation) {
+      throw new NotFoundException('Validation session not found');
+    }
+
+    const latestEtlResult = await this.etlResultRepository.findOne({
+      where: {
+        sessionId: id,
+        status: In([
+          EtlResultStatus.WAIT_FOR_APPROVAL,
+          EtlResultStatus.REJECTED,
+          EtlResultStatus.APPROVED,
+        ]),
+      },
+      relations: { rejector: true, commenter: true },
+      select: {
+        id: true,
+        resultPath: true,
+        etlCompletedAt: true,
+        status: true,
+        redoReason: true,
+        comment: true,
+        rejector: { id: true, name: true, email: true },
+        commenter: { id: true, name: true, email: true },
+      },
+      order: { id: 'DESC' },
+    });
+
+    return {
+      ...validation,
+      latestEtlResult,
+    };
+  }
+
   async downloadEtlResult(etlResultId: number): Promise<string> {
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },

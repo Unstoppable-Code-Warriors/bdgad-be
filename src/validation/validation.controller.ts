@@ -46,6 +46,14 @@ export class ValidationController {
     return this.validationService.findAllPatientsWithLatestEtlResults(query);
   }
 
+  @Get(':id')
+  @AuthZ([Role.VALIDATION_TECHNICIAN])
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ValidationSessionWithLatestEtlResponseDto> {
+    return this.validationService.findOne(id);
+  }
+
   @Get('etl-result/:etlResultId/download')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   async downloadEtlResult(

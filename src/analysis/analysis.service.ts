@@ -621,7 +621,10 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
   ): Promise<{ message: string }> {
     // Find the ETL result that's failed
     const etlResult = await this.etlResultRepository.findOne({
-      where: { id: etlResultId, status: EtlResultStatus.FAILED },
+      where: {
+        id: etlResultId,
+        status: In([EtlResultStatus.FAILED, EtlResultStatus.REJECTED]),
+      },
       relations: { session: true },
     });
 

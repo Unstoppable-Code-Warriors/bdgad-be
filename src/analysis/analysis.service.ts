@@ -366,7 +366,13 @@ export class AnalysisService {
   ): Promise<{ message: string }> {
     // Find the FastQ file
     const fastqFile = await this.fastqFileRepository.findOne({
-      where: { id: fastqFileId, status: FastqFileStatus.WAIT_FOR_APPROVAL },
+      where: {
+        id: fastqFileId,
+        status: In([
+          FastqFileStatus.WAIT_FOR_APPROVAL,
+          FastqFileStatus.APPROVED,
+        ]),
+      },
       relations: { session: true },
     });
 

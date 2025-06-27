@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
+import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import {
   PaginationQueryDto,
@@ -24,6 +25,8 @@ export class ValidationService {
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(EtlResult)
     private etlResultRepository: Repository<EtlResult>,
+    @InjectRepository(FastqFile)
+    private fastqFileRepository: Repository<FastqFile>,
     private s3Service: S3Service,
   ) {}
 
@@ -325,6 +328,18 @@ export class ValidationService {
       redoReason: reason,
       rejectBy: user.id,
     });
+
+    // Find and update the latest FastQ file status to WAIT_FOR_APPROVAL
+    const latestFastqFile = await this.fastqFileRepository.findOne({
+      where: { sessionId: etlResult.sessionId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (latestFastqFile) {
+      await this.fastqFileRepository.update(latestFastqFile.id, {
+        status: FastqFileStatus.WAIT_FOR_APPROVAL,
+      });
+    }
 
     return { message: 'ETL result rejected successfully' };
   }

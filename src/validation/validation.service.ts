@@ -15,6 +15,7 @@ import {
 import { ValidationSessionWithLatestEtlResponseDto } from './dto/validation-response.dto';
 import { S3Service } from '../utils/s3.service';
 import { S3Bucket } from '../utils/constant';
+import { In } from 'typeorm';
 
 @Injectable()
 export class ValidationService {
@@ -36,167 +37,191 @@ export class ValidationService {
       sortBy = 'createdAt',
       sortOrder = 'DESC',
     } = query;
-    const offset = (page - 1) * limit;
 
-    // Build base query
-    let queryBuilder = this.labSessionRepository
-      .createQueryBuilder('session')
-      .leftJoinAndSelect('session.patient', 'patient')
-      .leftJoinAndSelect('session.doctor', 'doctor')
-      .leftJoinAndSelect('session.etlResults', 'etlResult')
-      .leftJoinAndSelect('etlResult.rejector', 'rejector')
-      .leftJoinAndSelect('etlResult.commenter', 'commenter');
+    // Create query builder for lab sessions that have ETL results with specific statuses
+    const queryBuilder = this.labSessionRepository
+      .createQueryBuilder('labSession')
+      .leftJoinAndSelect('labSession.patient', 'patient')
+      .leftJoinAndSelect('labSession.doctor', 'doctor')
+      .select([
+        'labSession.id',
+        'labSession.labcode',
+        'labSession.barcode',
+        'labSession.requestDate',
+        'labSession.createdAt',
+        'labSession.metadata',
+        'patient.id',
+        'patient.fullName',
+        'patient.dateOfBirth',
+        'patient.phone',
+        'patient.address',
+        'patient.personalId',
+        'patient.healthInsuranceCode',
+        'patient.createdAt',
+        'doctor.id',
+        'doctor.name',
+        'doctor.email',
+        'doctor.metadata',
+      ])
+      // Include sessions that have ETL results with WAIT_FOR_APPROVAL, REJECTED, or APPROVED status
+      .innerJoin(
+        'labSession.etlResults',
+        'etlResult',
+        'etlResult.status IN (:...allowedStatuses)',
+        {
+          allowedStatuses: [
+            EtlResultStatus.WAIT_FOR_APPROVAL,
+            EtlResultStatus.REJECTED,
+            EtlResultStatus.APPROVED,
+          ],
+        },
+      );
 
-    // Filter by ETL result status priority: WAIT_FOR_APPROVAL, REJECTED, APPROVED
-    queryBuilder = queryBuilder.where('etlResult.status IN (:...statuses)', {
-      statuses: [
-        EtlResultStatus.WAIT_FOR_APPROVAL,
-        EtlResultStatus.REJECTED,
-        EtlResultStatus.APPROVED,
-      ],
-    });
-
-    // Add search functionality
-    if (search) {
-      queryBuilder = queryBuilder.andWhere(
-        '(patient.fullName ILIKE :search OR patient.personalId ILIKE :search OR session.labcode ILIKE :search OR session.barcode ILIKE :search)',
-        { search: `%${search}%` },
+    // Apply search functionality
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      queryBuilder.andWhere(
+        '(LOWER(patient.fullName) LIKE :search OR LOWER(patient.personalId) LIKE :search OR LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
+        { search: searchTerm },
       );
     }
 
-    // Add sorting
-    const allowedSortColumns = [
-      'createdAt',
-      'requestDate',
-      'labcode',
-      'barcode',
-    ];
-    const column = allowedSortColumns.includes(sortBy) ? sortBy : 'createdAt';
-    queryBuilder = queryBuilder.orderBy(
-      `session.${column}`,
-      sortOrder as 'ASC' | 'DESC',
-    );
+    // Apply dynamic sorting
+    if (sortBy && sortOrder) {
+      const allowedSortFields = {
+        id: 'labSession.id',
+        labcode: 'labSession.labcode',
+        barcode: 'labSession.barcode',
+        requestDate: 'labSession.requestDate',
+        createdAt: 'labSession.createdAt',
+        'patient.fullName': 'patient.fullName',
+        'patient.personalId': 'patient.personalId',
+        'doctor.name': 'doctor.name',
+        fullName: 'patient.fullName',
+        personalId: 'patient.personalId',
+        doctorName: 'doctor.name',
+      };
 
-    // Add secondary sort by ETL result status priority
-    queryBuilder = queryBuilder.addOrderBy(
-      `CASE 
-        WHEN etlResult.status = '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1
-        WHEN etlResult.status = '${EtlResultStatus.REJECTED}' THEN 2
-        WHEN etlResult.status = '${EtlResultStatus.APPROVED}' THEN 3
-        ELSE 4
-      END`,
-      'ASC',
-    );
-
-    // Add sorting by ETL result ID to get the latest one
-    queryBuilder = queryBuilder.addOrderBy('etlResult.id', 'DESC');
-
-    // Get total count (using a separate count query to avoid issues)
-    const countQuery = this.labSessionRepository
-      .createQueryBuilder('session')
-      .leftJoin('session.etlResults', 'etlResult')
-      .where('etlResult.status IN (:...statuses)', {
-        statuses: [
-          EtlResultStatus.WAIT_FOR_APPROVAL,
-          EtlResultStatus.REJECTED,
-          EtlResultStatus.APPROVED,
-        ],
-      });
-
-    if (search) {
-      countQuery.leftJoin('session.patient', 'patient');
-      countQuery.andWhere(
-        '(patient.fullName ILIKE :search OR patient.personalId ILIKE :search OR session.labcode ILIKE :search OR session.barcode ILIKE :search)',
-        { search: `%${search}%` },
-      );
+      const sortField = allowedSortFields[sortBy];
+      if (sortField) {
+        queryBuilder.orderBy(sortField, sortOrder);
+      } else {
+        // Default sort by ETL status priority then by creation date
+        queryBuilder
+          .addSelect('etlResult.status', 'etlStatus')
+          .orderBy(
+            `CASE etlResult.status 
+             WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1 
+             WHEN '${EtlResultStatus.REJECTED}' THEN 2 
+             WHEN '${EtlResultStatus.APPROVED}' THEN 3 
+             ELSE 4 END`,
+          )
+          .addOrderBy('labSession.createdAt', 'DESC');
+      }
+    } else {
+      // Default sort by ETL status priority then by creation date
+      queryBuilder
+        .addSelect('etlResult.status', 'etlStatus')
+        .orderBy(
+          `CASE etlResult.status 
+           WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1 
+           WHEN '${EtlResultStatus.REJECTED}' THEN 2 
+           WHEN '${EtlResultStatus.APPROVED}' THEN 3 
+           ELSE 4 END`,
+        )
+        .addOrderBy('labSession.createdAt', 'DESC');
     }
-
-    const totalItems = await countQuery.getCount();
 
     // Apply pagination
-    const sessions = await queryBuilder.skip(offset).take(limit).getMany();
+    queryBuilder.skip((page - 1) * limit).take(limit);
 
-    // Process the results to get only the latest ETL result per session
-    const sessionMap = new Map();
-    sessions.forEach((session) => {
-      if (!sessionMap.has(session.id)) {
-        // Get the latest ETL result (first one due to ordering)
-        const latestEtlResult = session.etlResults
-          .filter((etl) =>
-            [
+    // Execute query
+    const [sessions, total] = await queryBuilder.getManyAndCount();
+
+    // For each session, get the latest ETL result
+    const sessionsWithLatest = await Promise.all(
+      sessions.map(async (session) => {
+        const latestEtlResult = await this.etlResultRepository.findOne({
+          where: {
+            sessionId: session.id,
+            status: In([
               EtlResultStatus.WAIT_FOR_APPROVAL,
               EtlResultStatus.REJECTED,
               EtlResultStatus.APPROVED,
-            ].includes(etl.status),
-          )
-          .sort((a, b) => b.id - a.id)[0];
-
-        sessionMap.set(session.id, {
-          ...session,
-          etlResults: latestEtlResult ? [latestEtlResult] : [],
+            ]),
+          },
+          relations: { rejector: true, commenter: true },
+          select: {
+            id: true,
+            resultPath: true,
+            etlCompletedAt: true,
+            status: true,
+            redoReason: true,
+            comment: true,
+            rejector: { id: true, name: true, email: true },
+            commenter: { id: true, name: true, email: true },
+          },
+          order: { id: 'DESC' },
         });
-      }
-    });
 
-    const processedSessions = Array.from(sessionMap.values());
-
-    // Transform data
-    const data = processedSessions.map((session) => ({
-      id: session.id,
-      labcode: session.labcode,
-      barcode: session.barcode,
-      requestDate: session.requestDate,
-      createdAt: session.createdAt,
-      metadata: session.metadata,
-      patient: {
-        id: session.patient.id,
-        fullName: session.patient.fullName,
-        dateOfBirth: session.patient.dateOfBirth,
-        phone: session.patient.phone,
-        address: session.patient.address,
-        personalId: session.patient.personalId,
-        healthInsuranceCode: session.patient.healthInsuranceCode,
-        createdAt: session.patient.createdAt,
-      },
-      doctor: {
-        id: session.doctor.id,
-        name: session.doctor.name,
-        email: session.doctor.email,
-        metadata: session.doctor.metadata,
-      },
-      latestEtlResult: session.etlResults?.[0]
-        ? {
-            id: session.etlResults[0].id,
-            resultPath: session.etlResults[0].resultPath,
-            etlCompletedAt: session.etlResults[0].etlCompletedAt,
-            status: session.etlResults[0].status,
-            redoReason: session.etlResults[0].redoReason,
-            comment: session.etlResults[0].comment,
-            rejector: session.etlResults[0].rejector
-              ? {
-                  id: session.etlResults[0].rejector.id,
-                  name: session.etlResults[0].rejector.name,
-                  email: session.etlResults[0].rejector.email,
-                }
-              : undefined,
-            commenter: session.etlResults[0].commenter
-              ? {
-                  id: session.etlResults[0].commenter.id,
-                  name: session.etlResults[0].commenter.name,
-                  email: session.etlResults[0].commenter.email,
-                }
-              : undefined,
-          }
-        : null,
-    }));
+        return {
+          id: session.id,
+          labcode: session.labcode,
+          barcode: session.barcode,
+          requestDate: session.requestDate,
+          createdAt: session.createdAt,
+          metadata: session.metadata,
+          patient: {
+            id: session.patient.id,
+            fullName: session.patient.fullName,
+            dateOfBirth: session.patient.dateOfBirth,
+            phone: session.patient.phone,
+            address: session.patient.address,
+            personalId: session.patient.personalId,
+            healthInsuranceCode: session.patient.healthInsuranceCode,
+            createdAt: session.patient.createdAt,
+          },
+          doctor: {
+            id: session.doctor.id,
+            name: session.doctor.name,
+            email: session.doctor.email,
+            metadata: session.doctor.metadata,
+          },
+          latestEtlResult: latestEtlResult
+            ? {
+                id: latestEtlResult.id,
+                resultPath: latestEtlResult.resultPath,
+                etlCompletedAt: latestEtlResult.etlCompletedAt,
+                status: latestEtlResult.status,
+                redoReason: latestEtlResult.redoReason,
+                comment: latestEtlResult.comment,
+                rejector: latestEtlResult.rejector
+                  ? {
+                      id: latestEtlResult.rejector.id,
+                      name: latestEtlResult.rejector.name,
+                      email: latestEtlResult.rejector.email,
+                    }
+                  : undefined,
+                commenter: latestEtlResult.commenter
+                  ? {
+                      id: latestEtlResult.commenter.id,
+                      name: latestEtlResult.commenter.name,
+                      email: latestEtlResult.commenter.email,
+                    }
+                  : undefined,
+              }
+            : null,
+        };
+      }),
+    );
 
     return {
-      data,
+      data: sessionsWithLatest,
       meta: {
         page,
         limit,
-        total: totalItems,
-        totalPages: Math.ceil(totalItems / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
       success: true,
       timestamp: new Date().toISOString(),

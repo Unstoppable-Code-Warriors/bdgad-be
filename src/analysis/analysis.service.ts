@@ -594,10 +594,8 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
   ): Promise<{ message: string }> {
     // Find the ETL result that's completed
     const etlResult = await this.etlResultRepository.findOne({
-      where: {
-        id: etlResultId,
-        status: EtlResultStatus.COMPLETED,
-      },
+      where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
+      relations: { session: true },
     });
 
     if (!etlResult) {
@@ -608,13 +606,66 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     // Update ETL result status to WAIT_FOR_APPROVAL
     etlResult.status = EtlResultStatus.WAIT_FOR_APPROVAL;
+    etlResult.comment = 'Sent to validation for review';
     etlResult.commentBy = user.id;
-    etlResult.comment = 'Sent to validation for approval';
-
     await this.etlResultRepository.save(etlResult);
 
     return {
       message: 'ETL result sent to validation successfully',
+    };
+  }
+
+  async retryEtlProcess(
+    etlResultId: number,
+    user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    // Find the ETL result that's failed
+    const etlResult = await this.etlResultRepository.findOne({
+      where: { id: etlResultId, status: EtlResultStatus.FAILED },
+      relations: { session: true },
+    });
+
+    if (!etlResult) {
+      throw new NotFoundException(
+        `Failed ETL result with ID ${etlResultId} not found`,
+      );
+    }
+
+    // Check if there's already another ETL process running for this session
+    const existingProcessingEtl = await this.etlResultRepository.findOne({
+      where: {
+        sessionId: etlResult.sessionId,
+        status: EtlResultStatus.PROCESSING,
+      },
+    });
+
+    if (existingProcessingEtl && existingProcessingEtl.id !== etlResultId) {
+      throw new BadRequestException(
+        'Another ETL process is already running for this session',
+      );
+    }
+
+    // Reset the ETL result for retry
+    etlResult.status = EtlResultStatus.PROCESSING;
+    etlResult.resultPath = '';
+    etlResult.comment = `Retried by ${user.name} at ${new Date().toISOString()}`;
+    etlResult.commentBy = user.id;
+    etlResult.etlCompletedAt = new Date();
+    await this.etlResultRepository.save(etlResult);
+
+    // Start mock ETL pipeline (async) for retry
+    this.runMockEtlPipeline(etlResult, etlResult.session.labcode).catch(
+      async (error) => {
+        // Mark as failed if pipeline fails again
+        etlResult.status = EtlResultStatus.FAILED;
+        etlResult.comment = `Retry failed: ${error.message}`;
+        etlResult.commentBy = user.id;
+        await this.etlResultRepository.save(etlResult);
+      },
+    );
+
+    return {
+      message: 'ETL process retry started successfully',
     };
   }
 }

@@ -102,4 +102,13 @@ export class AnalysisController {
   ): Promise<{ message: string }> {
     return this.analysisService.sendEtlResultToValidation(etlResultId, user);
   }
+
+  @Post('etl-result/:etlResultId/retry')
+  @AuthZ([Role.ANALYSIS_TECHNICIAN])
+  async retryEtlProcess(
+    @Param('etlResultId', ParseIntPipe) etlResultId: number,
+    @User() user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    return this.analysisService.retryEtlProcess(etlResultId, user);
+  }
 }

@@ -366,7 +366,7 @@ export class AnalysisService {
   ): Promise<{ message: string }> {
     // Find the FastQ file
     const fastqFile = await this.fastqFileRepository.findOne({
-      where: { id: fastqFileId, status: FastqFileStatus.APPROVED },
+      where: { id: fastqFileId, status: FastqFileStatus.WAIT_FOR_APPROVAL },
       relations: { session: true },
     });
 
@@ -375,6 +375,11 @@ export class AnalysisService {
         `Approved FastQ file with ID ${fastqFileId} not found`,
       );
     }
+
+    // update fastq file status to APPROVED
+    fastqFile.status = FastqFileStatus.APPROVED;
+    fastqFile.approveBy = user.id;
+    await this.fastqFileRepository.save(fastqFile);
 
     // Check if analysis is already in progress for this session
     const existingEtl = await this.etlResultRepository.findOne({

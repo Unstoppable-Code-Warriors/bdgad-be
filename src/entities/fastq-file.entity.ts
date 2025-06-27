@@ -50,6 +50,9 @@ export class FastqFile {
   @Column({ name: 'reject_by', nullable: true })
   rejectBy: number;
 
+  @Column({ name: 'approve_by', nullable: true })
+  approveBy: number;
+
   @ManyToOne(() => LabSession, (labSession) => labSession.fastqFiles)
   @JoinColumn({ name: 'session_id' })
   session: LabSession;
@@ -66,4 +69,11 @@ export class FastqFile {
   })
   @JoinColumn({ name: 'reject_by' })
   rejector: User;
+
+  @ManyToOne(() => User, {
+    cascade: true,
+    nullable: true,
+  })
+  @JoinColumn({ name: 'approve_by' })
+  approver: User;
 }

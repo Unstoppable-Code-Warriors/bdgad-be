@@ -587,4 +587,34 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       message: `FastQ file rejected successfully. Reason: ${redoReason}`,
     };
   }
+
+  async sendEtlResultToValidation(
+    etlResultId: number,
+    user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    // Find the ETL result that's completed
+    const etlResult = await this.etlResultRepository.findOne({
+      where: {
+        id: etlResultId,
+        status: EtlResultStatus.COMPLETED,
+      },
+    });
+
+    if (!etlResult) {
+      throw new NotFoundException(
+        `Completed ETL result with ID ${etlResultId} not found`,
+      );
+    }
+
+    // Update ETL result status to WAIT_FOR_APPROVAL
+    etlResult.status = EtlResultStatus.WAIT_FOR_APPROVAL;
+    etlResult.commentBy = user.id;
+    etlResult.comment = 'Sent to validation for approval';
+
+    await this.etlResultRepository.save(etlResult);
+
+    return {
+      message: 'ETL result sent to validation successfully',
+    };
+  }
 }

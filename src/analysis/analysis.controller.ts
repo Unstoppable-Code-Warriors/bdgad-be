@@ -39,7 +39,7 @@ export class AnalysisController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async findAllAnalysisSessions(
     @Query() query: PaginationQueryDto,
-    @User() user: AuthenticatedUser,
+    @User() _user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<AnalysisSessionWithLatestResponseDto>> {
     return this.analysisService.findAllAnalysisSessions(query);
   }
@@ -48,7 +48,7 @@ export class AnalysisController {
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async findAnalysisSessionById(
     @Param('id', ParseIntPipe) id: number,
-    @User() user: AuthenticatedUser,
+    @User() _user: AuthenticatedUser,
   ): Promise<AnalysisSessionDetailResponseDto> {
     return this.analysisService.findAnalysisSessionById(id);
   }
@@ -81,7 +81,6 @@ export class AnalysisController {
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async downloadEtlResult(
     @Param('etlResultId', ParseIntPipe) etlResultId: number,
-    @User() user: AuthenticatedUser,
   ): Promise<EtlResultDownloadResponseDto> {
     const downloadUrl =
       await this.analysisService.downloadEtlResult(etlResultId);
@@ -93,5 +92,14 @@ export class AnalysisController {
       expiresIn,
       expiresAt,
     };
+  }
+
+  @Post('etl-result/:etlResultId/send-to-validation')
+  @AuthZ([Role.ANALYSIS_TECHNICIAN])
+  async sendEtlResultToValidation(
+    @Param('etlResultId', ParseIntPipe) etlResultId: number,
+    @User() user: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    return this.analysisService.sendEtlResultToValidation(etlResultId, user);
   }
 }

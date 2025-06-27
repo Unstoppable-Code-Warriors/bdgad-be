@@ -344,30 +344,18 @@ export class AnalysisService {
         ].includes(file.status),
     );
 
-    // Sort FastQ files by status priority first, then by creation date
+    // Sort FastQ files by createdAt in descending order (newest first)
     session.fastqFiles.sort((a, b) => {
-      const statusPriority = {
-        [FastqFileStatus.WAIT_FOR_APPROVAL]: 1,
-        [FastqFileStatus.REJECTED]: 2,
-        [FastqFileStatus.APPROVED]: 3,
-      };
-
-      const aPriority = a.status ? statusPriority[a.status] || 4 : 4;
-      const bPriority = b.status ? statusPriority[b.status] || 4 : 4;
-
-      if (aPriority !== bPriority) {
-        return aPriority - bPriority;
-      }
-
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    // Sort ETL results by completion date
-    session.etlResults.sort(
-      (a, b) =>
+    // Sort ETL results by createdAt in descending order (newest first)
+    session.etlResults.sort((a, b) => {
+      return (
         new Date(b.etlCompletedAt).getTime() -
-        new Date(a.etlCompletedAt).getTime(),
-    );
+        new Date(a.etlCompletedAt).getTime()
+      );
+    });
 
     return session;
   }

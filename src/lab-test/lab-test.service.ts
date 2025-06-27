@@ -316,35 +316,9 @@ export class LabTestService {
       throw new NotFoundException(`Session with id ${id} not found`);
     }
 
-    // Sort FastQ files by status priority first, then by creation date
+    // Sort FastQ files by createdAt in descending order (newest first)
     const sortedFastqFiles = session.fastqFiles
       ? session.fastqFiles.sort((a, b) => {
-          const getStatusPriority = (
-            status: FastqFileStatus | null,
-          ): number => {
-            if (status === null) return 1;
-            switch (status) {
-              case FastqFileStatus.UPLOADED:
-                return 2;
-              case FastqFileStatus.REJECTED:
-                return 3;
-              case FastqFileStatus.WAIT_FOR_APPROVAL:
-                return 4;
-              case FastqFileStatus.APPROVED:
-                return 5;
-              default:
-                return 6;
-            }
-          };
-
-          const aPriority = getStatusPriority(a.status);
-          const bPriority = getStatusPriority(b.status);
-
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
-
-          // Sort by createdAt in descending order (newest first)
           return (
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );

@@ -12,13 +12,8 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers.authorization;
 
-    if (!authHeader) {
-      throw new UnauthorizedException('Authorization header is required');
-    }
-
-    const token = authHeader.replace('Bearer ', '');
+    const token = this.extractTokenFromHeader(request);
     if (!token) {
       throw new UnauthorizedException('Token is required');
     }
@@ -31,4 +26,16 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid token');
     }
   }
+  private extractTokenFromHeader(request): string | null {
+    const authHeader = request.headers.authorization;
+    if(!authHeader){
+      return null;
+    }
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return null;
+    }
+    return authHeader.split(' ')[1];
+  }
 }
+
+

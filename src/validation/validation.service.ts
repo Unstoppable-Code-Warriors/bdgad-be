@@ -296,7 +296,7 @@ export class ValidationService {
     }
 
     // Use resultPath directly as the key (it's already stored as a key, not a full URL)
-    return this.s3Service.generatePresignedDownloadUrl(
+    return this.s3Service.generatePresigned(
       S3Bucket.ANALYSIS_RESULTS,
       etlResult.resultPath,
     );

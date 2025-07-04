@@ -19,10 +19,12 @@ async function bootstrap() {
   .setTitle('BDGAD BE API')
   .setDescription('The BDGAD BE API description')
   .setVersion('1.0')
-  .addTag('BDGAD BE')
+  .addSecurity('token', { type: 'http', scheme: 'bearer' })
   .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, documentFactory);
+  SwaggerModule.setup('api', app, documentFactory(),{
+    swaggerOptions: { persistAuthorization: true },
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

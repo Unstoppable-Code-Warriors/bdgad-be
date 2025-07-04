@@ -6,6 +6,9 @@ import {
   UploadedFile,
   BadRequestException,
   UseGuards,
+  Param,
+  Get,
+  Delete,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
@@ -18,9 +21,11 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
+import { ApiBody, ApiConsumes, ApiSecurity } from '@nestjs/swagger';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
+@ApiSecurity('token')
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
@@ -99,4 +104,63 @@ export class StaffController {
 
     return this.staffService.handleMedicalTestRequisitionUpload(file);
   }
+
+  @Post('/upload-master-file')
+  @AuthZ([Role.STAFF])
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @UseInterceptors(FileInterceptor('file',{
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+        'application/vnd.ms-excel', // .xls
+        'text/csv', // .csv
+        'application/pdf', // .pdf
+        'text/plain', // .txt
+        'application/msword', // .doc
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+      ];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only .xlsx, .xls, .csv, .pdf, .txt, .doc, .docx are allowed'), false);
+      }
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+  }))
+  async uploadMasterFile(@UploadedFile() file: Express.Multer.File, @User() user: AuthenticatedUser) {
+    return this.staffService.uploadMasterFile(file, user);
+  }
+
+  @Get('/download-master-file/:id')
+  @AuthZ([Role.STAFF])
+  async downloadMasterFile(@Param('id') id: number) {
+    return this.staffService.downloadMasterFile(id);
+  }
+
+  @Delete('/delete-master-file/:id')
+  @AuthZ([Role.STAFF])
+  async deleteMasterFile(@Param('id') id: number) {
+    return this.staffService.deleteMasterFile(id);
+  }
+
+  @Get('/get-master-file/:id')
+  @AuthZ([Role.STAFF])
+  async getMasterFileById(@Param('id') id: number) {
+    return this.staffService.getMasterFileById(id);
+  }
+
 }

@@ -15,7 +15,7 @@ export class AuthService {
   async verifyToken(token: string): Promise<UserVerifyResponseDto> {
     try {
       const authServiceUrl = this.configService.get<string>(Env.AUTH_SERVICE);
-      console.log(authServiceUrl);
+      console.log("authServiceUrl",authServiceUrl);
 
       const response = await firstValueFrom(
         this.httpService.get<UserVerifyResponseDto>(

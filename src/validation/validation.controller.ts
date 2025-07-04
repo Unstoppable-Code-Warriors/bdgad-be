@@ -30,9 +30,11 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
+import { ApiSecurity } from '@nestjs/swagger';
 
 @Controller('validation')
 @UseGuards(AuthGuard, RolesGuard)
+@ApiSecurity('token')
 export class ValidationController {
   constructor(private readonly validationService: ValidationService) {}
 

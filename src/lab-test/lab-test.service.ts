@@ -420,7 +420,7 @@ export class LabTestService {
       );
 
       // Generate presigned download URL (valid for 1 hour)
-      const presignedUrl = await this.s3Service.generatePresignedDownloadUrl(
+      const presignedUrl = await this.s3Service.generatePresigned(
         S3Bucket.FASTQ_FILE,
         s3Key,
         3600, // 1 hour expiration

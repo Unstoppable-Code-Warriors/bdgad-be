@@ -5,15 +5,16 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { MasterFile } from 'src/entities/master-file.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
 import { S3Bucket } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
-import { errorMasterFile } from 'src/utils/errorRespones';
+import { errorLabSession, errorMasterFile, errorPatient } from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { Patient } from 'src/entities/patient.entity';
+import { LabSession } from 'src/entities/lab-session.entity';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -32,6 +33,8 @@ export class StaffService {
     private readonly s3Service: S3Service,
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
+    @InjectRepository(LabSession)
+    private readonly labSessionRepository: Repository<LabSession>,
   ) {}
 
   async handleUploadInfo(files: UploadedFiles) {
@@ -587,6 +590,90 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     }finally{
       this.logger.log('Patient get all process completed');
+    }
+  }
+
+  async getLabSessionsByPatientId(id: number) {
+    this.logger.log('Starting Patient get by ID process');
+    try{
+      const patient = await this.patientRepository.findOne({
+        where: {id},
+        relations: {
+          labSessions: true,
+        },
+        select: {
+          id: true,
+          fullName: true,
+          dateOfBirth: true,
+          phone: true,
+          address: true,
+          personalId: true,
+          healthInsuranceCode: true,
+          createdAt: true,
+          labSessions: {
+            id: true,
+          },
+        },
+      });
+      if (!patient) {
+        return errorPatient.patientNotFound;
+      }
+      const labSessions = patient.labSessions.flatMap(labSession => labSession.id);
+      const labSessionData = await this.labSessionRepository.find({
+        where: {
+          id: In(labSessions),
+        },
+        relations: {
+          doctor: true,
+          patientFiles: true
+        },
+        select: {
+          id: true,
+          labcode: true,
+          barcode: true,
+          typeLabSession: true,
+          requestDate: true,
+          createdAt: true,
+          doctor: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          patientFiles: {
+            id: true,
+            fileName: true,
+            filePath: true,
+          }
+        },
+      });
+      return labSessionData;
+    }catch(error){
+      this.logger.error('Failed to get Patient by ID', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Patient get by ID process completed');
+    }
+  }
+
+  async getLabSessionById(id: number) {
+    this.logger.log('Starting Lab Session get by ID process');
+    try{
+      const labSession = await this.labSessionRepository.findOne({
+        where: {id},
+        relations: {
+          doctor: true,
+          patientFiles: true,
+        },
+      });
+      if (!labSession) {
+        return errorLabSession.labSessionNotFound;
+      }
+      return labSession;
+    }catch(error){
+      this.logger.error('Failed to get Lab Session by ID', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Lab Session get by ID process completed');
     }
   }
 }

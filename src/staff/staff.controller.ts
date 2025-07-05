@@ -205,7 +205,7 @@ export class StaffController {
     return this.staffService.getAllMasterFiles(query);
   }
 
-  @Post('/patient')
+  @Post('/patients')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Create a new patient' })
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -221,7 +221,7 @@ export class StaffController {
     return this.staffService.createPatient(createPatientDto);
   }
 
-  @Get('/patient')
+  @Get('/patients')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Get all patients with query' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
@@ -233,6 +233,20 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async getAllPatients(@Query() query: PaginationQueryDto) {
     return this.staffService.getAllPatients(query);
+  }
+
+  @Get('patients/:patientId/sessions')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Get all lab sessions of a patient' })
+  async getLabSessionsByPatientId(@Param('patientId') patientId: number) {
+    return this.staffService.getLabSessionsByPatientId(patientId);
+  }
+
+  @Get('sessions/:sessionId')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Get a lab session by ID' })
+  async getLabSessionById(@Param('sessionId') sessionId: number) {
+    return this.staffService.getLabSessionById(sessionId);
   }
 
 }

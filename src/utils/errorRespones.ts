@@ -22,3 +22,19 @@ export const errorMasterFile = {
     404,
   )
 }
+
+export const errorPatient = {
+  patientNotFound: new ErrorResponse(
+    'PATIENT_NOT_FOUND',
+    'Patient not found',
+    404,
+  )
+}
+
+export const errorLabSession = {
+  labSessionNotFound: new ErrorResponse(
+    'LAB_SESSION_NOT_FOUND',
+    'Lab session not found',
+    404,
+  )
+}

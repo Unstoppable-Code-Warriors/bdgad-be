@@ -29,3 +29,8 @@ export enum Role {
   VALIDATION_TECHNICIAN = 4,
   DOCTOR = 5,
 }
+
+export enum TypeLabSession {
+  TEST = 'test',
+  VALIDATION = 'validation',
+}

@@ -36,6 +36,9 @@ export class LabSession {
   })
   createdAt: Date;
 
+  @Column({ name: 'type_lab_session', type: 'varchar', enum: ['test', 'validation'] })
+  typeLabSession: string;
+
   @Column({
     type: 'jsonb',
     default: {},

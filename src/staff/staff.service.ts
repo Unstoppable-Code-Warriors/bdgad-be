@@ -1,9 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { MasterFile } from 'src/entities/master-file.entity';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { S3Service } from 'src/utils/s3.service';
+import { S3Bucket } from 'src/utils/constant';
+import { AuthenticatedUser } from 'src/auth';
+import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
+import { errorMasterFile } from 'src/utils/errorRespones';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -17,6 +25,9 @@ export class StaffService {
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
+    @InjectRepository(MasterFile)
+    private readonly masterFileRepository: Repository<MasterFile>,
+    private readonly s3Service: S3Service,
   ) {}
 
   async handleUploadInfo(files: UploadedFiles) {
@@ -259,5 +270,237 @@ export class StaffService {
       storagePath: storePath,
       ocrResult: ocrResult,
     };
+  }
+
+  async uploadMasterFile(file: Express.Multer.File, user: AuthenticatedUser) {
+    this.logger.log('Starting Master File upload process');
+    try{
+      const timestamp = Date.now();
+
+      const fileName = file.originalname.trim().replace(/\s+/g, '-');
+      const s3Key = `${timestamp}_${fileName}`;
+
+      const s3Url = await this.s3Service.uploadFile(
+        S3Bucket.MASTER_FILES,
+        s3Key,
+        file.buffer,
+        file.mimetype,
+      );
+
+      const masterFile = this.masterFileRepository.create({
+        fileName: file.originalname,
+        filePath: s3Url,
+        description: 'Master File',
+        uploadedBy: user.id,
+        uploadedAt: new Date(),
+      });
+
+      await this.masterFileRepository.save(masterFile);
+
+      return {message: 'Master File uploaded successfully'}
+    }catch(error){
+      this.logger.error('Failed to upload Master File', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Master File upload process completed');
+    }
+  }
+
+  async downloadMasterFile(id: number) {
+    this.logger.log('Starting Master File download process');
+    try {
+      const masterFile = await this.masterFileRepository.findOne({
+        where: { id },
+      });
+  
+      if (!masterFile) {
+        return errorMasterFile.masterFileNotFound; 
+      }
+      const s3key = this.s3Service.extractKeyFromUrl(masterFile.filePath, S3Bucket.MASTER_FILES);
+  
+      const presignedUrl = await this.s3Service.generatePresigned(
+        S3Bucket.MASTER_FILES,
+        s3key,
+        3600,
+      );
+  
+      return presignedUrl;
+    }catch(error){
+      this.logger.error('Failed to download Master File', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Master File download process completed');
+    }
+  }
+
+  async deleteMasterFile(id: number) {
+    this.logger.log('Starting Master File delete process');
+    try{
+      const masterFile = await this.masterFileRepository.findOne({
+        where: { id },
+      });
+
+      if (!masterFile) {
+        return errorMasterFile.masterFileNotFound;
+      }
+
+      const s3key = this.s3Service.extractKeyFromUrl(masterFile.filePath, S3Bucket.MASTER_FILES);
+      await this.s3Service.deleteFile(S3Bucket.MASTER_FILES, s3key);
+      await this.masterFileRepository.delete(id);
+
+      return {message: 'Master File deleted successfully'};
+    }catch(error){
+      this.logger.error('Failed to delete Master File', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Master File delete process completed');
+    }
+  }
+
+  async getMasterFileById(id: number) {
+    this.logger.log('Starting Master File get by ID process');
+    try{
+      const masterFile = await this.masterFileRepository.findOne({
+        where: { id },
+        relations: {
+          uploader: true,
+        },
+        select: {
+          id: true,
+          fileName: true,
+          filePath: true,
+          description: true,
+          uploadedBy: true,
+          uploadedAt: true,
+          uploader: {
+            id: true,
+            email: true,
+            metadata: true,
+          },
+        },
+      });
+
+      if (!masterFile) {
+        return errorMasterFile.masterFileNotFound;
+      }
+
+      return masterFile;
+    }catch(error){
+      this.logger.error('Failed to get Master File by ID', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Master File get by ID process completed');
+    }
+  }
+
+  async getAllMasterFiles(query: PaginationQueryDto) {
+    this.logger.log('Starting Master File get all process');
+    try {
+      const {
+        page = 1,
+        limit = 100,
+        search,
+        filter,
+        dateFrom,
+        dateTo,
+        sortBy = 'uploadedAt',
+        sortOrder = 'DESC',
+      } = query;
+
+      const queryBuilder = this.masterFileRepository
+        .createQueryBuilder('masterFile')
+        .leftJoinAndSelect('masterFile.uploader', 'uploader')
+        .select([
+          'masterFile.id',
+          'masterFile.fileName',
+          'masterFile.filePath',
+          'masterFile.description',
+          'masterFile.uploadedBy',
+          'masterFile.uploadedAt',
+          'uploader.id',
+          'uploader.email',
+          'uploader.metadata',
+        ]);
+
+      // Global search functionality
+      if (search) {
+        queryBuilder.andWhere(
+          '(LOWER(masterFile.fileName) LIKE LOWER(:search) OR LOWER(uploader.email) LIKE LOWER(:search) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.firstName")) LIKE LOWER(:search) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.lastName")) LIKE LOWER(:search))',
+          { search: `%${search}%` }
+        );
+      }
+
+      // Filter functionality
+      if (filter && Object.keys(filter).length > 0) {
+        if (filter.fileName) {
+          queryBuilder.andWhere(
+            'LOWER(masterFile.fileName) LIKE LOWER(:fileName)',
+            { fileName: `%${filter.fileName}%` }
+          );
+        }
+
+        if (filter.uploaderName) {
+          queryBuilder.andWhere(
+            '(LOWER(uploader.email) LIKE LOWER(:uploaderName) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.firstName")) LIKE LOWER(:uploaderName) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.lastName")) LIKE LOWER(:uploaderName))',
+            { uploaderName: `%${filter.uploaderName}%` }
+          );
+        }
+
+        if (filter.uploadedBy) {
+          queryBuilder.andWhere('masterFile.uploadedBy = :uploadedBy', {
+            uploadedBy: filter.uploadedBy,
+          });
+        }
+      }
+
+      // Date range filtering
+      if (dateFrom) {
+        queryBuilder.andWhere('masterFile.uploadedAt >= :dateFrom', {
+          dateFrom: new Date(dateFrom),
+        });
+      }
+
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999); // Include the entire day
+        queryBuilder.andWhere('masterFile.uploadedAt <= :dateTo', {
+          dateTo: endDate,
+        });
+      }
+
+      // Sorting
+      const validSortFields = ['id', 'fileName', 'uploadedAt', 'uploadedBy'];
+      const sortField = validSortFields.includes(sortBy) ? sortBy : 'uploadedAt';
+      
+      if (sortField === 'uploadedBy') {
+        queryBuilder.orderBy('uploader.email', sortOrder);
+      } else {
+        queryBuilder.orderBy(`masterFile.${sortField}`, sortOrder);
+      }
+
+      // Get total count before applying pagination
+      const total = await queryBuilder.getCount();
+
+      // Apply pagination
+      const offset = (page - 1) * limit;
+      queryBuilder.skip(offset).take(limit);
+
+      // Execute query
+      const masterFiles = await queryBuilder.getMany();
+
+      // Return paginated response
+      return new PaginatedResponseDto(
+        masterFiles,
+        page,
+        limit,
+        total,
+        'Master files retrieved successfully'
+      );
+    } catch (error) {
+      this.logger.error('Failed to get all Master Files', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Master File get all process completed');
+    }
   }
 }

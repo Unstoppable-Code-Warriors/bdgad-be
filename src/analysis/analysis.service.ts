@@ -530,7 +530,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     }
 
     // Generate presigned URL for download
-    const downloadUrl = await this.s3Service.generatePresignedDownloadUrl(
+    const downloadUrl = await this.s3Service.generatePresigned(
       S3Bucket.ANALYSIS_RESULTS,
       etlResult.resultPath,
       3600, // 1 hour expiry

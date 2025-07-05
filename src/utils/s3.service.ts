@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -95,32 +95,12 @@ export class S3Service {
    * @param expiresIn - URL expiration time in seconds (default: 1 hour)
    * @returns Promise<string> - Presigned URL
    */
-  async generatePresignedDownloadUrl(
+  async generatePresigned(
     bucket: string,
     key: string,
     expiresIn: number = 3600,
   ): Promise<string> {
     const command = new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-    });
-
-    return getSignedUrl(this.s3Client, command, { expiresIn });
-  }
-
-  /**
-   * Generate a presigned URL for uploading a file
-   * @param bucket - S3 bucket name
-   * @param key - File key/path in S3
-   * @param expiresIn - URL expiration time in seconds (default: 1 hour)
-   * @returns Promise<string> - Presigned URL
-   */
-  async generatePresignedUploadUrl(
-    bucket: string,
-    key: string,
-    expiresIn: number = 3600,
-  ): Promise<string> {
-    const command = new PutObjectCommand({
       Bucket: bucket,
       Key: key,
     });
@@ -156,6 +136,6 @@ export class S3Service {
       return s3Url.substring(prefix.length);
     }
 
-    throw new Error(`Invalid S3 URL format: ${s3Url}`);
+    throw new InternalServerErrorException(`Invalid S3 URL format: ${s3Url}`);
   }
 }

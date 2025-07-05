@@ -28,9 +28,11 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
+import { ApiSecurity } from '@nestjs/swagger';
 
 @Controller('analysis')
 @UseGuards(AuthGuard, RolesGuard)
+@ApiSecurity('token')
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
 

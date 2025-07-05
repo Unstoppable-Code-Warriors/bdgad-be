@@ -21,7 +21,7 @@ export class S3Service {
     );
 
     if (!endpoint || !accessKeyId || !secretAccessKey) {
-      throw new Error(
+      throw new InternalServerErrorException(
         'S3 configuration is missing. Please check S3_ENDPOINT, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY environment variables.',
       );
     }

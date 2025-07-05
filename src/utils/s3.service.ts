@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -136,6 +136,6 @@ export class S3Service {
       return s3Url.substring(prefix.length);
     }
 
-    throw new Error(`Invalid S3 URL format: ${s3Url}`);
+    throw new InternalServerErrorException(`Invalid S3 URL format: ${s3Url}`);
   }
 }

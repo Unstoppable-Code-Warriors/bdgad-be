@@ -11,6 +11,7 @@ import { S3Service } from 'src/utils/s3.service';
 import { S3Bucket } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
+import { errorMasterFile } from 'src/utils/errorRespones';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -313,7 +314,7 @@ export class StaffService {
       });
   
       if (!masterFile) {
-        throw new NotFoundException('Master File not found');
+        return errorMasterFile.masterFileNotFound; 
       }
       const s3key = this.s3Service.extractKeyFromUrl(masterFile.filePath, S3Bucket.MASTER_FILES);
   
@@ -340,7 +341,7 @@ export class StaffService {
       });
 
       if (!masterFile) {
-        throw new NotFoundException('Master File not found');
+        return errorMasterFile.masterFileNotFound;
       }
 
       const s3key = this.s3Service.extractKeyFromUrl(masterFile.filePath, S3Bucket.MASTER_FILES);
@@ -380,7 +381,7 @@ export class StaffService {
       });
 
       if (!masterFile) {
-        throw new NotFoundException('Master File not found');
+        return errorMasterFile.masterFileNotFound;
       }
 
       return masterFile;

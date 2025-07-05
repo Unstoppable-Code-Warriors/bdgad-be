@@ -42,8 +42,8 @@ export class LabSession {
   })
   metadata: Record<string, any>;
 
-  @Column({ name: 'doctor_id' })
-  doctorId: number;
+  @Column({ name: 'doctor_id', nullable: true })
+  doctorId: number | null;
 
   @ManyToOne(() => Patient, (patient) => patient.labSessions)
   @JoinColumn({ name: 'patient_id' })
@@ -54,6 +54,33 @@ export class LabSession {
   })
   @JoinColumn({ name: 'doctor_id' })
   doctor: User;
+
+  @Column({ name: 'lab_testing_id', nullable: true })
+  labTestingId: number | null;
+
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
+  @JoinColumn({ name: 'lab_testing_id' })
+  labTesting: User;
+
+  @Column({ name: 'analysis_id', nullable: true })
+  analysisId: number | null;
+
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
+  @JoinColumn({ name: 'analysis_id' })
+  analysis: User;
+
+  @Column({ name: 'validation_id', nullable: true })
+  validationId: number | null;
+
+  @ManyToOne(() => User, {
+    cascade: true,
+  })
+  @JoinColumn({ name: 'validation_id' })
+  validation: User;
 
   @OneToMany(() => PatientFile, (patientFile) => patientFile.session, {
     cascade: true,

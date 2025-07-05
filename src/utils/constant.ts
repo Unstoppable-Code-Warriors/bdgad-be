@@ -19,6 +19,7 @@ export enum S3Bucket {
   FASTQ_FILE = 'fastq-file',
   ANALYSIS_RESULTS = 'analysis-results',
   MASTER_FILES = 'master-files',
+  PATIENT_FILES = 'patient-files',
 }
 
 export enum Role {

@@ -12,6 +12,7 @@ import {
   Query,
   UsePipes,
   ValidationPipe,
+  Body,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
@@ -26,6 +27,7 @@ import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
 import { ApiBody, ApiConsumes, ApiSecurity, ApiQuery, ApiOperation } from '@nestjs/swagger';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { CreatePatientDto } from './dtos/create-patient-dto.req';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -201,6 +203,36 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async getAllMasterFiles(@Query() query: PaginationQueryDto) {
     return this.staffService.getAllMasterFiles(query);
+  }
+
+  @Post('/patient')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Create a new patient' })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  @ApiBody({ type: CreatePatientDto, examples: {
+    'example 1': {
+      value: {
+        fullName: 'John Doe',
+        healthInsuranceCode: '1234567890',
+      },
+    },
+  } })
+  async createPatient(@Body() createPatientDto: CreatePatientDto) {
+    return this.staffService.createPatient(createPatientDto);
+  }
+
+  @Get('/patient')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Get all patients with query' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search keyword for patient name' })
+  @ApiQuery({ name: 'searchField', required: false, type: String, description: 'Search field (fullName, healthInsuranceCode, personalId)', enum: ['fullName', 'healthInsuranceCode', 'personalId'] })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'Start date filter (ISO format)' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'End date filter (ISO format)' })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getAllPatients(@Query() query: PaginationQueryDto) {
+    return this.staffService.getAllPatients(query);
   }
 
 }

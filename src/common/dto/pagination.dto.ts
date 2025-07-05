@@ -74,6 +74,10 @@ export class PaginationQueryDto {
   search?: string;
 
   @IsOptional()
+  @IsString()
+  searchField?: string = 'fullName';
+
+  @IsOptional()
   @IsObject()
   @Transform(({ value }) => {
     if (typeof value === 'string') {

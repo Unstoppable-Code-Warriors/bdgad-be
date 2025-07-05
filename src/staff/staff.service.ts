@@ -12,6 +12,8 @@ import { S3Bucket } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
 import { errorMasterFile } from 'src/utils/errorRespones';
+import { CreatePatientDto } from './dtos/create-patient-dto.req';
+import { Patient } from 'src/entities/patient.entity';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -28,6 +30,8 @@ export class StaffService {
     @InjectRepository(MasterFile)
     private readonly masterFileRepository: Repository<MasterFile>,
     private readonly s3Service: S3Service,
+    @InjectRepository(Patient)
+    private readonly patientRepository: Repository<Patient>,
   ) {}
 
   async handleUploadInfo(files: UploadedFiles) {
@@ -501,6 +505,88 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     } finally {
       this.logger.log('Master File get all process completed');
+    }
+  }
+
+  async createPatient(createPatientDto: CreatePatientDto) {
+    this.logger.log('Starting Patient create process');
+    try{
+      const {fullName, healthInsuranceCode} = createPatientDto;
+      
+      const personalId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+      const patient = this.patientRepository.create({
+        fullName: fullName.trim(),
+        dateOfBirth: new Date('1995-07-05'),
+        phone: '081234567890',
+        address: 'Jl. Raya No. 123',
+        personalId,
+        healthInsuranceCode: healthInsuranceCode.trim(),
+        createdAt: new Date(),
+      });
+      await this.patientRepository.save(patient);
+      return {message: 'Patient created successfully'};
+    }catch(error){
+      this.logger.error('Failed to create Patient', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Patient create process completed');
+    }
+  }
+
+  async getAllPatients(query: PaginationQueryDto) {
+    this.logger.log('Starting Patient get all process');
+    try{
+      const {
+        page = 1,
+        limit = 100,
+        search,
+        dateFrom,
+        dateTo,
+        sortOrder = 'ASC',
+        searchField = 'fullName', // Default search field
+      } = query;
+
+      const queryBuilder = this.patientRepository.createQueryBuilder('patient');
+
+      // Global search functionality - search by the specified field
+      if (search) {
+        const validSearchFields = ['fullName', 'healthInsuranceCode', 'personalId'];
+        const fieldToSearch = validSearchFields.includes(searchField) ? searchField : 'fullName';
+        
+        queryBuilder.andWhere(
+          `LOWER(patient.${fieldToSearch}) LIKE LOWER(:search)`,
+          { search: `%${search}%` }
+        );
+      }
+
+      // Date range filtering
+      if (dateFrom) {
+        queryBuilder.andWhere('patient.createdAt >= :dateFrom', {
+          dateFrom: new Date(dateFrom),
+        });
+      }
+
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999); // Include the entire day
+        queryBuilder.andWhere('patient.createdAt <= :dateTo', {
+          dateTo: endDate,
+        });
+      }
+
+      queryBuilder.orderBy(`patient.fullName`, sortOrder);
+
+      const total = await queryBuilder.getCount();
+      const offset = (page - 1) * limit;
+      queryBuilder.skip(offset).take(limit);
+
+      const patients = await queryBuilder.getMany();
+      return new PaginatedResponseDto(patients, page, limit, total, 'Patients retrieved successfully'); 
+    }catch(error){
+      this.logger.error('Failed to get all Patients', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Patient get all process completed');
     }
   }
 }

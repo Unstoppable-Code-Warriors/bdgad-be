@@ -28,6 +28,7 @@ import { Role } from '../utils/constant';
 import { ApiBody, ApiConsumes, ApiSecurity, ApiQuery, ApiOperation } from '@nestjs/swagger';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
+import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -247,6 +248,98 @@ export class StaffController {
   @ApiOperation({ summary: 'Get a lab session by ID' })
   async getLabSessionById(@Param('sessionId') sessionId: number) {
     return this.staffService.getLabSessionById(sessionId);
+  }
+
+  @Get('sessions/:sessionId/patient-files/:patientFileId/download')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Download a patient file by session ID and patient file ID' })
+  async downloadPatientFile(@Param('sessionId') sessionId: number, @Param('patientFileId') patientFileId: number) {
+    return this.staffService.downloadPatientFile(sessionId, patientFileId);
+  }
+
+  @Post('patient-files/upload')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ 
+    summary: 'Upload patient files with OCR results',
+    description: 'Upload multiple patient files with optional OCR results and create/update lab session'
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Patient files upload with form data',
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+        patientId: {
+          type: 'number',
+          description: 'Patient ID',
+          example: 1,
+        },
+        doctorId: {
+          type: 'number',
+          description: 'Doctor ID',
+          example: 1,
+        },
+        typeLabSession: {
+          type: 'string',
+          enum: ['test', 'validation'],
+          description: 'Type of lab session',
+          example: 'test',
+        },
+        ocrResult: {
+          type: 'string',
+          description: 'OCR results as JSON string. Array of objects with filename as key and OCR result as value',
+          example: '[{"filename1.jpg": {"text": "sample text", "confidence": 0.95}}, {"filename2.jpg": null}]',
+        },
+      },
+      required: ['files', 'patientId', 'doctorId', 'typeLabSession'],
+    },
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'files', maxCount: 20 }], {
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+          'image/jpeg' , // .jpg
+          'image/jpg', // .jpg
+          'image/png', // .png
+          'application/pdf', // .pdf
+          'text/plain', // .txt
+          'application/msword', // .doc
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+          'application/vnd.ms-excel', // .xls
+          'text/csv', // .csv
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only images, PDF, text, csv, xls, xlsx, doc, docx files are allowed'), false);
+        }
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+        files: 20, // Maximum 20 files
+      },
+      preservePath: true, // Preserve the original filename path
+    })
+  )
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async uploadPatientFiles(
+    @UploadedFiles() files: { files?: Express.Multer.File[] },
+    @Body() uploadData: UploadPatientFilesDto,
+    @User() user: AuthenticatedUser,
+  ) {
+    if (!files.files || files.files.length === 0) {
+      throw new BadRequestException('At least one file is required');
+    }
+
+    return this.staffService.uploadPatientFiles(files.files, uploadData, user);
   }
 
 }

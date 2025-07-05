@@ -38,3 +38,19 @@ export const errorLabSession = {
     404,
   )
 }
+
+export const errorPatientFile = {
+  patientFileNotFound: new ErrorResponse(
+    'PATIENT_FILE_NOT_FOUND',
+    'Patient file not found',
+    404,
+  )
+}
+
+export const errorUser = {
+  userNotFound: new ErrorResponse(
+    'USER_NOT_FOUND',
+    'User not found',
+    404,
+  )
+}

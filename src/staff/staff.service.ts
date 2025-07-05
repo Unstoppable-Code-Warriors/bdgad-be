@@ -11,10 +11,13 @@ import { S3Service } from 'src/utils/s3.service';
 import { S3Bucket } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
-import { errorLabSession, errorMasterFile, errorPatient } from 'src/utils/errorRespones';
+import { errorLabSession, errorMasterFile, errorPatient, errorPatientFile, errorUser } from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
+import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
+import { PatientFile } from 'src/entities/patient-file.entity';
+import { User } from 'src/entities/user.entity';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -35,7 +38,50 @@ export class StaffService {
     private readonly patientRepository: Repository<Patient>,
     @InjectRepository(LabSession)
     private readonly labSessionRepository: Repository<LabSession>,
+    @InjectRepository(PatientFile)
+    private readonly patientFileRepository: Repository<PatientFile>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
+
+  private decodeFileName(filename: string): string {
+    try {
+      // First, try to detect if it's already properly encoded
+      if (this.isValidUtf8(filename)) {
+        return filename;
+      }
+      
+      // Try to fix Latin1 to UTF-8 encoding issue
+      const decoded = Buffer.from(filename, 'latin1').toString('utf8');
+      
+      // Validate the decoded result
+      if (this.isValidUtf8(decoded)) {
+        return decoded;
+      }
+      
+      // If all else fails, return the original
+      return filename;
+    } catch (error) {
+      this.logger.warn(`Failed to decode filename: ${filename}`, error);
+      return filename;
+    }
+  }
+
+  private isValidUtf8(str: string): boolean {
+    try {
+      // Check if string contains any replacement characters (�)
+      if (str.includes('\uFFFD')) {
+        return false;
+      }
+      
+      // Check if the string encodes/decodes properly
+      const encoded = Buffer.from(str, 'utf8');
+      const decoded = encoded.toString('utf8');
+      return str === decoded;
+    } catch {
+      return false;
+    }
+  }
 
   async handleUploadInfo(files: UploadedFiles) {
     // Use absolute path resolution to avoid path issues
@@ -664,6 +710,32 @@ export class StaffService {
           doctor: true,
           patientFiles: true,
         },
+        select: {
+          id: true,
+          labcode: true,
+          barcode: true,
+          typeLabSession: true,
+          requestDate: true,
+          createdAt: true,
+          doctor: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          patientFiles: {
+            id: true,
+            fileName: true,
+            filePath: true,
+            fileType: true,
+            ocrResult: true,
+            uploader: {
+              id: true,
+              email: true,
+              name: true,
+            },
+            uploadedAt: true,
+          }
+        },
       });
       if (!labSession) {
         return errorLabSession.labSessionNotFound;
@@ -674,6 +746,151 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     }finally{
       this.logger.log('Lab Session get by ID process completed');
+    }
+  }
+
+  async downloadPatientFile(sessionId: number, patientFileId: number) {
+    this.logger.log('Starting Patient File download process');
+    try{
+      const patientFile = await this.patientFileRepository.findOne({
+        where: {id: patientFileId, sessionId: sessionId},
+      });
+      if (!patientFile) {
+        return errorPatientFile.patientFileNotFound;
+      }
+      const s3key = this.s3Service.extractKeyFromUrl(patientFile.filePath, S3Bucket.PATIENT_FILES);
+      const fileUrl = await this.s3Service.generatePresigned(S3Bucket.PATIENT_FILES, s3key, 3600);
+      return fileUrl;
+    }catch(error){
+      this.logger.error('Failed to download Patient File', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Patient File download process completed');
+    }
+  }
+
+  async uploadPatientFiles(
+    files: Express.Multer.File[],
+    uploadData: UploadPatientFilesDto,
+    user: AuthenticatedUser
+  ) {
+    this.logger.log('Starting Patient Files upload process');
+    try {
+      const { patientId, doctorId, typeLabSession, ocrResult} = uploadData;
+
+      // Verify patient exists
+      const patient = await this.patientRepository.findOne({
+        where: { id: patientId }
+      });
+      if (!patient) {
+        return errorPatient.patientNotFound;
+      }
+
+      // Verify doctor exists
+      const doctor = await this.userRepository.findOne({
+        where: { id: doctorId }
+      });
+      if (!doctor) {
+        return errorUser.userNotFound;
+      }
+        // Generate unique labcode and barcode if not provided
+        const defaultLabcode = `LAB-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const defaultBarcode = `BAR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+        const labSession = this.labSessionRepository.create({
+          patientId,
+          labcode: defaultLabcode,
+          barcode: defaultBarcode,
+          requestDate: new Date(),
+          doctorId,
+          typeLabSession,
+          metadata: {},
+        });
+        await this.labSessionRepository.save(labSession);
+        this.logger.log(`Created new lab session with ID: ${labSession.id}`);
+
+      // Upload files and create patient file records
+      const uploadedFiles: Array<{
+        id: number;
+        fileName: string;
+        fileType: string;
+        hasOcrResult: boolean;
+      }> = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const timestamp = Date.now();
+        
+        // Properly decode UTF-8 filename
+        let originalFileName = this.decodeFileName(file.originalname);
+        
+        // Log for debugging
+        if (originalFileName !== file.originalname) {
+          this.logger.log(`Filename decoded from: "${file.originalname}" to: "${originalFileName}"`);
+        }
+        
+        // Create a safe S3 key without special characters
+        const fileExtension = path.extname(originalFileName);
+        const safeFileName = `file_${timestamp}_${i}${fileExtension}`;
+        const s3Key = `session-${labSession.id}/${safeFileName}`;
+
+        // Upload to S3
+        const s3Url = await this.s3Service.uploadFile(
+          S3Bucket.PATIENT_FILES,
+          s3Key,
+          file.buffer,
+          file.mimetype,
+        );
+
+        // Find OCR result for this file
+        let fileOcrResult: Record<string, any> | {} = {};
+        let hasActualOcrData = false;
+        
+        if (ocrResult && Array.isArray(ocrResult)) {
+          // Try to match with both original and corrected filename
+          const ocrEntry = ocrResult.find(entry => 
+            entry && typeof entry === 'object' && 
+            (entry[originalFileName] || entry[file.originalname])
+          );
+          if (ocrEntry) {
+            fileOcrResult = ocrEntry[originalFileName] || ocrEntry[file.originalname];
+            hasActualOcrData = fileOcrResult && Object.keys(fileOcrResult).length > 0;
+          }
+        }
+
+        // Create patient file record
+        const patientFile = this.patientFileRepository.create({
+          sessionId: labSession.id,
+          fileName: originalFileName,
+          filePath: s3Url,
+          fileType: file.mimetype,
+          ocrResult: fileOcrResult || {},
+          uploadedBy: user.id,
+          uploadedAt: new Date(),
+        });
+
+        await this.patientFileRepository.save(patientFile);
+        uploadedFiles.push({
+          id: patientFile.id,
+          fileName: patientFile.fileName,
+          fileType: patientFile.fileType,
+          hasOcrResult: hasActualOcrData,
+        });
+
+        this.logger.log(`Uploaded file: ${file.originalname} to session ${labSession.id}`);
+      }
+
+      return {
+        message: 'Patient files uploaded successfully',
+        sessionId: labSession.id,
+        uploadedFiles,
+        totalFiles: files.length,
+      };
+
+    } catch (error) {
+      this.logger.error('Failed to upload patient files', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Patient Files upload process completed');
     }
   }
 }

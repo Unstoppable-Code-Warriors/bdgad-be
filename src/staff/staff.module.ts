@@ -7,9 +7,11 @@ import { MasterFile } from 'src/entities/master-file.entity';
 import { S3Service } from 'src/utils/s3.service';
 import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
+import { PatientFile } from 'src/entities/patient-file.entity';
+import { User } from 'src/entities/user.entity';
 
 @Module({
-  imports: [HttpModule, TypeOrmModule.forFeature([MasterFile,Patient,LabSession])],
+  imports: [HttpModule, TypeOrmModule.forFeature([MasterFile,Patient,LabSession,PatientFile,User])],
   controllers: [StaffController],
   providers: [StaffService,S3Service],
 })

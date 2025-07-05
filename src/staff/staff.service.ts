@@ -10,7 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
 import { S3Bucket } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
-import { PaginationQueryDto } from 'src/common/dto/pagination.dto';
+import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -392,17 +392,114 @@ export class StaffService {
     }
   }
 
-  // async getAllMasterFiles(query: PaginationQueryDto) {
-  //   this.logger.log('Starting Master File get all process');
-  //   try{
-  //     const masterFiles = await this.masterFileRepository.find();
+  async getAllMasterFiles(query: PaginationQueryDto) {
+    this.logger.log('Starting Master File get all process');
+    try {
+      const {
+        page = 1,
+        limit = 100,
+        search,
+        filter,
+        dateFrom,
+        dateTo,
+        sortBy = 'uploadedAt',
+        sortOrder = 'DESC',
+      } = query;
 
-  //     return masterFiles;
-  //   }catch(error){
-  //     this.logger.error('Failed to get all Master Files', error);
-  //     throw new InternalServerErrorException(error.message);
-  //   }finally{
-  //     this.logger.log('Master File get all process completed');
-  //   }
-  // }
+      const queryBuilder = this.masterFileRepository
+        .createQueryBuilder('masterFile')
+        .leftJoinAndSelect('masterFile.uploader', 'uploader')
+        .select([
+          'masterFile.id',
+          'masterFile.fileName',
+          'masterFile.filePath',
+          'masterFile.description',
+          'masterFile.uploadedBy',
+          'masterFile.uploadedAt',
+          'uploader.id',
+          'uploader.email',
+          'uploader.metadata',
+        ]);
+
+      // Global search functionality
+      if (search) {
+        queryBuilder.andWhere(
+          '(LOWER(masterFile.fileName) LIKE LOWER(:search) OR LOWER(uploader.email) LIKE LOWER(:search) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.firstName")) LIKE LOWER(:search) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.lastName")) LIKE LOWER(:search))',
+          { search: `%${search}%` }
+        );
+      }
+
+      // Filter functionality
+      if (filter && Object.keys(filter).length > 0) {
+        if (filter.fileName) {
+          queryBuilder.andWhere(
+            'LOWER(masterFile.fileName) LIKE LOWER(:fileName)',
+            { fileName: `%${filter.fileName}%` }
+          );
+        }
+
+        if (filter.uploaderName) {
+          queryBuilder.andWhere(
+            '(LOWER(uploader.email) LIKE LOWER(:uploaderName) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.firstName")) LIKE LOWER(:uploaderName) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.lastName")) LIKE LOWER(:uploaderName))',
+            { uploaderName: `%${filter.uploaderName}%` }
+          );
+        }
+
+        if (filter.uploadedBy) {
+          queryBuilder.andWhere('masterFile.uploadedBy = :uploadedBy', {
+            uploadedBy: filter.uploadedBy,
+          });
+        }
+      }
+
+      // Date range filtering
+      if (dateFrom) {
+        queryBuilder.andWhere('masterFile.uploadedAt >= :dateFrom', {
+          dateFrom: new Date(dateFrom),
+        });
+      }
+
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999); // Include the entire day
+        queryBuilder.andWhere('masterFile.uploadedAt <= :dateTo', {
+          dateTo: endDate,
+        });
+      }
+
+      // Sorting
+      const validSortFields = ['id', 'fileName', 'uploadedAt', 'uploadedBy'];
+      const sortField = validSortFields.includes(sortBy) ? sortBy : 'uploadedAt';
+      
+      if (sortField === 'uploadedBy') {
+        queryBuilder.orderBy('uploader.email', sortOrder);
+      } else {
+        queryBuilder.orderBy(`masterFile.${sortField}`, sortOrder);
+      }
+
+      // Get total count before applying pagination
+      const total = await queryBuilder.getCount();
+
+      // Apply pagination
+      const offset = (page - 1) * limit;
+      queryBuilder.skip(offset).take(limit);
+
+      // Execute query
+      const masterFiles = await queryBuilder.getMany();
+
+      // Return paginated response
+      return new PaginatedResponseDto(
+        masterFiles,
+        page,
+        limit,
+        total,
+        'Master files retrieved successfully'
+      );
+    } catch (error) {
+      this.logger.error('Failed to get all Master Files', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Master File get all process completed');
+    }
+  }
 }

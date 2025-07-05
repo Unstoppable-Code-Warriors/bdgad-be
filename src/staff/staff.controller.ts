@@ -9,6 +9,9 @@ import {
   Param,
   Get,
   Delete,
+  Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
@@ -21,7 +24,8 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiBody, ApiConsumes, ApiSecurity } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiSecurity, ApiQuery, ApiOperation } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -161,6 +165,42 @@ export class StaffController {
   @AuthZ([Role.STAFF])
   async getMasterFileById(@Param('id') id: number) {
     return this.staffService.getMasterFileById(id);
+  }
+
+  @Get('/get-all-master-files')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ 
+    summary: 'Get all master files with pagination and filtering',
+    description: 'Retrieve a paginated list of master files with support for search, filtering by filename/uploader, date range, and sorting'
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search keyword for filename or uploader name' })
+  @ApiQuery({ 
+    name: 'filter', 
+    required: false, 
+    type: String, 
+    description: 'JSON object for filtering. Example: {"fileName":"test","uploaderName":"john","uploadedBy":1}' 
+  })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'Start date filter (ISO format)' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'End date filter (ISO format)' })
+  @ApiQuery({ 
+    name: 'sortBy', 
+    required: false, 
+    type: String, 
+    description: 'Sort field (id, fileName, uploadedAt, uploadedBy)', 
+    enum: ['id', 'fileName', 'uploadedAt', 'uploadedBy']
+  })
+  @ApiQuery({ 
+    name: 'sortOrder', 
+    required: false, 
+    type: String, 
+    description: 'Sort order (ASC or DESC)', 
+    enum: ['ASC', 'DESC']
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getAllMasterFiles(@Query() query: PaginationQueryDto) {
+    return this.staffService.getAllMasterFiles(query);
   }
 
 }

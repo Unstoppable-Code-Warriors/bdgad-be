@@ -237,7 +237,7 @@ export class StaffController {
 
   @Post('/patients')
   @AuthZ([Role.STAFF])
-  @ApiOperation({ summary: 'Create a new patient' })
+  @ApiOperation({ summary: 'Create a new folder patient' })
   @UsePipes(new ValidationPipe({ transform: true }))
   @ApiBody({ type: CreatePatientDto, examples: {
     'example 1': {
@@ -284,6 +284,13 @@ export class StaffController {
   @ApiOperation({ summary: 'Download a patient file by session ID and patient file ID' })
   async downloadPatientFile(@Param('sessionId') sessionId: number, @Param('patientFileId') patientFileId: number) {
     return this.staffService.downloadPatientFile(sessionId, patientFileId);
+  }
+
+  @Delete('sessions/:sessionId/patient-files/:patientFileId/delete')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Delete a patient file by session ID and patient file ID' })
+  async deletePatientFile(@Param('sessionId') sessionId: number, @Param('patientFileId') patientFileId: number) {
+    return this.staffService.deletePatientFile(sessionId, patientFileId);
   }
 
   @Post('patient-files/upload')

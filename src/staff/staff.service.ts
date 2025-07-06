@@ -764,6 +764,27 @@ export class StaffService {
     }
   }
 
+  async deletePatientFile(sessionId: number, patientFileId: number) {
+    this.logger.log('Starting Patient File delete process');
+    try{
+      const patientFile = await this.patientFileRepository.findOne({
+        where: {id: patientFileId, sessionId: sessionId},
+      });
+      if (!patientFile) {
+        return errorPatientFile.patientFileNotFound;
+      }
+      const s3key = this.s3Service.extractKeyFromUrl(patientFile.filePath, S3Bucket.PATIENT_FILES);
+      await this.s3Service.deleteFile(S3Bucket.PATIENT_FILES, s3key);
+      await this.patientFileRepository.delete(patientFileId);
+      return {message: 'Patient File deleted successfully'};
+    }catch(error){
+      this.logger.error('Failed to delete Patient File', error);
+      throw new InternalServerErrorException(error.message);
+    }finally{
+      this.logger.log('Patient File delete process completed');
+    }
+  }
+
   async uploadPatientFiles(
     files: Express.Multer.File[],
     uploadData: UploadPatientFilesDto,

@@ -29,6 +29,7 @@ import { ApiBody, ApiConsumes, ApiSecurity, ApiQuery, ApiOperation } from '@nest
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
+import { errorUploadFile } from 'src/utils/errorRespones';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -112,24 +113,34 @@ export class StaffController {
     return this.staffService.handleMedicalTestRequisitionUpload(file);
   }
 
-  @Post('/upload-general-file')
+  @Post('/upload-general-files')
   @AuthZ([Role.STAFF])
-  @ApiOperation({ summary: 'Upload a general file' })
+  @ApiOperation({ 
+    summary: 'Upload multiple general files',
+    description: 'Upload multiple general files at once'
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
         },
       },
-      required: ['file'],
+      required: ['files'],
     },
   })
-  @UseInterceptors(FileInterceptor('file',{
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'files', maxCount: 20 }], {
     fileFilter: (req, file, cb) => {
+      // Log filename encoding for debugging
+      console.log('Upload filename:', file.originalname);
+      console.log('Filename bytes:', Buffer.from(file.originalname).toString('hex'));
+      
       const allowedMimeTypes = [
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
         'application/vnd.ms-excel', // .xls
@@ -138,19 +149,32 @@ export class StaffController {
         'text/plain', // .txt
         'application/msword', // .doc
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+        'image/jpeg', // .jpg
+        'image/jpg', // .jpg
+        'image/png', // .png
       ];
       if (allowedMimeTypes.includes(file.mimetype)) {
         cb(null, true);
       } else {
-        cb(new Error('Only .xlsx, .xls, .csv, .pdf, .txt, .doc, .docx are allowed'), false);
+        cb(new Error('Only .xlsx, .xls, .csv, .pdf, .txt, .doc, .docx, .jpg, .png files are allowed'), false);
       }
     },
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
+      fileSize: 10 * 1024 * 1024, // 10MB per file
+      files: 20, // Maximum 20 files
     },
+    preservePath: true, // Preserve the original filename path
   }))
-  async uploadGeneralFile(@UploadedFile() file: Express.Multer.File, @User() user: AuthenticatedUser) {
-    return this.staffService.uploadGeneralFile(file, user);
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async uploadGeneralFiles(
+    @UploadedFiles() files: { files?: Express.Multer.File[] },
+    @User() user: AuthenticatedUser,
+  ) {
+    if (!files.files || files.files.length === 0) {
+      return errorUploadFile.fileNotFound;
+    }
+
+    return this.staffService.uploadGeneralFiles(files.files, user);
   }
 
   @Get('/download-general-file/:id')

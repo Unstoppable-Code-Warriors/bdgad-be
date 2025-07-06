@@ -67,3 +67,21 @@ export const errorLabTesting = {
     404,
   )
 }
+
+export const errorUploadFile = {
+  fileNotFound: new ErrorResponse(
+    'FILE_NOT_FOUND',
+    'File not found',
+    404,
+  ),
+  fileSizeExceeded: new ErrorResponse(
+    'FILE_SIZE_EXCEEDED',
+    'File size exceeded',
+    413,
+  ),
+  fileTypeNotAllowed: new ErrorResponse(
+    'FILE_TYPE_NOT_ALLOWED',
+    'File type not allowed',
+    400,
+  ),
+}

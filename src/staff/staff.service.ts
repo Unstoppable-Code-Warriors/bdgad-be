@@ -19,6 +19,7 @@ import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { User } from 'src/entities/user.entity';
 import { GeneralFile } from 'src/entities/general-file.entity';
+import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -288,37 +289,68 @@ export class StaffService {
     };
   }
 
-  async uploadGeneralFile(file: Express.Multer.File, user: AuthenticatedUser) {
-    this.logger.log('Starting General File upload process');
-    try{
-      const timestamp = Date.now();
 
-      const fileName = file.originalname.trim().replace(/\s+/g, '-');
-      const s3Key = `${timestamp}_${fileName}`;
+  async uploadGeneralFiles(files: Express.Multer.File[], user: AuthenticatedUser) {
+    this.logger.log('Starting General Files upload process');
+    try {
+      const uploadedFiles: Array<{
+        id: number;
+        fileName: string;
+        fileType: string;
+        fileSize: number;
+      }> = [];
 
-      const s3Url = await this.s3Service.uploadFile(
-        S3Bucket.GENERAL_FILES,
-        s3Key,
-        file.buffer,
-        file.mimetype,
-      );
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const timestamp = Date.now();
+        
+        // Properly decode UTF-8 filename
+        let originalFileName = Buffer.from(file.originalname, 'binary').toString('utf8');
+        let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
+        
+        // Create a safe S3 key
+        const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
 
-      const generalFile = this.generalFileRepository.create({
-        fileName: file.originalname,
-        filePath: s3Url,
-        description: 'Master File',
-        uploadedBy: user.id,
-        uploadedAt: new Date(),
-      });
+        // Upload to S3
+        const s3Url = await this.s3Service.uploadFile(
+          S3Bucket.GENERAL_FILES,
+          s3Key,
+          file.buffer,
+          file.mimetype,
+        );
 
-      await this.generalFileRepository.save(generalFile);
+        // Create general file record
+        const generalFile = this.generalFileRepository.create({
+          fileName: originalFileName.split('.').slice(0, -1).join('.'),
+          fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
+          filePath: s3Url,
+          description: 'General File',
+          uploadedBy: user.id,
+          uploadedAt: new Date(),
+        });
 
-      return {message: 'General File uploaded successfully'}
-    }catch(error){
-      this.logger.error('Failed to upload General File', error);
+        await this.generalFileRepository.save(generalFile);
+        uploadedFiles.push({
+          id: generalFile.id,
+          fileName: generalFile.fileName,
+          fileType: file.mimetype,
+          fileSize: file.size,
+        });
+
+        this.logger.log(`Uploaded file: ${originalFileName} with ID: ${generalFile.id}`);
+      }
+
+      return {
+        message: 'General files uploaded successfully',
+        uploadedFiles,
+        totalFiles: files.length,
+      };
+
+    } catch (error) {
+      this.logger.error('Failed to upload general files', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
-      this.logger.log('General File upload process completed');
+    } finally {
+      this.logger.log('General Files upload process completed');
     }
   }
 
@@ -833,9 +865,9 @@ export class StaffService {
         // Create patient file record
         const patientFile = this.patientFileRepository.create({
           sessionId: labSession.id,
-          fileName: originalFileName,
+          fileName: originalFileName.split('.').slice(0, -1).join('.'),
           filePath: s3Url,
-          fileType: file.mimetype,
+          fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
           ocrResult: fileOcrResult || {},
           uploadedBy: user.id,
           uploadedAt: new Date(),

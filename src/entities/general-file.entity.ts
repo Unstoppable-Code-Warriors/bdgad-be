@@ -15,6 +15,9 @@ export class GeneralFile {
   @Column({ name: 'file_name' })
   fileName: string;
 
+  @Column({ name: 'file_type', nullable: true })
+  fileType: string;
+
   @Column({ name: 'file_path', type: 'text' })
   filePath: string;
 

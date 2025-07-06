@@ -4,20 +4,21 @@ import * as fs from 'fs';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { MasterFile } from 'src/entities/master-file.entity';
+
 import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
 import { S3Bucket, TypeLabSession } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
-import { errorLabSession, errorLabTesting, errorMasterFile, errorPatient, errorPatientFile, errorUser } from 'src/utils/errorRespones';
+import { errorGeneralFile, errorLabSession, errorLabTesting, errorPatient, errorPatientFile, errorUser } from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { User } from 'src/entities/user.entity';
+import { GeneralFile } from 'src/entities/general-file.entity';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -31,8 +32,8 @@ export class StaffService {
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
-    @InjectRepository(MasterFile)
-    private readonly masterFileRepository: Repository<MasterFile>,
+    @InjectRepository(GeneralFile)
+    private readonly generalFileRepository: Repository<GeneralFile>,
     private readonly s3Service: S3Service,
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
@@ -287,8 +288,8 @@ export class StaffService {
     };
   }
 
-  async uploadMasterFile(file: Express.Multer.File, user: AuthenticatedUser) {
-    this.logger.log('Starting Master File upload process');
+  async uploadGeneralFile(file: Express.Multer.File, user: AuthenticatedUser) {
+    this.logger.log('Starting General File upload process');
     try{
       const timestamp = Date.now();
 
@@ -296,13 +297,13 @@ export class StaffService {
       const s3Key = `${timestamp}_${fileName}`;
 
       const s3Url = await this.s3Service.uploadFile(
-        S3Bucket.MASTER_FILES,
+        S3Bucket.GENERAL_FILES,
         s3Key,
         file.buffer,
         file.mimetype,
       );
 
-      const masterFile = this.masterFileRepository.create({
+      const generalFile = this.generalFileRepository.create({
         fileName: file.originalname,
         filePath: s3Url,
         description: 'Master File',
@@ -310,72 +311,72 @@ export class StaffService {
         uploadedAt: new Date(),
       });
 
-      await this.masterFileRepository.save(masterFile);
+      await this.generalFileRepository.save(generalFile);
 
-      return {message: 'Master File uploaded successfully'}
+      return {message: 'General File uploaded successfully'}
     }catch(error){
-      this.logger.error('Failed to upload Master File', error);
+      this.logger.error('Failed to upload General File', error);
       throw new InternalServerErrorException(error.message);
     }finally{
-      this.logger.log('Master File upload process completed');
+      this.logger.log('General File upload process completed');
     }
   }
 
-  async downloadMasterFile(id: number) {
-    this.logger.log('Starting Master File download process');
+  async downloadGeneralFile(id: number) {
+    this.logger.log('Starting General File download process');
     try {
-      const masterFile = await this.masterFileRepository.findOne({
+      const generalFile = await this.generalFileRepository.findOne({
         where: { id },
       });
   
-      if (!masterFile) {
-        return errorMasterFile.masterFileNotFound; 
+      if (!generalFile) {
+        return errorGeneralFile.generalFileNotFound;  
       }
-      const s3key = this.s3Service.extractKeyFromUrl(masterFile.filePath, S3Bucket.MASTER_FILES);
+      const s3key = this.s3Service.extractKeyFromUrl(generalFile.filePath, S3Bucket.GENERAL_FILES);
   
       const presignedUrl = await this.s3Service.generatePresigned(
-        S3Bucket.MASTER_FILES,
+        S3Bucket.GENERAL_FILES,
         s3key,
         3600,
       );
   
       return presignedUrl;
     }catch(error){
-      this.logger.error('Failed to download Master File', error);
+      this.logger.error('Failed to download General File', error);
       throw new InternalServerErrorException(error.message);
     }finally{
-      this.logger.log('Master File download process completed');
+      this.logger.log('General File download process completed');
     }
   }
 
-  async deleteMasterFile(id: number) {
-    this.logger.log('Starting Master File delete process');
+  async deleteGeneralFile(id: number) {
+    this.logger.log('Starting General File delete process');
     try{
-      const masterFile = await this.masterFileRepository.findOne({
+      const generalFile = await this.generalFileRepository.findOne({
         where: { id },
       });
 
-      if (!masterFile) {
-        return errorMasterFile.masterFileNotFound;
+      if (!generalFile) {
+        return errorGeneralFile.generalFileNotFound;    
       }
 
-      const s3key = this.s3Service.extractKeyFromUrl(masterFile.filePath, S3Bucket.MASTER_FILES);
-      await this.s3Service.deleteFile(S3Bucket.MASTER_FILES, s3key);
-      await this.masterFileRepository.delete(id);
+      const s3key = this.s3Service.extractKeyFromUrl(generalFile.filePath, S3Bucket.GENERAL_FILES);
+      await this.s3Service.deleteFile(S3Bucket.GENERAL_FILES, s3key);
+      await this.generalFileRepository.delete(id);
 
-      return {message: 'Master File deleted successfully'};
+        return {message: 'General File deleted successfully'};
     }catch(error){
-      this.logger.error('Failed to delete Master File', error);
+      this.logger.error('Failed to delete General File', error);
       throw new InternalServerErrorException(error.message);
     }finally{
-      this.logger.log('Master File delete process completed');
+      this.logger.log('General File delete process completed');
     }
   }
 
-  async getMasterFileById(id: number) {
-    this.logger.log('Starting Master File get by ID process');
+  async getGeneralFileById(id: number) {
+    this.logger.log('Starting General File get by ID process');
     try{
-      const masterFile = await this.masterFileRepository.findOne({
+      const generalFile = await this.generalFileRepository.findOne({
         where: { id },
         relations: {
           uploader: true,
@@ -395,21 +396,21 @@ export class StaffService {
         },
       });
 
-      if (!masterFile) {
-        return errorMasterFile.masterFileNotFound;
+      if (!generalFile) {
+        return errorGeneralFile.generalFileNotFound;
       }
 
-      return masterFile;
+      return generalFile;
     }catch(error){
-      this.logger.error('Failed to get Master File by ID', error);
+      this.logger.error('Failed to get General File by ID', error);
       throw new InternalServerErrorException(error.message);
     }finally{
-      this.logger.log('Master File get by ID process completed');
+      this.logger.log('General File get by ID process completed');
     }
   }
 
-  async getAllMasterFiles(query: PaginationQueryDto) {
-    this.logger.log('Starting Master File get all process');
+  async getAllGeneralFiles(query: PaginationQueryDto) {
+    this.logger.log('Starting General File get all process');
     try {
       const {
         page = 1,
@@ -422,16 +423,16 @@ export class StaffService {
         sortOrder = 'DESC',
       } = query;
 
-      const queryBuilder = this.masterFileRepository
-        .createQueryBuilder('masterFile')
-        .leftJoinAndSelect('masterFile.uploader', 'uploader')
+      const queryBuilder = this.generalFileRepository
+        .createQueryBuilder('generalFile')
+        .leftJoinAndSelect('generalFile.uploader', 'uploader')
         .select([
-          'masterFile.id',
-          'masterFile.fileName',
-          'masterFile.filePath',
-          'masterFile.description',
-          'masterFile.uploadedBy',
-          'masterFile.uploadedAt',
+          'generalFile.id',
+          'generalFile.fileName',
+          'generalFile.filePath',
+          'generalFile.description',
+          'generalFile.uploadedBy',
+          'generalFile.uploadedAt',
           'uploader.id',
           'uploader.email',
           'uploader.metadata',
@@ -449,7 +450,7 @@ export class StaffService {
       if (filter && Object.keys(filter).length > 0) {
         if (filter.fileName) {
           queryBuilder.andWhere(
-            'LOWER(masterFile.fileName) LIKE LOWER(:fileName)',
+            'LOWER(generalFile.fileName) LIKE LOWER(:fileName)',
             { fileName: `%${filter.fileName}%` }
           );
         }
@@ -462,7 +463,7 @@ export class StaffService {
         }
 
         if (filter.uploadedBy) {
-          queryBuilder.andWhere('masterFile.uploadedBy = :uploadedBy', {
+          queryBuilder.andWhere('generalFile.uploadedBy = :uploadedBy', {
             uploadedBy: filter.uploadedBy,
           });
         }
@@ -470,7 +471,7 @@ export class StaffService {
 
       // Date range filtering
       if (dateFrom) {
-        queryBuilder.andWhere('masterFile.uploadedAt >= :dateFrom', {
+        queryBuilder.andWhere('generalFile.uploadedAt >= :dateFrom', {
           dateFrom: new Date(dateFrom),
         });
       }
@@ -478,7 +479,7 @@ export class StaffService {
       if (dateTo) {
         const endDate = new Date(dateTo);
         endDate.setHours(23, 59, 59, 999); // Include the entire day
-        queryBuilder.andWhere('masterFile.uploadedAt <= :dateTo', {
+        queryBuilder.andWhere('generalFile.uploadedAt <= :dateTo', {
           dateTo: endDate,
         });
       }
@@ -490,7 +491,7 @@ export class StaffService {
       if (sortField === 'uploadedBy') {
         queryBuilder.orderBy('uploader.email', sortOrder);
       } else {
-        queryBuilder.orderBy(`masterFile.${sortField}`, sortOrder);
+        queryBuilder.orderBy(`generalFile.${sortField}`, sortOrder);
       }
 
       // Get total count before applying pagination
@@ -501,21 +502,21 @@ export class StaffService {
       queryBuilder.skip(offset).take(limit);
 
       // Execute query
-      const masterFiles = await queryBuilder.getMany();
+      const generalFiles = await queryBuilder.getMany();
 
       // Return paginated response
       return new PaginatedResponseDto(
-        masterFiles,
+        generalFiles,
         page,
         limit,
         total,
-        'Master files retrieved successfully'
+        'General files retrieved successfully'
       );
     } catch (error) {
-      this.logger.error('Failed to get all Master Files', error);
+      this.logger.error('Failed to get all General files', error);
       throw new InternalServerErrorException(error.message);
     } finally {
-      this.logger.log('Master File get all process completed');
+        this.logger.log('General files get all process completed');
     }
   }
 

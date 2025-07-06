@@ -112,8 +112,9 @@ export class StaffController {
     return this.staffService.handleMedicalTestRequisitionUpload(file);
   }
 
-  @Post('/upload-master-file')
+  @Post('/upload-general-file')
   @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Upload a general file' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -148,33 +149,37 @@ export class StaffController {
       fileSize: 10 * 1024 * 1024, // 10MB limit
     },
   }))
-  async uploadMasterFile(@UploadedFile() file: Express.Multer.File, @User() user: AuthenticatedUser) {
-    return this.staffService.uploadMasterFile(file, user);
+  async uploadGeneralFile(@UploadedFile() file: Express.Multer.File, @User() user: AuthenticatedUser) {
+    return this.staffService.uploadGeneralFile(file, user);
   }
 
-  @Get('/download-master-file/:id')
+  @Get('/download-general-file/:id')
+  @ApiOperation({ summary: 'Download a general file' })
   @AuthZ([Role.STAFF])
-  async downloadMasterFile(@Param('id') id: number) {
-    return this.staffService.downloadMasterFile(id);
+  async downloadGeneralFile(@Param('id') id: number) {
+    return this.staffService.downloadGeneralFile(id);
   }
 
-  @Delete('/delete-master-file/:id')
+  @Delete('/delete-general-file/:id')
+  @ApiOperation({ summary: 'Delete a general file' })
   @AuthZ([Role.STAFF])
-  async deleteMasterFile(@Param('id') id: number) {
-    return this.staffService.deleteMasterFile(id);
+  async deleteGeneralFile(@Param('id') id: number) {
+    return this.staffService.deleteGeneralFile(id);
   }
 
-  @Get('/get-master-file/:id')
+  @Get('/get-general-file/:id')
+  @ApiOperation({ summary: 'Get a general file by ID' })
   @AuthZ([Role.STAFF])
-  async getMasterFileById(@Param('id') id: number) {
-    return this.staffService.getMasterFileById(id);
+  async getGeneralFileById(@Param('id') id: number) {
+    return this.staffService.getGeneralFileById(id);
   }
 
-  @Get('/get-all-master-files')
+  @Get('/get-all-general-files')
+  @ApiOperation({ summary: 'Get all general files' })
   @AuthZ([Role.STAFF])
   @ApiOperation({ 
-    summary: 'Get all master files with pagination and filtering',
-    description: 'Retrieve a paginated list of master files with support for search, filtering by filename/uploader, date range, and sorting'
+    summary: 'Get all general files with pagination and filtering',
+    description: 'Retrieve a paginated list of general files with support for search, filtering by filename/uploader, date range, and sorting'
   })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)' })
@@ -202,8 +207,8 @@ export class StaffController {
     enum: ['ASC', 'DESC']
   })
   @UsePipes(new ValidationPipe({ transform: true }))
-  async getAllMasterFiles(@Query() query: PaginationQueryDto) {
-    return this.staffService.getAllMasterFiles(query);
+  async getAllGeneralFiles(@Query() query: PaginationQueryDto) {
+    return this.staffService.getAllGeneralFiles(query);
   }
 
   @Post('/patients')

@@ -7,8 +7,8 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 
-@Entity('master_files')
-export class MasterFile {
+@Entity('general_files')
+export class GeneralFile {
   @PrimaryGeneratedColumn()
   id: number;
 

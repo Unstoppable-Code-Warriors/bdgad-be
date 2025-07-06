@@ -15,10 +15,10 @@ export class ErrorResponse {
 }
 
 
-export const errorMasterFile = {
-  masterFileNotFound: new ErrorResponse(
-    'MASTER_FILE_NOT_FOUND',
-    'Master file not found',
+export const errorGeneralFile = {
+  generalFileNotFound: new ErrorResponse(
+    'GENERAL_FILE_NOT_FOUND',
+    'General file not found',
     404,
   )
 }

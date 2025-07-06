@@ -46,7 +46,7 @@ export class LabTestController {
     @User() user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<LabSessionWithFastqResponseDto>> {
     console.log(user);
-    return this.labTestService.findAllSession(query);
+    return this.labTestService.findAllSession(query, user);
   }
 
   @Get('sessions/:id')

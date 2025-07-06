@@ -286,6 +286,11 @@ export class StaffController {
           description: 'Doctor ID',
           example: 1,
         },
+        labTestingId: {
+          type: 'number',
+          description: 'Lab testing ID',
+          example: 1,
+        },
         typeLabSession: {
           type: 'string',
           enum: ['test', 'validation'],

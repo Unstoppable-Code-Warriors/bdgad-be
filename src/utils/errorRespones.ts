@@ -15,10 +15,73 @@ export class ErrorResponse {
 }
 
 
-export const errorMasterFile = {
-  masterFileNotFound: new ErrorResponse(
-    'MASTER_FILE_NOT_FOUND',
-    'Master file not found',
+export const errorGeneralFile = {
+  generalFileNotFound: new ErrorResponse(
+    'GENERAL_FILE_NOT_FOUND',
+    'General file not found',
     404,
   )
+}
+
+export const errorPatient = {
+  patientNotFound: new ErrorResponse(
+    'PATIENT_NOT_FOUND',
+    'Patient not found',
+    404,
+  )
+}
+
+export const errorLabSession = {
+  labSessionNotFound: new ErrorResponse(
+    'LAB_SESSION_NOT_FOUND',
+    'Lab session not found',
+    404,
+  )
+}
+
+export const errorPatientFile = {
+  patientFileNotFound: new ErrorResponse(
+    'PATIENT_FILE_NOT_FOUND',
+    'Patient file not found',
+    404,
+  )
+}
+
+export const errorUser = {
+  userNotFound: new ErrorResponse(
+    'USER_NOT_FOUND',
+    'User not found',
+    404,
+  )
+}
+
+export const errorLabTesting = {
+  labTestingIdNotFound: new ErrorResponse(
+    'LAB_TESTING_ID_NOT_FOUND',
+    'Lab testing id not found',
+    400,
+  ),
+  labTestingNotFound: new ErrorResponse(
+    'LAB_TESTING_NOT_FOUND',
+    'Lab testing not found',
+    404,
+  )
+}
+
+export const errorUploadFile = {
+  fileNotFound: new ErrorResponse(
+    'FILE_NOT_FOUND',
+    'File not found',
+    404,
+  ),
+  fileSizeExceeded: new ErrorResponse(
+    'FILE_SIZE_EXCEEDED',
+    'File size exceeded',
+    413,
+  ),
+  fileTypeNotAllowed: new ErrorResponse(
+    'FILE_TYPE_NOT_ALLOWED',
+    'File type not allowed',
+    400,
+  ),
 }

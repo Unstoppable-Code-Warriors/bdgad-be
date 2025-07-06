@@ -59,6 +59,7 @@ export class LabTestService {
 
   async findAllSession(
     query: PaginationQueryDto,
+    user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<LabSessionWithFastqResponseDto>> {
     const {
       search,
@@ -97,7 +98,8 @@ export class LabTestService {
           'doctor.name',
           'doctor.email',
           'doctor.metadata',
-        ]);
+        ])
+        .where('labSession.labTestingId = :userId', { userId: user.id });
 
     // Apply search functionality (search by patient personalId and fullName)
     if (search && search.trim()) {

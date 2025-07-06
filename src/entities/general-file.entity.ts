@@ -7,13 +7,16 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 
-@Entity('master_files')
-export class MasterFile {
+@Entity('general_files')
+export class GeneralFile {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ name: 'file_name' })
   fileName: string;
+
+  @Column({ name: 'file_type', nullable: true })
+  fileType: string;
 
   @Column({ name: 'file_path', type: 'text' })
   filePath: string;

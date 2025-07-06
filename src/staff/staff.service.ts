@@ -8,10 +8,10 @@ import { MasterFile } from 'src/entities/master-file.entity';
 import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
-import { S3Bucket } from 'src/utils/constant';
+import { S3Bucket, TypeLabSession } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
-import { errorLabSession, errorMasterFile, errorPatient, errorPatientFile, errorUser } from 'src/utils/errorRespones';
+import { errorLabSession, errorLabTesting, errorMasterFile, errorPatient, errorPatientFile, errorUser } from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 import { Patient } from 'src/entities/patient.entity';
@@ -44,44 +44,6 @@ export class StaffService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  private decodeFileName(filename: string): string {
-    try {
-      // First, try to detect if it's already properly encoded
-      if (this.isValidUtf8(filename)) {
-        return filename;
-      }
-      
-      // Try to fix Latin1 to UTF-8 encoding issue
-      const decoded = Buffer.from(filename, 'latin1').toString('utf8');
-      
-      // Validate the decoded result
-      if (this.isValidUtf8(decoded)) {
-        return decoded;
-      }
-      
-      // If all else fails, return the original
-      return filename;
-    } catch (error) {
-      this.logger.warn(`Failed to decode filename: ${filename}`, error);
-      return filename;
-    }
-  }
-
-  private isValidUtf8(str: string): boolean {
-    try {
-      // Check if string contains any replacement characters (�)
-      if (str.includes('\uFFFD')) {
-        return false;
-      }
-      
-      // Check if the string encodes/decodes properly
-      const encoded = Buffer.from(str, 'utf8');
-      const decoded = encoded.toString('utf8');
-      return str === decoded;
-    } catch {
-      return false;
-    }
-  }
 
   async handleUploadInfo(files: UploadedFiles) {
     // Use absolute path resolution to avoid path issues
@@ -776,7 +738,7 @@ export class StaffService {
   ) {
     this.logger.log('Starting Patient Files upload process');
     try {
-      const { patientId, doctorId, typeLabSession, ocrResult} = uploadData;
+      const { patientId, doctorId, typeLabSession, ocrResult, labTestingId} = uploadData;
 
       // Verify patient exists
       const patient = await this.patientRepository.findOne({
@@ -793,9 +755,23 @@ export class StaffService {
       if (!doctor) {
         return errorUser.userNotFound;
       }
+
+      if (typeLabSession === TypeLabSession.TEST) {
+        if (!labTestingId) {
+          return errorLabTesting.labTestingIdNotFound;
+        }
+        const labTesting = await this.userRepository.findOne({
+          where: { id: labTestingId }
+        });
+        if (!labTesting) {
+          return errorLabTesting.labTestingNotFound;
+        }
+      }
         // Generate unique labcode and barcode if not provided
-        const defaultLabcode = `LAB-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        const defaultBarcode = `BAR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const number = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
+        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
+        const defaultLabcode = `O5${number}${letter}`;
+        const defaultBarcode = `${Math.floor(Math.random() * 1000000)}`;
 
         const labSession = this.labSessionRepository.create({
           patientId,
@@ -803,6 +779,7 @@ export class StaffService {
           barcode: defaultBarcode,
           requestDate: new Date(),
           doctorId,
+          labTestingId: labTestingId || null,
           typeLabSession,
           metadata: {},
         });
@@ -821,16 +798,11 @@ export class StaffService {
         const timestamp = Date.now();
         
         // Properly decode UTF-8 filename
-        let originalFileName = this.decodeFileName(file.originalname);
-        
-        // Log for debugging
-        if (originalFileName !== file.originalname) {
-          this.logger.log(`Filename decoded from: "${file.originalname}" to: "${originalFileName}"`);
-        }
+        let originalFileName = Buffer.from(file.originalname, 'binary').toString('utf8')
+        let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
         
         // Create a safe S3 key without special characters
-        const fileExtension = path.extname(originalFileName);
-        const safeFileName = `file_${timestamp}_${i}${fileExtension}`;
+        const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
         const s3Key = `session-${labSession.id}/${safeFileName}`;
 
         // Upload to S3

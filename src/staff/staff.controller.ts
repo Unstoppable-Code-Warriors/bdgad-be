@@ -304,6 +304,10 @@ export class StaffController {
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'files', maxCount: 20 }], {
       fileFilter: (req, file, cb) => {
+        // Log filename encoding for debugging
+        console.log('Upload filename:', file.originalname);
+        console.log('Filename bytes:', Buffer.from(file.originalname).toString('hex'));
+        
         const allowedMimeTypes = [
           'image/jpeg' , // .jpg
           'image/jpg', // .jpg
@@ -341,5 +345,4 @@ export class StaffController {
 
     return this.staffService.uploadPatientFiles(files.files, uploadData, user);
   }
-
 }

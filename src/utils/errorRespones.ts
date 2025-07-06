@@ -54,3 +54,16 @@ export const errorUser = {
     404,
   )
 }
+
+export const errorLabTesting = {
+  labTestingIdNotFound: new ErrorResponse(
+    'LAB_TESTING_ID_NOT_FOUND',
+    'Lab testing id not found',
+    400,
+  ),
+  labTestingNotFound: new ErrorResponse(
+    'LAB_TESTING_NOT_FOUND',
+    'Lab testing not found',
+    404,
+  )
+}

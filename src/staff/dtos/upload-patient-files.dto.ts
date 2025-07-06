@@ -23,6 +23,15 @@ export class UploadPatientFilesDto {
   doctorId: number;
 
   @ApiProperty({
+    description: 'Lab Testing ID',
+    example: 1
+  })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  labTestingId?: number;
+
+  @ApiProperty({
     description: 'Type of lab session',
     enum: TypeLabSession,
     example: TypeLabSession.TEST
@@ -38,15 +47,5 @@ export class UploadPatientFilesDto {
   })
   @IsOptional()
   @IsJSON()
-  @Transform(({ value }) => {
-    if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return null;
-      }
-    }
-    return value;
-  })
   ocrResult?: Record<string, any>[] | null;
 } 

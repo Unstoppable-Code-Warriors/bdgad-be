@@ -25,7 +25,13 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiBody, ApiConsumes, ApiSecurity, ApiQuery, ApiOperation } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiSecurity,
+  ApiQuery,
+  ApiOperation,
+} from '@nestjs/swagger';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
@@ -115,9 +121,9 @@ export class StaffController {
 
   @Post('/upload-general-files')
   @AuthZ([Role.STAFF])
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Upload multiple general files',
-    description: 'Upload multiple general files at once'
+    description: 'Upload multiple general files at once',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -135,36 +141,46 @@ export class StaffController {
       required: ['files'],
     },
   })
-  @UseInterceptors(FileFieldsInterceptor([{ name: 'files', maxCount: 20 }], {
-    fileFilter: (req, file, cb) => {
-      // Log filename encoding for debugging
-      console.log('Upload filename:', file.originalname);
-      console.log('Filename bytes:', Buffer.from(file.originalname).toString('hex'));
-      
-      const allowedMimeTypes = [
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-        'application/vnd.ms-excel', // .xls
-        'text/csv', // .csv
-        'application/pdf', // .pdf
-        'text/plain', // .txt
-        'application/msword', // .doc
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-        'image/jpeg', // .jpg
-        'image/jpg', // .jpg
-        'image/png', // .png
-      ];
-      if (allowedMimeTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Only .xlsx, .xls, .csv, .pdf, .txt, .doc, .docx, .jpg, .png files are allowed'), false);
-      }
-    },
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB per file
-      files: 20, // Maximum 20 files
-    },
-    preservePath: true, // Preserve the original filename path
-  }))
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'files', maxCount: 20 }], {
+      fileFilter: (req, file, cb) => {
+        // Log filename encoding for debugging
+        console.log('Upload filename:', file.originalname);
+        console.log(
+          'Filename bytes:',
+          Buffer.from(file.originalname).toString('hex'),
+        );
+
+        const allowedMimeTypes = [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+          'application/vnd.ms-excel', // .xls
+          'text/csv', // .csv
+          'application/pdf', // .pdf
+          'text/plain', // .txt
+          'application/msword', // .doc
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+          'image/jpeg', // .jpg
+          'image/jpg', // .jpg
+          'image/png', // .png
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new Error(
+              'Only .xlsx, .xls, .csv, .pdf, .txt, .doc, .docx, .jpg, .png files are allowed',
+            ),
+            false,
+          );
+        }
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+        files: 20, // Maximum 20 files
+      },
+      preservePath: true, // Preserve the original filename path
+    }),
+  )
   @UsePipes(new ValidationPipe({ transform: true }))
   async uploadGeneralFiles(
     @UploadedFiles() files: { files?: Express.Multer.File[] },
@@ -201,34 +217,61 @@ export class StaffController {
   @Get('/get-all-general-files')
   @ApiOperation({ summary: 'Get all general files' })
   @AuthZ([Role.STAFF])
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get all general files with pagination and filtering',
-    description: 'Retrieve a paginated list of general files with support for search, filtering by filename/uploader, date range, and sorting'
+    description:
+      'Retrieve a paginated list of general files with support for search, filtering by filename/uploader, date range, and sorting',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)' })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search keyword for filename or uploader name' })
-  @ApiQuery({ 
-    name: 'filter', 
-    required: false, 
-    type: String, 
-    description: 'JSON object for filtering. Example: {"fileName":"test","uploaderName":"john","uploadedBy":1}' 
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
   })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'Start date filter (ISO format)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'End date filter (ISO format)' })
-  @ApiQuery({ 
-    name: 'sortBy', 
-    required: false, 
-    type: String, 
-    description: 'Sort field (id, fileName, uploadedAt, uploadedBy)', 
-    enum: ['id', 'fileName', 'uploadedAt', 'uploadedBy']
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10, max: 100)',
   })
-  @ApiQuery({ 
-    name: 'sortOrder', 
-    required: false, 
-    type: String, 
-    description: 'Sort order (ASC or DESC)', 
-    enum: ['ASC', 'DESC']
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search keyword for filename or uploader name',
+  })
+  @ApiQuery({
+    name: 'filter',
+    required: false,
+    type: String,
+    description:
+      'JSON object for filtering. Example: {"fileName":"test","uploaderName":"john","uploadedBy":1}',
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'Start date filter (ISO format)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'End date filter (ISO format)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    description: 'Sort field (id, fileName, uploadedAt, uploadedBy)',
+    enum: ['id', 'fileName', 'uploadedAt', 'uploadedBy'],
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    type: String,
+    description: 'Sort order (ASC or DESC)',
+    enum: ['ASC', 'DESC'],
   })
   @UsePipes(new ValidationPipe({ transform: true }))
   async getAllGeneralFiles(@Query() query: PaginationQueryDto) {
@@ -239,14 +282,17 @@ export class StaffController {
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Create a new folder patient' })
   @UsePipes(new ValidationPipe({ transform: true }))
-  @ApiBody({ type: CreatePatientDto, examples: {
-    'example 1': {
-      value: {
-        fullName: 'John Doe',
-        healthInsuranceCode: '1234567890',
+  @ApiBody({
+    type: CreatePatientDto,
+    examples: {
+      'example 1': {
+        value: {
+          fullName: 'John Doe',
+          healthInsuranceCode: '1234567890',
+        },
       },
     },
-  } })
+  })
   async createPatient(@Body() createPatientDto: CreatePatientDto) {
     return this.staffService.createPatient(createPatientDto);
   }
@@ -254,12 +300,43 @@ export class StaffController {
   @Get('/patients')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Get all patients with query' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)' })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search keyword for patient name' })
-  @ApiQuery({ name: 'searchField', required: false, type: String, description: 'Search field (fullName, healthInsuranceCode, personalId)', enum: ['fullName', 'healthInsuranceCode', 'personalId'] })
-  @ApiQuery({ name: 'dateFrom', required: false, type: String, description: 'Start date filter (ISO format)' })
-  @ApiQuery({ name: 'dateTo', required: false, type: String, description: 'End date filter (ISO format)' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10, max: 100)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search keyword for patient name',
+  })
+  @ApiQuery({
+    name: 'searchField',
+    required: false,
+    type: String,
+    description: 'Search field (fullName, healthInsuranceCode, personalId)',
+    enum: ['fullName', 'healthInsuranceCode', 'personalId'],
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'Start date filter (ISO format)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'End date filter (ISO format)',
+  })
   @UsePipes(new ValidationPipe({ transform: true }))
   async getAllPatients(@Query() query: PaginationQueryDto) {
     return this.staffService.getAllPatients(query);
@@ -281,23 +358,34 @@ export class StaffController {
 
   @Get('sessions/:sessionId/patient-files/:patientFileId/download')
   @AuthZ([Role.STAFF])
-  @ApiOperation({ summary: 'Download a patient file by session ID and patient file ID' })
-  async downloadPatientFile(@Param('sessionId') sessionId: number, @Param('patientFileId') patientFileId: number) {
+  @ApiOperation({
+    summary: 'Download a patient file by session ID and patient file ID',
+  })
+  async downloadPatientFile(
+    @Param('sessionId') sessionId: number,
+    @Param('patientFileId') patientFileId: number,
+  ) {
     return this.staffService.downloadPatientFile(sessionId, patientFileId);
   }
 
   @Delete('sessions/:sessionId/patient-files/:patientFileId/delete')
   @AuthZ([Role.STAFF])
-  @ApiOperation({ summary: 'Delete a patient file by session ID and patient file ID' })
-  async deletePatientFile(@Param('sessionId') sessionId: number, @Param('patientFileId') patientFileId: number) {
+  @ApiOperation({
+    summary: 'Delete a patient file by session ID and patient file ID',
+  })
+  async deletePatientFile(
+    @Param('sessionId') sessionId: number,
+    @Param('patientFileId') patientFileId: number,
+  ) {
     return this.staffService.deletePatientFile(sessionId, patientFileId);
   }
 
   @Post('patient-files/upload')
   @AuthZ([Role.STAFF])
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Upload patient files with OCR results',
-    description: 'Upload multiple patient files with optional OCR results and create/update lab session'
+    description:
+      'Upload multiple patient files with optional OCR results and create/update lab session',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -335,8 +423,25 @@ export class StaffController {
         },
         ocrResult: {
           type: 'string',
-          description: 'OCR results as JSON string. Array of objects with filename as key and OCR result as value',
-          example: '[{"filename1.jpg": {"text": "sample text", "confidence": 0.95}}, {"filename2.jpg": null}]',
+          description:
+            'OCR results as JSON string. Array of objects with filename as key and OCR result as value',
+          example: [
+            {
+              'Mô U Phổi': {
+                name: 'thang',
+                age: '20',
+              },
+            },
+            { 'Mô U Đại trực tràng': null },
+            {
+              'quoc phong': {
+                name: 'thang',
+                age: '20',
+              },
+            },
+            { 'hai phong': null },
+            { 'hai banh': 1233 },
+          ],
         },
       },
       required: ['files', 'patientId', 'doctorId', 'typeLabSession'],
@@ -347,10 +452,13 @@ export class StaffController {
       fileFilter: (req, file, cb) => {
         // Log filename encoding for debugging
         console.log('Upload filename:', file.originalname);
-        console.log('Filename bytes:', Buffer.from(file.originalname).toString('hex'));
-        
+        console.log(
+          'Filename bytes:',
+          Buffer.from(file.originalname).toString('hex'),
+        );
+
         const allowedMimeTypes = [
-          'image/jpeg' , // .jpg
+          'image/jpeg', // .jpg
           'image/jpg', // .jpg
           'image/png', // .png
           'application/pdf', // .pdf
@@ -364,7 +472,12 @@ export class StaffController {
         if (allowedMimeTypes.includes(file.mimetype)) {
           cb(null, true);
         } else {
-          cb(new Error('Only images, PDF, text, csv, xls, xlsx, doc, docx files are allowed'), false);
+          cb(
+            new Error(
+              'Only images, PDF, text, csv, xls, xlsx, doc, docx files are allowed',
+            ),
+            false,
+          );
         }
       },
       limits: {
@@ -372,7 +485,7 @@ export class StaffController {
         files: 20, // Maximum 20 files
       },
       preservePath: true, // Preserve the original filename path
-    })
+    }),
   )
   @UsePipes(new ValidationPipe({ transform: true }))
   async uploadPatientFiles(
@@ -383,7 +496,6 @@ export class StaffController {
     if (!files.files || files.files.length === 0) {
       throw new BadRequestException('At least one file is required');
     }
-
     return this.staffService.uploadPatientFiles(files.files, uploadData, user);
   }
 }

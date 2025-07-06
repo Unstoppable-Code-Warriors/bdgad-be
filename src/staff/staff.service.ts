@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ConfigService } from '@nestjs/config';
@@ -10,8 +15,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
 import { S3Bucket, TypeLabSession } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
-import { PaginationQueryDto, PaginatedResponseDto } from 'src/common/dto/pagination.dto';
-import { errorGeneralFile, errorLabSession, errorLabTesting, errorPatient, errorPatientFile, errorUser } from 'src/utils/errorRespones';
+import {
+  PaginationQueryDto,
+  PaginatedResponseDto,
+} from 'src/common/dto/pagination.dto';
+import {
+  errorGeneralFile,
+  errorLabSession,
+  errorLabTesting,
+  errorPatient,
+  errorPatientFile,
+  errorUser,
+} from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 import { Patient } from 'src/entities/patient.entity';
@@ -45,7 +60,6 @@ export class StaffService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
-
 
   async handleUploadInfo(files: UploadedFiles) {
     // Use absolute path resolution to avoid path issues
@@ -289,8 +303,10 @@ export class StaffService {
     };
   }
 
-
-  async uploadGeneralFiles(files: Express.Multer.File[], user: AuthenticatedUser) {
+  async uploadGeneralFiles(
+    files: Express.Multer.File[],
+    user: AuthenticatedUser,
+  ) {
     this.logger.log('Starting General Files upload process');
     try {
       const uploadedFiles: Array<{
@@ -303,11 +319,17 @@ export class StaffService {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const timestamp = Date.now();
-        
+
         // Properly decode UTF-8 filename
-        let originalFileName = Buffer.from(file.originalname, 'binary').toString('utf8');
-        let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
-        
+        let originalFileName = Buffer.from(
+          file.originalname,
+          'binary',
+        ).toString('utf8');
+        let originalFileNameWithoutSpace = originalFileName.replace(
+          /\s+/g,
+          '-',
+        );
+
         // Create a safe S3 key
         const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
 
@@ -337,7 +359,9 @@ export class StaffService {
           fileSize: file.size,
         });
 
-        this.logger.log(`Uploaded file: ${originalFileName} with ID: ${generalFile.id}`);
+        this.logger.log(
+          `Uploaded file: ${originalFileName} with ID: ${generalFile.id}`,
+        );
       }
 
       return {
@@ -345,7 +369,6 @@ export class StaffService {
         uploadedFiles,
         totalFiles: files.length,
       };
-
     } catch (error) {
       this.logger.error('Failed to upload general files', error);
       throw new InternalServerErrorException(error.message);
@@ -360,54 +383,60 @@ export class StaffService {
       const generalFile = await this.generalFileRepository.findOne({
         where: { id },
       });
-  
+
       if (!generalFile) {
-        return errorGeneralFile.generalFileNotFound;  
+        return errorGeneralFile.generalFileNotFound;
       }
-      const s3key = this.s3Service.extractKeyFromUrl(generalFile.filePath, S3Bucket.GENERAL_FILES);
-  
+      const s3key = this.s3Service.extractKeyFromUrl(
+        generalFile.filePath,
+        S3Bucket.GENERAL_FILES,
+      );
+
       const presignedUrl = await this.s3Service.generatePresigned(
         S3Bucket.GENERAL_FILES,
         s3key,
         3600,
       );
-  
+
       return presignedUrl;
-    }catch(error){
+    } catch (error) {
       this.logger.error('Failed to download General File', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('General File download process completed');
     }
   }
 
   async deleteGeneralFile(id: number) {
     this.logger.log('Starting General File delete process');
-    try{
+    try {
       const generalFile = await this.generalFileRepository.findOne({
         where: { id },
       });
 
       if (!generalFile) {
-        return errorGeneralFile.generalFileNotFound;    
+        return errorGeneralFile.generalFileNotFound;
       }
 
-      const s3key = this.s3Service.extractKeyFromUrl(generalFile.filePath, S3Bucket.GENERAL_FILES);
+      const s3key = this.s3Service.extractKeyFromUrl(
+        generalFile.filePath,
+        S3Bucket.GENERAL_FILES,
+      );
       await this.s3Service.deleteFile(S3Bucket.GENERAL_FILES, s3key);
       await this.generalFileRepository.delete(id);
 
-        return {message: 'General File deleted successfully'};
-    }catch(error){
+      return { message: 'General File deleted successfully' };
+    } catch (error) {
       this.logger.error('Failed to delete General File', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('General File delete process completed');
     }
   }
 
   async getGeneralFileById(id: number) {
     this.logger.log('Starting General File get by ID process');
-    try{
+    try {
       const generalFile = await this.generalFileRepository.findOne({
         where: { id },
         relations: {
@@ -433,10 +462,10 @@ export class StaffService {
       }
 
       return generalFile;
-    }catch(error){
+    } catch (error) {
       this.logger.error('Failed to get General File by ID', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('General File get by ID process completed');
     }
   }
@@ -474,7 +503,7 @@ export class StaffService {
       if (search) {
         queryBuilder.andWhere(
           '(LOWER(masterFile.fileName) LIKE LOWER(:search) OR LOWER(uploader.email) LIKE LOWER(:search) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.firstName")) LIKE LOWER(:search) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.lastName")) LIKE LOWER(:search))',
-          { search: `%${search}%` }
+          { search: `%${search}%` },
         );
       }
 
@@ -483,14 +512,14 @@ export class StaffService {
         if (filter.fileName) {
           queryBuilder.andWhere(
             'LOWER(generalFile.fileName) LIKE LOWER(:fileName)',
-            { fileName: `%${filter.fileName}%` }
+            { fileName: `%${filter.fileName}%` },
           );
         }
 
         if (filter.uploaderName) {
           queryBuilder.andWhere(
             '(LOWER(uploader.email) LIKE LOWER(:uploaderName) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.firstName")) LIKE LOWER(:uploaderName) OR LOWER(JSON_EXTRACT(uploader.metadata, "$.lastName")) LIKE LOWER(:uploaderName))',
-            { uploaderName: `%${filter.uploaderName}%` }
+            { uploaderName: `%${filter.uploaderName}%` },
           );
         }
 
@@ -518,8 +547,10 @@ export class StaffService {
 
       // Sorting
       const validSortFields = ['id', 'fileName', 'uploadedAt', 'uploadedBy'];
-      const sortField = validSortFields.includes(sortBy) ? sortBy : 'uploadedAt';
-      
+      const sortField = validSortFields.includes(sortBy)
+        ? sortBy
+        : 'uploadedAt';
+
       if (sortField === 'uploadedBy') {
         queryBuilder.orderBy('uploader.email', sortOrder);
       } else {
@@ -542,22 +573,24 @@ export class StaffService {
         page,
         limit,
         total,
-        'General files retrieved successfully'
+        'General files retrieved successfully',
       );
     } catch (error) {
       this.logger.error('Failed to get all General files', error);
       throw new InternalServerErrorException(error.message);
     } finally {
-        this.logger.log('General files get all process completed');
+      this.logger.log('General files get all process completed');
     }
   }
 
   async createPatient(createPatientDto: CreatePatientDto) {
     this.logger.log('Starting Patient create process');
-    try{
-      const {fullName, healthInsuranceCode} = createPatientDto;
-      
-      const personalId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+    try {
+      const { fullName, healthInsuranceCode } = createPatientDto;
+
+      const personalId = Math.floor(
+        1000000000 + Math.random() * 9000000000,
+      ).toString();
       const patient = this.patientRepository.create({
         fullName: fullName.trim(),
         dateOfBirth: new Date('1995-07-05'),
@@ -568,18 +601,18 @@ export class StaffService {
         createdAt: new Date(),
       });
       await this.patientRepository.save(patient);
-      return {message: 'Patient created successfully'};
-    }catch(error){
+      return { message: 'Patient created successfully' };
+    } catch (error) {
       this.logger.error('Failed to create Patient', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('Patient create process completed');
     }
   }
 
   async getAllPatients(query: PaginationQueryDto) {
     this.logger.log('Starting Patient get all process');
-    try{
+    try {
       const {
         page = 1,
         limit = 100,
@@ -594,12 +627,18 @@ export class StaffService {
 
       // Global search functionality - search by the specified field
       if (search) {
-        const validSearchFields = ['fullName', 'healthInsuranceCode', 'personalId'];
-        const fieldToSearch = validSearchFields.includes(searchField) ? searchField : 'fullName';
-        
+        const validSearchFields = [
+          'fullName',
+          'healthInsuranceCode',
+          'personalId',
+        ];
+        const fieldToSearch = validSearchFields.includes(searchField)
+          ? searchField
+          : 'fullName';
+
         queryBuilder.andWhere(
           `LOWER(patient.${fieldToSearch}) LIKE LOWER(:search)`,
-          { search: `%${search}%` }
+          { search: `%${search}%` },
         );
       }
 
@@ -625,20 +664,26 @@ export class StaffService {
       queryBuilder.skip(offset).take(limit);
 
       const patients = await queryBuilder.getMany();
-      return new PaginatedResponseDto(patients, page, limit, total, 'Patients retrieved successfully'); 
-    }catch(error){
+      return new PaginatedResponseDto(
+        patients,
+        page,
+        limit,
+        total,
+        'Patients retrieved successfully',
+      );
+    } catch (error) {
       this.logger.error('Failed to get all Patients', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('Patient get all process completed');
     }
   }
 
   async getLabSessionsByPatientId(id: number) {
     this.logger.log('Starting Patient get by ID process');
-    try{
+    try {
       const patient = await this.patientRepository.findOne({
-        where: {id},
+        where: { id },
         relations: {
           labSessions: true,
         },
@@ -659,14 +704,16 @@ export class StaffService {
       if (!patient) {
         return errorPatient.patientNotFound;
       }
-      const labSessions = patient.labSessions.flatMap(labSession => labSession.id);
+      const labSessions = patient.labSessions.flatMap(
+        (labSession) => labSession.id,
+      );
       const labSessionData = await this.labSessionRepository.find({
         where: {
           id: In(labSessions),
         },
         relations: {
           doctor: true,
-          patientFiles: true
+          patientFiles: true,
         },
         select: {
           id: true,
@@ -684,23 +731,23 @@ export class StaffService {
             id: true,
             fileName: true,
             filePath: true,
-          }
+          },
         },
       });
       return labSessionData;
-    }catch(error){
+    } catch (error) {
       this.logger.error('Failed to get Patient by ID', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('Patient get by ID process completed');
     }
   }
 
   async getLabSessionById(id: number) {
     this.logger.log('Starting Lab Session get by ID process');
-    try{
+    try {
       const labSession = await this.labSessionRepository.findOne({
-        where: {id},
+        where: { id },
         relations: {
           doctor: true,
           patientFiles: true,
@@ -729,58 +776,68 @@ export class StaffService {
               name: true,
             },
             uploadedAt: true,
-          }
+          },
         },
       });
       if (!labSession) {
         return errorLabSession.labSessionNotFound;
       }
       return labSession;
-    }catch(error){
+    } catch (error) {
       this.logger.error('Failed to get Lab Session by ID', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('Lab Session get by ID process completed');
     }
   }
 
   async downloadPatientFile(sessionId: number, patientFileId: number) {
     this.logger.log('Starting Patient File download process');
-    try{
+    try {
       const patientFile = await this.patientFileRepository.findOne({
-        where: {id: patientFileId, sessionId: sessionId},
+        where: { id: patientFileId, sessionId: sessionId },
       });
       if (!patientFile) {
         return errorPatientFile.patientFileNotFound;
       }
-      const s3key = this.s3Service.extractKeyFromUrl(patientFile.filePath, S3Bucket.PATIENT_FILES);
-      const fileUrl = await this.s3Service.generatePresigned(S3Bucket.PATIENT_FILES, s3key, 3600);
+      const s3key = this.s3Service.extractKeyFromUrl(
+        patientFile.filePath,
+        S3Bucket.PATIENT_FILES,
+      );
+      const fileUrl = await this.s3Service.generatePresigned(
+        S3Bucket.PATIENT_FILES,
+        s3key,
+        3600,
+      );
       return fileUrl;
-    }catch(error){
+    } catch (error) {
       this.logger.error('Failed to download Patient File', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('Patient File download process completed');
     }
   }
 
   async deletePatientFile(sessionId: number, patientFileId: number) {
     this.logger.log('Starting Patient File delete process');
-    try{
+    try {
       const patientFile = await this.patientFileRepository.findOne({
-        where: {id: patientFileId, sessionId: sessionId},
+        where: { id: patientFileId, sessionId: sessionId },
       });
       if (!patientFile) {
         return errorPatientFile.patientFileNotFound;
       }
-      const s3key = this.s3Service.extractKeyFromUrl(patientFile.filePath, S3Bucket.PATIENT_FILES);
+      const s3key = this.s3Service.extractKeyFromUrl(
+        patientFile.filePath,
+        S3Bucket.PATIENT_FILES,
+      );
       await this.s3Service.deleteFile(S3Bucket.PATIENT_FILES, s3key);
       await this.patientFileRepository.delete(patientFileId);
-      return {message: 'Patient File deleted successfully'};
-    }catch(error){
+      return { message: 'Patient File deleted successfully' };
+    } catch (error) {
       this.logger.error('Failed to delete Patient File', error);
       throw new InternalServerErrorException(error.message);
-    }finally{
+    } finally {
       this.logger.log('Patient File delete process completed');
     }
   }
@@ -788,15 +845,17 @@ export class StaffService {
   async uploadPatientFiles(
     files: Express.Multer.File[],
     uploadData: UploadPatientFilesDto,
-    user: AuthenticatedUser
+    user: AuthenticatedUser,
   ) {
     this.logger.log('Starting Patient Files upload process');
     try {
-      const { patientId, doctorId, typeLabSession, ocrResult, labTestingId} = uploadData;
+      const { patientId, doctorId, typeLabSession, ocrResult, labTestingId } =
+        uploadData;
+      let labTestingIdCheck: number | undefined | null = labTestingId;
 
       // Verify patient exists
       const patient = await this.patientRepository.findOne({
-        where: { id: patientId }
+        where: { id: patientId },
       });
       if (!patient) {
         return errorPatient.patientNotFound;
@@ -804,7 +863,7 @@ export class StaffService {
 
       // Verify doctor exists
       const doctor = await this.userRepository.findOne({
-        where: { id: doctorId }
+        where: { id: doctorId },
       });
       if (!doctor) {
         return errorUser.userNotFound;
@@ -815,46 +874,55 @@ export class StaffService {
           return errorLabTesting.labTestingIdNotFound;
         }
         const labTesting = await this.userRepository.findOne({
-          where: { id: labTestingId }
+          where: { id: labTestingId },
         });
         if (!labTesting) {
           return errorLabTesting.labTestingNotFound;
         }
+      } else {
+        labTestingIdCheck = null;
       }
-        // Generate unique labcode and barcode if not provided
-        const number = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
-        const defaultLabcode = `O5${number}${letter}`;
-        const defaultBarcode = `${Math.floor(Math.random() * 1000000)}`;
+      // Generate unique labcode and barcode if not provided
+      const number = String(Math.floor(Math.random() * 999) + 1).padStart(
+        3,
+        '0',
+      );
+      const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
+      const defaultLabcode = `O5${number}${letter}`;
+      const defaultBarcode = `${Math.floor(Math.random() * 1000000)}`;
 
-        const labSession = this.labSessionRepository.create({
-          patientId,
-          labcode: defaultLabcode,
-          barcode: defaultBarcode,
-          requestDate: new Date(),
-          doctorId,
-          labTestingId: labTestingId || null,
-          typeLabSession,
-          metadata: {},
-        });
-        await this.labSessionRepository.save(labSession);
-        this.logger.log(`Created new lab session with ID: ${labSession.id}`);
+      const labSession = this.labSessionRepository.create({
+        patientId,
+        labcode: defaultLabcode,
+        barcode: defaultBarcode,
+        requestDate: new Date(),
+        doctorId,
+        labTestingId: labTestingIdCheck,
+        typeLabSession,
+        metadata: {},
+      });
+      await this.labSessionRepository.save(labSession);
+      this.logger.log(`Created new lab session with ID: ${labSession.id}`);
 
       // Upload files and create patient file records
-      const uploadedFiles: Array<{
-        id: number;
-        fileName: string;
-        fileType: string;
-        hasOcrResult: boolean;
-      }> = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const timestamp = Date.now();
-        
+
         // Properly decode UTF-8 filename
-        let originalFileName = Buffer.from(file.originalname, 'binary').toString('utf8')
-        let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
-        
+        let originalFileName = Buffer.from(
+          file.originalname,
+          'binary',
+        ).toString('utf8');
+        let originalFileNameWithoutSpace = originalFileName.replace(
+          /\s+/g,
+          '-',
+        );
+        const originalFileNameWithoutDot = originalFileName
+          .split('.')
+          .slice(0, -1)
+          .join('.');
+
         // Create a safe S3 key without special characters
         const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
         const s3Key = `session-${labSession.id}/${safeFileName}`;
@@ -870,23 +938,26 @@ export class StaffService {
         // Find OCR result for this file
         let fileOcrResult: Record<string, any> | {} = {};
         let hasActualOcrData = false;
-        
-        if (ocrResult && Array.isArray(ocrResult)) {
+
+        if (ocrResult) {
           // Try to match with both original and corrected filename
-          const ocrEntry = ocrResult.find(entry => 
-            entry && typeof entry === 'object' && 
-            (entry[originalFileName] || entry[file.originalname])
+          const ocrEntry = ocrResult.find(
+            (entry) =>
+              entry &&
+              typeof entry === 'object' &&
+              entry[originalFileNameWithoutDot],
           );
           if (ocrEntry) {
-            fileOcrResult = ocrEntry[originalFileName] || ocrEntry[file.originalname];
-            hasActualOcrData = fileOcrResult && Object.keys(fileOcrResult).length > 0;
+            fileOcrResult = ocrEntry[originalFileNameWithoutDot] || {};
+            hasActualOcrData =
+              fileOcrResult && Object.keys(fileOcrResult).length > 0;
           }
         }
 
         // Create patient file record
         const patientFile = this.patientFileRepository.create({
           sessionId: labSession.id,
-          fileName: originalFileName.split('.').slice(0, -1).join('.'),
+          fileName: originalFileNameWithoutDot,
           filePath: s3Url,
           fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
           ocrResult: fileOcrResult || {},
@@ -895,23 +966,15 @@ export class StaffService {
         });
 
         await this.patientFileRepository.save(patientFile);
-        uploadedFiles.push({
-          id: patientFile.id,
-          fileName: patientFile.fileName,
-          fileType: patientFile.fileType,
-          hasOcrResult: hasActualOcrData,
-        });
 
-        this.logger.log(`Uploaded file: ${file.originalname} to session ${labSession.id}`);
+        this.logger.log(
+          `Uploaded file: ${file.originalname} to session ${labSession.id}`,
+        );
       }
 
       return {
         message: 'Patient files uploaded successfully',
-        sessionId: labSession.id,
-        uploadedFiles,
-        totalFiles: files.length,
       };
-
     } catch (error) {
       this.logger.error('Failed to upload patient files', error);
       throw new InternalServerErrorException(error.message);

@@ -30,10 +30,11 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiSecurity } from '@nestjs/swagger';
+import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 @Controller('lab-test')
 @UseGuards(AuthGuard, RolesGuard)
+@ApiTags('Lab Test')
 @ApiSecurity('token')
 export class LabTestController {
   constructor(private readonly labTestService: LabTestService) {}

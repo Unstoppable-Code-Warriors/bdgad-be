@@ -31,6 +31,7 @@ import {
   ApiSecurity,
   ApiQuery,
   ApiOperation,
+  ApiTags,
 } from '@nestjs/swagger';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
@@ -43,6 +44,7 @@ import { errorUploadFile } from 'src/utils/errorRespones';
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
+  @ApiTags('Staff - OCR file')
   @Post('/upload-info')
   @AuthZ([Role.STAFF])
   @UseInterceptors(
@@ -90,6 +92,7 @@ export class StaffController {
     });
   }
 
+  @ApiTags('Staff - OCR file')
   @Post('/upload-medical-test-requisition')
   @AuthZ([Role.STAFF])
   @UseInterceptors(
@@ -119,7 +122,9 @@ export class StaffController {
     return this.staffService.handleMedicalTestRequisitionUpload(file);
   }
 
-  @Post('/upload-general-files')
+  // General Files api
+  @ApiTags('Staff - General Files')
+  @Post('/general-files')
   @AuthZ([Role.STAFF])
   @ApiOperation({
     summary: 'Upload multiple general files',
@@ -193,28 +198,32 @@ export class StaffController {
     return this.staffService.uploadGeneralFiles(files.files, user);
   }
 
-  @Get('/download-general-file/:id')
+  @ApiTags('Staff - General Files')
+  @Get('/general-files/:id/download')
   @ApiOperation({ summary: 'Download a general file' })
   @AuthZ([Role.STAFF])
   async downloadGeneralFile(@Param('id') id: number) {
     return this.staffService.downloadGeneralFile(id);
   }
 
-  @Delete('/delete-general-file/:id')
+  @ApiTags('Staff - General Files')
+  @Delete('/general-files/:id')
   @ApiOperation({ summary: 'Delete a general file' })
   @AuthZ([Role.STAFF])
   async deleteGeneralFile(@Param('id') id: number) {
     return this.staffService.deleteGeneralFile(id);
   }
 
-  @Get('/get-general-file/:id')
+  @ApiTags('Staff - General Files')
+  @Get('/general-files/:id')
   @ApiOperation({ summary: 'Get a general file by ID' })
   @AuthZ([Role.STAFF])
   async getGeneralFileById(@Param('id') id: number) {
     return this.staffService.getGeneralFileById(id);
   }
 
-  @Get('/get-all-general-files')
+  @ApiTags('Staff - General Files')
+  @Get('/general-files')
   @ApiOperation({ summary: 'Get all general files' })
   @AuthZ([Role.STAFF])
   @ApiOperation({
@@ -278,6 +287,8 @@ export class StaffController {
     return this.staffService.getAllGeneralFiles(query);
   }
 
+  // Patient api
+  @ApiTags('Staff - Patients')
   @Post('/patients')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Create a new folder patient' })
@@ -297,6 +308,7 @@ export class StaffController {
     return this.staffService.createPatient(createPatientDto);
   }
 
+  @ApiTags('Staff - Patients')
   @Get('/patients')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Get all patients with query' })
@@ -342,6 +354,7 @@ export class StaffController {
     return this.staffService.getAllPatients(query);
   }
 
+  @ApiTags('Staff - Patients')
   @Get('patients/:patientId/sessions')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Get all lab sessions of a patient' })
@@ -349,6 +362,8 @@ export class StaffController {
     return this.staffService.getLabSessionsByPatientId(patientId);
   }
 
+  // Session api
+  @ApiTags('Staff - Sessions')
   @Get('sessions/:sessionId')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Get a lab session by ID' })
@@ -356,7 +371,9 @@ export class StaffController {
     return this.staffService.getLabSessionById(sessionId);
   }
 
-  @Get('sessions/:sessionId/patient-files/:patientFileId/download')
+  // Patient File api
+  @ApiTags('Staff - Patient Files')
+  @Get('patient-files/:patientFileId/sessions/:sessionId/download')
   @AuthZ([Role.STAFF])
   @ApiOperation({
     summary: 'Download a patient file by session ID and patient file ID',
@@ -368,7 +385,8 @@ export class StaffController {
     return this.staffService.downloadPatientFile(sessionId, patientFileId);
   }
 
-  @Delete('sessions/:sessionId/patient-files/:patientFileId/delete')
+  @ApiTags('Staff - Patient Files')
+  @Delete('patient-files/:patientFileId/sessions/:sessionId')
   @AuthZ([Role.STAFF])
   @ApiOperation({
     summary: 'Delete a patient file by session ID and patient file ID',
@@ -380,6 +398,7 @@ export class StaffController {
     return this.staffService.deletePatientFile(sessionId, patientFileId);
   }
 
+  @ApiTags('Staff - Patient Files')
   @Post('patient-files/upload')
   @AuthZ([Role.STAFF])
   @ApiOperation({

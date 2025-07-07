@@ -1,3 +1,6 @@
+import { invalid } from 'joi';
+import { permission } from 'process';
+
 export class ErrorResponse {
   constructor(
     public readonly code: string,
@@ -14,46 +17,61 @@ export class ErrorResponse {
   }
 }
 
+export const errorUserAuthen = {
+  invalidCredentials: new ErrorResponse(
+    'INVALID_CREDENTIALS',
+    'Invalid credentials',
+    401,
+  ),
+  userNotFound: new ErrorResponse('USER_NOT_FOUND', 'User not found', 404),
+  permissionDenied: new ErrorResponse(
+    'PERMISSION_DENIED',
+    'Permission denied',
+    403,
+  ),
+  tokenNotFound: new ErrorResponse(
+    'TOKEN_NOT_FOUND',
+    'Token not found in header',
+    404,
+  ),
+  invalidToken: new ErrorResponse('INVALID_TOKEN', 'Invalid token', 401),
+};
 
 export const errorGeneralFile = {
   generalFileNotFound: new ErrorResponse(
     'GENERAL_FILE_NOT_FOUND',
     'General file not found',
     404,
-  )
-}
+  ),
+};
 
 export const errorPatient = {
   patientNotFound: new ErrorResponse(
     'PATIENT_NOT_FOUND',
     'Patient not found',
     404,
-  )
-}
+  ),
+};
 
 export const errorLabSession = {
   labSessionNotFound: new ErrorResponse(
     'LAB_SESSION_NOT_FOUND',
     'Lab session not found',
     404,
-  )
-}
+  ),
+};
 
 export const errorPatientFile = {
   patientFileNotFound: new ErrorResponse(
     'PATIENT_FILE_NOT_FOUND',
     'Patient file not found',
     404,
-  )
-}
+  ),
+};
 
 export const errorUser = {
-  userNotFound: new ErrorResponse(
-    'USER_NOT_FOUND',
-    'User not found',
-    404,
-  )
-}
+  userNotFound: new ErrorResponse('USER_NOT_FOUND', 'User not found', 404),
+};
 
 export const errorLabTesting = {
   labTestingIdNotFound: new ErrorResponse(
@@ -65,15 +83,11 @@ export const errorLabTesting = {
     'LAB_TESTING_NOT_FOUND',
     'Lab testing not found',
     404,
-  )
-}
+  ),
+};
 
 export const errorUploadFile = {
-  fileNotFound: new ErrorResponse(
-    'FILE_NOT_FOUND',
-    'File not found',
-    404,
-  ),
+  fileNotFound: new ErrorResponse('FILE_NOT_FOUND', 'File not found', 404),
   fileSizeExceeded: new ErrorResponse(
     'FILE_SIZE_EXCEEDED',
     'File size exceeded',
@@ -84,4 +98,4 @@ export const errorUploadFile = {
     'File type not allowed',
     400,
   ),
-}
+};

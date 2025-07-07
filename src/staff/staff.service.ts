@@ -338,6 +338,7 @@ export class StaffService {
         const generalFile = this.generalFileRepository.create({
           fileName: originalFileName.split('.').slice(0, -1).join('.'),
           fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
+          fileSize: file.size,
           filePath: s3Url,
           description: 'General File',
           uploadedBy: user.id,
@@ -430,11 +431,14 @@ export class StaffService {
           id: true,
           fileName: true,
           filePath: true,
+          fileType: true,
+          fileSize: true,
           description: true,
           uploadedBy: true,
           uploadedAt: true,
           uploader: {
             id: true,
+            name: true,
             email: true,
             metadata: true,
           },
@@ -476,9 +480,12 @@ export class StaffService {
           'generalFile.fileName',
           'generalFile.filePath',
           'generalFile.description',
+          'generalFile.fileType',
+          'generalFile.fileSize',
           'generalFile.uploadedBy',
           'generalFile.uploadedAt',
           'uploader.id',
+          'uploader.name',
           'uploader.email',
           'uploader.metadata',
         ]);
@@ -734,7 +741,9 @@ export class StaffService {
         where: { id },
         relations: {
           doctor: true,
-          patientFiles: true,
+          patientFiles: {
+            uploader: true,
+          },
         },
         select: {
           id: true,
@@ -753,11 +762,13 @@ export class StaffService {
             fileName: true,
             filePath: true,
             fileType: true,
+            fileSize: true,
             ocrResult: true,
             uploader: {
               id: true,
               email: true,
               name: true,
+              metadata: true,
             },
             uploadedAt: true,
           },
@@ -944,6 +955,7 @@ export class StaffService {
           fileName: originalFileNameWithoutDot,
           filePath: s3Url,
           fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
+          fileSize: file.size,
           ocrResult: fileOcrResult || {},
           uploadedBy: user.id,
           uploadedAt: new Date(),

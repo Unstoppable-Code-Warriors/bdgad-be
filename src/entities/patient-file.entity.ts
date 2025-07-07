@@ -25,6 +25,9 @@ export class PatientFile {
   @Column({ name: 'file_type' })
   fileType: string;
 
+  @Column({ name: 'file_size', nullable: true })
+  fileSize: number;
+
   @Column({
     name: 'ocr_result',
     type: 'jsonb',

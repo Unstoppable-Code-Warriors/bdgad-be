@@ -309,13 +309,6 @@ export class StaffService {
   ) {
     this.logger.log('Starting General Files upload process');
     try {
-      const uploadedFiles: Array<{
-        id: number;
-        fileName: string;
-        fileType: string;
-        fileSize: number;
-      }> = [];
-
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const timestamp = Date.now();
@@ -352,13 +345,6 @@ export class StaffService {
         });
 
         await this.generalFileRepository.save(generalFile);
-        uploadedFiles.push({
-          id: generalFile.id,
-          fileName: generalFile.fileName,
-          fileType: file.mimetype,
-          fileSize: file.size,
-        });
-
         this.logger.log(
           `Uploaded file: ${originalFileName} with ID: ${generalFile.id}`,
         );
@@ -366,8 +352,6 @@ export class StaffService {
 
       return {
         message: 'General files uploaded successfully',
-        uploadedFiles,
-        totalFiles: files.length,
       };
     } catch (error) {
       this.logger.error('Failed to upload general files', error);

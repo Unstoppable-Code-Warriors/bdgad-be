@@ -3,8 +3,10 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  HttpException,
 } from '@nestjs/common';
 import { AuthService } from '../auth.service';
+import { errorUserAuthen } from 'src/utils/errorRespones';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -15,7 +17,7 @@ export class AuthGuard implements CanActivate {
 
     const token = this.extractTokenFromHeader(request);
     if (!token) {
-      throw new UnauthorizedException('Token is required');
+      throw new HttpException(errorUserAuthen.tokenNotFound, 200);
     }
 
     try {
@@ -23,12 +25,12 @@ export class AuthGuard implements CanActivate {
       request.user = verifyResult.user;
       return true;
     } catch (error) {
-      throw new UnauthorizedException('Invalid token');
+      throw new HttpException(errorUserAuthen.invalidToken, 200);
     }
   }
   private extractTokenFromHeader(request): string | null {
     const authHeader = request.headers.authorization;
-    if(!authHeader){
+    if (!authHeader) {
       return null;
     }
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -37,5 +39,3 @@ export class AuthGuard implements CanActivate {
     return authHeader.split(' ')[1];
   }
 }
-
-

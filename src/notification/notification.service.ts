@@ -34,34 +34,40 @@ export class NotificationService {
   async getNotifications(
     queryNotificationDto: QueryNotificaiton,
   ): Promise<Notifications[]> {
-    const {
-      receiverId,
-      type,
-      isRead,
-      sortOrder = 'DESC',
-    } = queryNotificationDto;
-
-    const queryBuilder = this.notificationRepository
-      .createQueryBuilder('notification')
-      .leftJoinAndSelect('notification.sender', 'sender')
-      .leftJoinAndSelect('notification.receiver', 'receiver');
-
-    if (receiverId !== undefined) {
-      queryBuilder.andWhere('notification.receiverId = :receiverId', {
+    try {
+      const {
         receiverId,
-      });
+        type,
+        isRead,
+        sortOrder = 'DESC',
+      } = queryNotificationDto;
+
+      const queryBuilder = this.notificationRepository
+        .createQueryBuilder('notification')
+        .leftJoinAndSelect('notification.sender', 'sender')
+        .leftJoinAndSelect('notification.receiver', 'receiver');
+
+      if (receiverId !== undefined) {
+        queryBuilder.andWhere('notification.receiverId = :receiverId', {
+          receiverId,
+        });
+      }
+
+      if (type !== undefined) {
+        queryBuilder.andWhere('notification.type = :type', { type });
+      }
+
+      if (isRead !== undefined) {
+        queryBuilder.andWhere('notification.isRead = :isRead', { isRead });
+      }
+
+      queryBuilder.orderBy('notification.createdAt', sortOrder);
+
+      const notifications = await queryBuilder.getMany();
+      return notifications;
+    } catch (error) {
+      this.logger.error('Failed to get notifications', error);
+      throw new InternalServerErrorException('Fail to get notifications');
     }
-
-    if (type !== undefined) {
-      queryBuilder.andWhere('notification.type = :type', { type });
-    }
-
-    if (isRead !== undefined) {
-      queryBuilder.andWhere('notification.isRead = :isRead', { isRead });
-    }
-
-    queryBuilder.orderBy('notification.createdAt', sortOrder);
-
-    return await queryBuilder.getMany();
   }
 }

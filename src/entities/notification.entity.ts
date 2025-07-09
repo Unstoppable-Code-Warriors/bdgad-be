@@ -9,7 +9,7 @@ import {
 import { User } from './user.entity';
 
 @Entity('notifications')
-export class notifications {
+export class Notifications {
   @PrimaryGeneratedColumn()
   id: number;
 

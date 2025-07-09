@@ -21,9 +21,17 @@ export class NotificationService {
   async createNotification(createNotificationReqDto: CreateNotificationReqDto) {
     this.logger.log('Start create notification');
     try {
-      const newNotification = await this.notificationRepository.save({
-        ...createNotificationReqDto,
+      const { title, message, type, senderId, receiverId } =
+        createNotificationReqDto;
+      const newNotification = await this.notificationRepository.create({
+        title,
+        message,
+        type,
+        senderId,
+        receiverId,
       });
+
+      await this.notificationRepository.save(newNotification);
       return newNotification;
     } catch (error) {
       this.logger.error('Failed to create notification', error);
@@ -41,23 +49,40 @@ export class NotificationService {
         isRead,
         sortOrder = 'DESC',
       } = queryNotificationDto;
+      this.logger.log(
+        `Log get notifications query - receiverId: ${receiverId}, type: ${type}, isRead: ${isRead}, sortOrder: ${sortOrder}`,
+      );
 
       const queryBuilder = this.notificationRepository
         .createQueryBuilder('notification')
         .leftJoinAndSelect('notification.sender', 'sender')
-        .leftJoinAndSelect('notification.receiver', 'receiver');
+        .leftJoinAndSelect('notification.receiver', 'receiver')
+        .select([
+          'notification.id',
+          'notification.title',
+          'notification.message',
+          'notification.type',
+          'sender.id',
+          'sender.name',
+          'sender.email',
+          'receiver.id',
+          'receiver.name',
+          'receiver.email',
+          'notification.isRead',
+          'notification.createdAt',
+        ]);
 
-      if (receiverId !== undefined) {
+      if (receiverId) {
         queryBuilder.andWhere('notification.receiverId = :receiverId', {
           receiverId,
         });
       }
 
-      if (type !== undefined) {
+      if (type) {
         queryBuilder.andWhere('notification.type = :type', { type });
       }
 
-      if (isRead !== undefined) {
+      if (isRead) {
         queryBuilder.andWhere('notification.isRead = :isRead', { isRead });
       }
 

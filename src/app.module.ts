@@ -9,6 +9,8 @@ import { LabTestModule } from './lab-test/lab-test.module';
 import { AuthModule } from './auth/auth.module';
 import { AnalysisModule } from './analysis/analysis.module';
 import { ValidationModule } from './validation/validation.module';
+import { NotificationModule } from './notification/notification.module';
+import { NotificaitonService } from './notificaiton/notificaiton.service';
 
 @Module({
   imports: [
@@ -39,8 +41,9 @@ import { ValidationModule } from './validation/validation.module';
     LabTestModule,
     AnalysisModule,
     ValidationModule,
+    NotificationModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [NotificaitonService],
 })
 export class AppModule {}

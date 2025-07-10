@@ -103,6 +103,7 @@ export class S3Service {
     const command = new GetObjectCommand({
       Bucket: bucket,
       Key: key,
+      ResponseContentDisposition: `attachment` ,
     });
 
     return getSignedUrl(this.s3Client, command, { expiresIn });

@@ -42,7 +42,7 @@ import { errorUploadFile } from 'src/utils/errorRespones';
 @UseGuards(AuthGuard, RolesGuard)
 @ApiSecurity('token')
 export class StaffController {
-  constructor(private readonly staffService: StaffService) {}
+  constructor(private readonly staffService: StaffService) { }
 
   @ApiTags('Staff - OCR file')
   @Post('/upload-info')
@@ -203,7 +203,15 @@ export class StaffController {
   @ApiOperation({ summary: 'Download a general file' })
   @AuthZ([Role.STAFF])
   async downloadGeneralFile(@Param('id') id: number) {
-    return this.staffService.downloadGeneralFile(id);
+    const downloadUrl = await this.staffService.downloadGeneralFile(id);
+    const expiresIn = 3600; // 1 hour in seconds
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    return {
+      downloadUrl,
+      expiresIn,
+      expiresAt,
+    };
   }
 
   @ApiTags('Staff - General Files')

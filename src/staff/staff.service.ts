@@ -37,6 +37,8 @@ import { GeneralFile } from 'src/entities/general-file.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
+import { UpdatePatientDto } from './dtos/update-patient-dto.req';
+import e from 'express';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -666,6 +668,54 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     } finally {
       this.logger.log('Patient get all process completed');
+    }
+  }
+
+  async updatePatientById(id: number, updatePatientDto: UpdatePatientDto) {
+    try {
+      this.logger.log('Starting Patient update process');
+      const patient = await this.patientRepository.findOne({
+        where: { id },
+      });
+
+      if (!patient) {
+        return errorPatient.patientNotFound;
+      }
+      Object.assign(patient, updatePatientDto);
+
+      const updatedPatient = await this.patientRepository.save(patient);
+
+      return 'Patient updated successfully';
+    } catch (error) {
+      this.logger.error('Failed to update Patient', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Patient update process completed');
+    }
+  }
+
+  async deletePatientById(id: number) {
+    try {
+      this.logger.log('Starting Patient delete process');
+      const patient = await this.patientRepository.findOne({
+        where: { id },
+        relations: {
+          labSessions: true,
+        },
+      });
+      if (!patient) {
+        return errorPatient.patientNotFound;
+      }
+      if (patient.labSessions.length > 0) {
+        return errorPatient.patientHasLabSession;
+      }
+      await this.patientRepository.delete(id);
+      return { message: 'Patient deleted successfully' };
+    } catch (error) {
+      this.logger.error('Failed to delete Patient', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Patient delete process completed');
     }
   }
 

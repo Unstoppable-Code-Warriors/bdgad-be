@@ -51,6 +51,11 @@ export const errorPatient = {
     'Patient not found',
     404,
   ),
+  patientHasLabSession: new ErrorResponse(
+    'PATIENT_HAS_LAB_SESSION',
+    'Patient has lab session',
+    400,
+  ),
 };
 
 export const errorLabSession = {

@@ -4,6 +4,7 @@ import {
   Entity,
   OneToMany,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { LabSession } from './lab-session.entity';
 
@@ -36,7 +37,7 @@ export class Patient {
   })
   createdAt: Date;
 
-  @Column({
+  @UpdateDateColumn({
     name: 'updated_at',
     type: 'timestamp',
   })

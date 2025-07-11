@@ -46,6 +46,9 @@ export class User {
   })
   updatedAt: Date;
 
+  @Column({ name: 'deleted_at', type: 'timestamp', nullable: true })
+  deletedAt: Date | null;
+
   @ManyToMany(() => Role, (role) => role.users, {
     cascade: true,
   })

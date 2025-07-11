@@ -342,8 +342,8 @@ export class StaffController {
     name: 'searchField',
     required: false,
     type: String,
-    description: 'Search field (fullName, healthInsuranceCode, personalId)',
-    enum: ['fullName', 'healthInsuranceCode', 'personalId'],
+    description: 'Search field (fullName, citizenId, personalId)',
+    enum: ['fullName', 'citizenId', 'personalId'],
   })
   @ApiQuery({
     name: 'dateFrom',

@@ -580,7 +580,7 @@ export class StaffService {
   async createPatient(createPatientDto: CreatePatientDto) {
     this.logger.log('Starting Patient create process');
     try {
-      const { fullName, healthInsuranceCode } = createPatientDto;
+      const { fullName, citizenId } = createPatientDto;
 
       const personalId = Math.floor(
         1000000000 + Math.random() * 9000000000,
@@ -591,7 +591,7 @@ export class StaffService {
         phone: '081234567890',
         address: 'Jl. Raya No. 123',
         personalId,
-        healthInsuranceCode: healthInsuranceCode.trim(),
+        citizenId: citizenId.trim(),
         createdAt: new Date(),
       });
       await this.patientRepository.save(patient);
@@ -621,11 +621,7 @@ export class StaffService {
 
       // Global search functionality - search by the specified field
       if (search) {
-        const validSearchFields = [
-          'fullName',
-          'healthInsuranceCode',
-          'personalId',
-        ];
+        const validSearchFields = ['fullName', 'citizenId', 'personalId'];
         const fieldToSearch = validSearchFields.includes(searchField)
           ? searchField
           : 'fullName';
@@ -688,7 +684,7 @@ export class StaffService {
           phone: true,
           address: true,
           personalId: true,
-          healthInsuranceCode: true,
+          citizenId: true,
           createdAt: true,
           labSessions: {
             id: true,

@@ -27,14 +27,20 @@ export class Patient {
   @Column({ name: 'personal_id', unique: true })
   personalId: string;
 
-  @Column({ name: 'health_insurance_code', unique: true })
-  healthInsuranceCode: string;
+  @Column({ name: 'citizen_id', unique: true })
+  citizenId: string;
 
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',
   })
   createdAt: Date;
+
+  @Column({
+    name: 'updated_at',
+    type: 'timestamp',
+  })
+  updatedAt: Date;
 
   @OneToMany(() => LabSession, (labSession) => labSession.patient, {
     cascade: true,

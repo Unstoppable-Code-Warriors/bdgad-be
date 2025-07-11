@@ -181,7 +181,7 @@ export class ValidationService {
             phone: session.patient.phone,
             address: session.patient.address,
             personalId: session.patient.personalId,
-            healthInsuranceCode: session.patient.healthInsuranceCode,
+            citizenId: session.patient.citizenId,
             createdAt: session.patient.createdAt,
           },
           doctor: {

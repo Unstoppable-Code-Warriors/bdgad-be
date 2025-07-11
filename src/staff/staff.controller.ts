@@ -13,6 +13,7 @@ import {
   UsePipes,
   ValidationPipe,
   Body,
+  Put,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
@@ -37,6 +38,7 @@ import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
+import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -368,6 +370,48 @@ export class StaffController {
   @ApiOperation({ summary: 'Get all lab sessions of a patient' })
   async getLabSessionsByPatientId(@Param('patientId') patientId: number) {
     return this.staffService.getLabSessionsByPatientId(patientId);
+  }
+
+  @ApiTags('Staff - Patients')
+  @Put('patients/:patientId')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Update a folder patient' })
+  @ApiBody({
+    type: UpdatePatientDto,
+    examples: {
+      example: {
+        summary: 'Cập nhật một số thông tin bệnh nhân',
+        value: {
+          fullName: 'Nguyễn Văn A',
+          dateOfBirth: '1990-01-01T00:00:00.000Z',
+          phone: '0912345678',
+          address: '123 Đường ABC, Quận 1, TP.HCM',
+          personalId: '123456789',
+          citizenId: '012345678901',
+        },
+      },
+      minimalUpdate: {
+        summary: 'Chỉ cập nhật họ tên và số CCCD',
+        value: {
+          fullName: 'Trần Thị B',
+          citizenId: '987654321000',
+        },
+      },
+    },
+  })
+  async updatePatientById(
+    @Param('patientId') patientId: number,
+    @Body() updatePatientDto: UpdatePatientDto,
+  ) {
+    return this.staffService.updatePatientById(patientId, updatePatientDto);
+  }
+
+  @ApiTags('Staff - Patients')
+  @Delete('patients/:patientId')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Delete a folder patient' })
+  async deletePatientById(@Param('patientId') patientId: number) {
+    return this.staffService.deletePatientById(patientId);
   }
 
   // Session api

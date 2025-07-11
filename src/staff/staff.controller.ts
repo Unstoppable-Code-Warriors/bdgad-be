@@ -42,7 +42,7 @@ import { errorUploadFile } from 'src/utils/errorRespones';
 @UseGuards(AuthGuard, RolesGuard)
 @ApiSecurity('token')
 export class StaffController {
-  constructor(private readonly staffService: StaffService) { }
+  constructor(private readonly staffService: StaffService) {}
 
   @ApiTags('Staff - OCR file')
   @Post('/upload-info')
@@ -307,7 +307,7 @@ export class StaffController {
       'example 1': {
         value: {
           fullName: 'John Doe',
-          healthInsuranceCode: '1234567890',
+          citizenId: '1234567890',
         },
       },
     },

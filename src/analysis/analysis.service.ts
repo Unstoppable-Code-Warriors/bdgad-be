@@ -282,7 +282,7 @@ export class AnalysisService {
           phone: true,
           address: true,
           personalId: true,
-          healthInsuranceCode: true,
+          citizenId: true,
           createdAt: true,
         },
         doctor: {

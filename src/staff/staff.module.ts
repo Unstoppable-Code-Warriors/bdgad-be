@@ -9,10 +9,21 @@ import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { User } from 'src/entities/user.entity';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
-  imports: [HttpModule, TypeOrmModule.forFeature([GeneralFile,Patient,LabSession,PatientFile,User])],
+  imports: [
+    HttpModule,
+    TypeOrmModule.forFeature([
+      GeneralFile,
+      Patient,
+      LabSession,
+      PatientFile,
+      User,
+    ]),
+    NotificationModule,
+  ],
   controllers: [StaffController],
-  providers: [StaffService,S3Service],
+  providers: [StaffService, S3Service],
 })
 export class StaffModule {}

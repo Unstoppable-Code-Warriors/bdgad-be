@@ -13,7 +13,7 @@ import { firstValueFrom } from 'rxjs';
 import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
-import { S3Bucket, TypeLabSession } from 'src/utils/constant';
+import { S3Bucket, TypeLabSession, TypeNotification } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import {
   PaginationQueryDto,
@@ -35,6 +35,8 @@ import { PatientFile } from 'src/entities/patient-file.entity';
 import { User } from 'src/entities/user.entity';
 import { GeneralFile } from 'src/entities/general-file.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
+import { NotificationService } from 'src/notification/notification.service';
+import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -59,6 +61,7 @@ export class StaffService {
     private readonly patientFileRepository: Repository<PatientFile>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async handleUploadInfo(files: UploadedFiles) {
@@ -843,11 +846,17 @@ export class StaffService {
     user: AuthenticatedUser,
   ) {
     this.logger.log('Starting Patient Files upload process');
+    let notificationRequest: CreateNotificationReqDto = {
+      title: 'Assign Lab Testing',
+      message: '',
+      type: TypeNotification.LAB_TASK,
+      senderId: user.id,
+      receiverId: uploadData.labTestingId as number,
+    };
     try {
       const { patientId, doctorId, typeLabSession, ocrResult, labTestingId } =
         uploadData;
       let labTestingIdCheck: number | undefined | null = labTestingId;
-
       // Verify patient exists
       const patient = await this.patientRepository.findOne({
         where: { id: patientId },
@@ -898,6 +907,9 @@ export class StaffService {
       });
       await this.labSessionRepository.save(labSession);
       this.logger.log(`Created new lab session with ID: ${labSession.id}`);
+      if (typeLabSession === TypeLabSession.TEST) {
+        notificationRequest.message = `You have been assigned lab session #${labSession.id} by ${user.name}.`;
+      }
 
       // Upload files and create patient file records
       for (let i = 0; i < files.length; i++) {
@@ -975,7 +987,11 @@ export class StaffService {
       this.logger.error('Failed to upload patient files', error);
       throw new InternalServerErrorException(error.message);
     } finally {
-      this.logger.log('Patient Files upload process completed');
+      if (uploadData.typeLabSession === TypeLabSession.TEST) {
+        this.logger.log('Sending notification for lab task creation');
+        await this.notificationService.createNotification(notificationRequest);
+      }
+      this.logger.log('Patient files upload process completed');
     }
   }
 }

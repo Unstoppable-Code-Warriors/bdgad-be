@@ -685,7 +685,10 @@ export class StaffService {
 
       const updatedPatient = await this.patientRepository.save(patient);
 
-      return 'Patient updated successfully';
+      return {
+        message: 'Patient updated successfully',
+        patient: updatedPatient,
+      }
     } catch (error) {
       this.logger.error('Failed to update Patient', error);
       throw new InternalServerErrorException(error.message);

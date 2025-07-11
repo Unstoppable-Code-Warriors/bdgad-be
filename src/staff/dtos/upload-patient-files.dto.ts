@@ -66,7 +66,6 @@ export class UploadPatientFilesDto {
     }
     return value;
   })
-  @IsArray()
   @IsOptional()
   ocrResult?: any;
 }

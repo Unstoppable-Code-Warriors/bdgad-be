@@ -35,3 +35,10 @@ export enum TypeLabSession {
   TEST = 'test',
   VALIDATION = 'validation',
 }
+
+export enum TypeNotification {
+  SYSTEM = 'system',
+  LAB_TASK = 'lab_task',
+  VALIDATION_TASK = 'validation_task',
+  ANALYSIS_TASK = 'analysis_task',
+}

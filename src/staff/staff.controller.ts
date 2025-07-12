@@ -477,16 +477,6 @@ export class StaffController {
           description: 'Patient ID',
           example: 1,
         },
-        doctorId: {
-          type: 'number',
-          description: 'Doctor ID',
-          example: 1,
-        },
-        labTestingId: {
-          type: 'number',
-          description: 'Lab testing ID',
-          example: 1,
-        },
         typeLabSession: {
           type: 'string',
           enum: ['test', 'validation'],
@@ -516,7 +506,7 @@ export class StaffController {
           ],
         },
       },
-      required: ['files', 'patientId', 'doctorId', 'typeLabSession'],
+      required: ['files', 'patientId', 'typeLabSession'],
     },
   })
   @UseInterceptors(

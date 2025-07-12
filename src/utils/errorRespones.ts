@@ -1,6 +1,3 @@
-import { invalid } from 'joi';
-import { permission } from 'process';
-
 export class ErrorResponse {
   constructor(
     public readonly code: string,
@@ -16,6 +13,19 @@ export class ErrorResponse {
     };
   }
 }
+
+export const errorOCR = {
+  filePathNotFound: new ErrorResponse(
+    'FILE_PATH_NOT_FOUND',
+    'File path not found',
+    404,
+  ),
+  ocrServiceUrlNotFound: new ErrorResponse(
+    'OCR_SERVICE_URL_NOT_FOUND',
+    'OCR service URL not found',
+    400,
+  ),
+};
 
 export const errorUserAuthen = {
   invalidCredentials: new ErrorResponse(

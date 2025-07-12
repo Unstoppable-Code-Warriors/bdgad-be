@@ -39,6 +39,7 @@ import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import e from 'express';
+import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -1017,6 +1018,40 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     } finally {
       this.logger.log('Patient files upload process completed');
+    }
+  }
+
+  async assignDoctorAndLabTestingLabSession(
+    id: number,
+    assignLabSessionDto: AssignLabSessionDto,
+  ) {
+    try {
+      this.logger.log('Starting Lab Session update process');
+      const { doctorId, labTestingId } = assignLabSessionDto;
+      const labSession = await this.labSessionRepository.findOne({
+        where: { id },
+      });
+      if (!labSession) {
+        return errorLabSession.labSessionNotFound;
+      }
+      if (!doctorId) {
+        return errorLabSession.doctorIdRequired;
+      }
+      if (labSession.typeLabSession === TypeLabSession.TEST && !labTestingId) {
+        return errorLabSession.labTestingIdRequired;
+      }
+      Object.assign(labSession, assignLabSessionDto);
+      const updatedLabSession =
+        await this.labSessionRepository.save(labSession);
+      return {
+        message: 'Lab session updated successfully',
+        labSession: updatedLabSession,
+      };
+    } catch (error) {
+      this.logger.error('Failed to update lab session', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Lab Session update process completed');
     }
   }
 }

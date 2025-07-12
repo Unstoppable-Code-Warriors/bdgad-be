@@ -23,24 +23,6 @@ export class UploadPatientFilesDto {
   patientId: number;
 
   @ApiProperty({
-    description: 'Doctor ID',
-    example: 1,
-  })
-  @IsNumber()
-  @Type(() => Number)
-  @IsNotEmpty()
-  doctorId: number;
-
-  @ApiProperty({
-    description: 'Lab Testing ID',
-    example: 1,
-  })
-  @IsNumber()
-  @Type(() => Number)
-  @IsOptional()
-  labTestingId?: number;
-
-  @ApiProperty({
     description: 'Type of lab session',
     enum: TypeLabSession,
     example: TypeLabSession.TEST,

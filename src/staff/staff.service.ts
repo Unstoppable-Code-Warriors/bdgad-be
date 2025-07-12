@@ -688,7 +688,7 @@ export class StaffService {
       return {
         message: 'Patient updated successfully',
         patient: updatedPatient,
-      }
+      };
     } catch (error) {
       this.logger.error('Failed to update Patient', error);
       throw new InternalServerErrorException(error.message);
@@ -765,6 +765,8 @@ export class StaffService {
           typeLabSession: true,
           requestDate: true,
           createdAt: true,
+          updatedAt: true,
+          finishedAt: true,
           doctor: {
             id: true,
             name: true,
@@ -804,6 +806,8 @@ export class StaffService {
           typeLabSession: true,
           requestDate: true,
           createdAt: true,
+          updatedAt: true,
+          finishedAt: true,
           doctor: {
             id: true,
             name: true,

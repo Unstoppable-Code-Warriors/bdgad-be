@@ -23,6 +23,7 @@ import {
   errorGeneralFile,
   errorLabSession,
   errorLabTesting,
+  errorOCR,
   errorPatient,
   errorPatientFile,
   errorUser,
@@ -38,7 +39,6 @@ import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
-import e from 'express';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 
 interface UploadedFiles {
@@ -67,214 +67,35 @@ export class StaffService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async handleUploadInfo(files: UploadedFiles) {
-    // Use absolute path resolution to avoid path issues
-    const configuredStorePath =
-      this.configService.get<string>('STORE_PATH') || './uploads';
-    const storePath = path.isAbsolute(configuredStorePath)
-      ? configuredStorePath
-      : path.resolve(process.cwd(), configuredStorePath);
+  async ocrFilePath(patientFileId: number) {
+    const patientFile = await this.patientFileRepository.findOne({
+      where: { id: patientFileId },
+    });
 
-    this.logger.log(`Using storage path: ${storePath}`);
-
-    // Ensure the storage directory exists
-    try {
-      if (!fs.existsSync(storePath)) {
-        this.logger.log('Storage directory does not exist, creating it');
-        fs.mkdirSync(storePath, { recursive: true });
-        this.logger.log('Storage directory created successfully');
-      }
-
-      // Verify directory is writable
-      fs.accessSync(storePath, fs.constants.W_OK);
-      this.logger.log('Storage directory is writable');
-    } catch (error) {
-      this.logger.error(
-        `Failed to create or access storage directory: ${storePath}`,
-        error,
-      );
-      throw new Error(`Storage directory is not accessible: ${error.message}`);
+    if (!patientFile) {
+      return errorPatientFile.patientFileNotFound;
     }
-
-    // Process Medical Test Requisition file
-    const medicalTestRequisitionSuffix =
-      Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const medicalTestRequisitionExt = path.extname(
-      files.medicalTestRequisition.originalname,
-    );
-    const medicalTestRequisitionFilename = `medical-test-requisition-${medicalTestRequisitionSuffix}${medicalTestRequisitionExt}`;
-    const medicalTestRequisitionPath = path.join(
-      storePath,
-      medicalTestRequisitionFilename,
-    );
-
-    try {
-      fs.writeFileSync(
-        medicalTestRequisitionPath,
-        files.medicalTestRequisition.buffer,
-      );
-      this.logger.log(
-        `Medical test requisition file saved: ${medicalTestRequisitionFilename}`,
-      );
-    } catch (error) {
-      this.logger.error('Failed to save medical test requisition file', error);
-      throw new Error(
-        `Failed to save medical test requisition file: ${error.message}`,
-      );
-    }
-
-    // Process Sales Invoice file
-    const salesInvoiceSuffix =
-      Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const salesInvoiceExt = path.extname(files.salesInvoice.originalname);
-    const salesInvoiceFilename = `sales-invoice-${salesInvoiceSuffix}${salesInvoiceExt}`;
-    const salesInvoicePath = path.join(storePath, salesInvoiceFilename);
-
-    try {
-      fs.writeFileSync(salesInvoicePath, files.salesInvoice.buffer);
-      this.logger.log(`Sales invoice file saved: ${salesInvoiceFilename}`);
-    } catch (error) {
-      this.logger.error('Failed to save sales invoice file', error);
-      throw new Error(`Failed to save sales invoice file: ${error.message}`);
-    }
-
-    const savedFiles = {
-      medicalTestRequisition: {
-        originalName: files.medicalTestRequisition.originalname,
-        filename: medicalTestRequisitionFilename,
-        path: medicalTestRequisitionPath,
-        size: files.medicalTestRequisition.size,
-        mimetype: files.medicalTestRequisition.mimetype,
-      },
-      salesInvoice: {
-        originalName: files.salesInvoice.originalname,
-        filename: salesInvoiceFilename,
-        path: salesInvoicePath,
-        size: files.salesInvoice.size,
-        mimetype: files.salesInvoice.mimetype,
-      },
-    };
-
-    return {
-      success: true,
-      message: 'Files uploaded successfully',
-      files: savedFiles,
-      storagePath: storePath,
-    };
-  }
-
-  async handleMedicalTestRequisitionUpload(file: Express.Multer.File) {
-    this.logger.log('Starting Medical Test Requisition upload process');
-
-    // Use absolute path resolution to avoid path issues
-    const configuredStorePath =
-      this.configService.get<string>('STORE_PATH') || './uploads';
-    const storePath = path.isAbsolute(configuredStorePath)
-      ? configuredStorePath
-      : path.resolve(process.cwd(), configuredStorePath);
-
-    this.logger.log(`Using storage path: ${storePath}`);
-    this.logger.log(`Current working directory: ${process.cwd()}`);
-    this.logger.log(`Configured store path: ${configuredStorePath}`);
-
-    // Validate file input
-    if (!file || !file.buffer) {
-      this.logger.error('Invalid file: no file or buffer provided');
-      throw new Error('Invalid file provided');
-    }
-
-    this.logger.log(
-      `File details - Name: ${file.originalname}, Size: ${file.size}, Type: ${file.mimetype}`,
-    );
-
-    // Ensure the storage directory exists
-    try {
-      if (!fs.existsSync(storePath)) {
-        this.logger.log('Storage directory does not exist, creating it');
-        fs.mkdirSync(storePath, { recursive: true });
-        this.logger.log('Storage directory created successfully');
-      } else {
-        this.logger.log('Storage directory already exists');
-      }
-
-      // Verify directory is writable
-      fs.accessSync(storePath, fs.constants.W_OK);
-      this.logger.log('Storage directory is writable');
-    } catch (error) {
-      this.logger.error(
-        `Failed to create or access storage directory: ${storePath}`,
-        error,
-      );
-      throw new Error(`Storage directory is not accessible: ${error.message}`);
-    }
-
-    // Process Medical Test Requisition file
-    const medicalTestRequisitionSuffix =
-      Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const medicalTestRequisitionExt = path.extname(file.originalname);
-    const medicalTestRequisitionFilename = `medical-test-requisition-${medicalTestRequisitionSuffix}${medicalTestRequisitionExt}`;
-    const medicalTestRequisitionPath = path.join(
-      storePath,
-      medicalTestRequisitionFilename,
-    );
-
-    this.logger.log(`Saving file as: ${medicalTestRequisitionFilename}`);
-    this.logger.log(`Full file path: ${medicalTestRequisitionPath}`);
-    this.logger.log(`File buffer size: ${file.buffer.length} bytes`);
-
-    try {
-      fs.writeFileSync(medicalTestRequisitionPath, file.buffer);
-      this.logger.log('File saved successfully to storage');
-
-      // Verify file was actually written
-      if (fs.existsSync(medicalTestRequisitionPath)) {
-        const savedFileStats = fs.statSync(medicalTestRequisitionPath);
-        this.logger.log(`File verified - Size: ${savedFileStats.size} bytes`);
-
-        if (savedFileStats.size !== file.buffer.length) {
-          this.logger.warn(
-            `File size mismatch - Expected: ${file.buffer.length}, Actual: ${savedFileStats.size}`,
-          );
-        }
-      } else {
-        this.logger.error(
-          'File was not created despite successful write operation',
-        );
-        throw new Error(
-          'File verification failed - file does not exist after write',
-        );
-      }
-    } catch (error) {
-      this.logger.error('Failed to save file to storage', error);
-      this.logger.error(`Error details: ${error.message}`);
-      this.logger.error(`Error code: ${error.code}`);
-      throw new Error(`Failed to save file: ${error.message}`);
-    }
-
-    const savedFile = {
-      originalName: file.originalname,
-      filename: medicalTestRequisitionFilename,
-      path: medicalTestRequisitionPath,
-      size: file.size,
-      mimetype: file.mimetype,
-    };
-
     // Send to OCR service
+    const s3key = this.s3Service.extractKeyFromUrl(
+      patientFile.filePath,
+      S3Bucket.PATIENT_FILES,
+    );
+
+    const presignedUrl = await this.s3Service.generatePresigned(
+      S3Bucket.PATIENT_FILES,
+      s3key,
+      3600,
+    );
+
     const ocrServiceUrl = this.configService.get<string>('OCR_SERVICE');
+
     if (!ocrServiceUrl) {
       this.logger.warn('OCR_SERVICE not configured, skipping OCR processing');
-      return {
-        success: true,
-        message:
-          'Medical Test Requisition uploaded successfully (OCR service not configured)',
-        file: savedFile,
-        storagePath: storePath,
-        ocrResult: null,
-      };
+      return errorOCR.ocrServiceUrlNotFound;
     }
 
     this.logger.log(`OCR service URL configured: ${ocrServiceUrl}`);
-    const ocrEndpoint = `${ocrServiceUrl}/process_document?path=${encodeURIComponent(medicalTestRequisitionPath)}`;
+    const ocrEndpoint = `${ocrServiceUrl}/process_document?url=${encodeURIComponent(presignedUrl)}`;
     this.logger.log(`OCR endpoint: ${ocrEndpoint}`);
 
     let ocrResult: any = null;
@@ -301,10 +122,7 @@ export class StaffService {
     this.logger.log('Medical Test Requisition upload process completed');
 
     return {
-      success: true,
       message: 'Medical Test Requisition uploaded successfully',
-      file: savedFile,
-      storagePath: storePath,
       ocrResult: ocrResult,
     };
   }
@@ -1053,5 +871,21 @@ export class StaffService {
     } finally {
       this.logger.log('Lab Session update process completed');
     }
+  }
+
+  async getPreSigndR2() {
+    // const general = await this.getGeneralFileById(28);
+    const s3key = this.s3Service.extractKeyFromUrl(
+      'https://d46919b3b31b61ac349836b18c9ac671.r2.cloudflarestorage.com/general-files/1752308785301_phieu_chi_dinh.jpg',
+      S3Bucket.GENERAL_FILES,
+    );
+
+    const presignedUrl = await this.s3Service.generatePresigned(
+      S3Bucket.GENERAL_FILES,
+      s3key,
+      3600,
+    );
+
+    return presignedUrl;
   }
 }

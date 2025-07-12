@@ -6,6 +6,7 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
@@ -36,7 +37,17 @@ export class LabSession {
   })
   createdAt: Date;
 
-  @Column({ name: 'type_lab_session', type: 'varchar', enum: ['test', 'validation'] })
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+  })
+  updatedAt: Date;
+
+  @Column({
+    name: 'type_lab_session',
+    type: 'varchar',
+    enum: ['test', 'validation'],
+  })
   typeLabSession: string;
 
   @Column({
@@ -84,6 +95,9 @@ export class LabSession {
   })
   @JoinColumn({ name: 'validation_id' })
   validation: User;
+
+  @Column({ name: 'finished_at', type: 'timestamp', nullable: true })
+  finishedAt: Date | null;
 
   @OneToMany(() => PatientFile, (patientFile) => patientFile.session, {
     cascade: true,

@@ -64,6 +64,16 @@ export const errorLabSession = {
     'Lab session not found',
     404,
   ),
+  doctorIdRequired: new ErrorResponse(
+    'DOCTOR_ID_REQUIRED',
+    'Doctor id required',
+    400,
+  ),
+  labTestingIdRequired: new ErrorResponse(
+    'LAB_TESTING_ID_REQUIRED',
+    'Lab testing id required',
+    400,
+  ),
 };
 
 export const errorPatientFile = {

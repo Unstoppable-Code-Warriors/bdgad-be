@@ -39,6 +39,7 @@ import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
+import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -365,14 +366,6 @@ export class StaffController {
   }
 
   @ApiTags('Staff - Patients')
-  @Get('patients/:patientId/sessions')
-  @AuthZ([Role.STAFF])
-  @ApiOperation({ summary: 'Get all lab sessions of a patient' })
-  async getLabSessionsByPatientId(@Param('patientId') patientId: number) {
-    return this.staffService.getLabSessionsByPatientId(patientId);
-  }
-
-  @ApiTags('Staff - Patients')
   @Put('patients/:patientId')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Update a folder patient' })
@@ -415,12 +408,51 @@ export class StaffController {
   }
 
   // Session api
+
+  @ApiTags('Staff - Sessions')
+  @Get('patients/:patientId/sessions')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Get all lab sessions of a patient' })
+  async getLabSessionsByPatientId(@Param('patientId') patientId: number) {
+    return this.staffService.getLabSessionsByPatientId(patientId);
+  }
+
   @ApiTags('Staff - Sessions')
   @Get('sessions/:sessionId')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Get a lab session by ID' })
   async getLabSessionById(@Param('sessionId') sessionId: number) {
     return this.staffService.getLabSessionById(sessionId);
+  }
+
+  @ApiTags('Staff - Sessions')
+  @Put('sessions/:sessionId')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Assign a lab session to a doctor or lab testing' })
+  @ApiBody({
+    type: AssignLabSessionDto,
+    examples: {
+      testType: {
+        value: {
+          doctorId: 1,
+          labTestingId: 6,
+        },
+      },
+      validationType: {
+        value: {
+          doctorId: 1,
+        },
+      },
+    },
+  })
+  async assignLabSession(
+    @Param('sessionId') sessionId: number,
+    @Body() assignLabSessionDto: AssignLabSessionDto,
+  ) {
+    return this.staffService.assignDoctorAndLabTestingLabSession(
+      sessionId,
+      assignLabSessionDto,
+    );
   }
 
   // Patient File api
@@ -476,16 +508,6 @@ export class StaffController {
           description: 'Patient ID',
           example: 1,
         },
-        doctorId: {
-          type: 'number',
-          description: 'Doctor ID',
-          example: 1,
-        },
-        labTestingId: {
-          type: 'number',
-          description: 'Lab testing ID',
-          example: 1,
-        },
         typeLabSession: {
           type: 'string',
           enum: ['test', 'validation'],
@@ -515,7 +537,7 @@ export class StaffController {
           ],
         },
       },
-      required: ['files', 'patientId', 'doctorId', 'typeLabSession'],
+      required: ['files', 'patientId', 'typeLabSession'],
     },
   })
   @UseInterceptors(

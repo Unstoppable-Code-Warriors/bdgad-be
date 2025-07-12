@@ -39,6 +39,7 @@ import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import e from 'express';
+import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -688,7 +689,7 @@ export class StaffService {
       return {
         message: 'Patient updated successfully',
         patient: updatedPatient,
-      }
+      };
     } catch (error) {
       this.logger.error('Failed to update Patient', error);
       throw new InternalServerErrorException(error.message);
@@ -756,6 +757,7 @@ export class StaffService {
         },
         relations: {
           doctor: true,
+          labTesting: true,
           patientFiles: true,
         },
         select: {
@@ -765,7 +767,14 @@ export class StaffService {
           typeLabSession: true,
           requestDate: true,
           createdAt: true,
+          updatedAt: true,
+          finishedAt: true,
           doctor: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          labTesting: {
             id: true,
             name: true,
             email: true,
@@ -793,6 +802,7 @@ export class StaffService {
         where: { id },
         relations: {
           doctor: true,
+          labTesting: true,
           patientFiles: {
             uploader: true,
           },
@@ -804,7 +814,14 @@ export class StaffService {
           typeLabSession: true,
           requestDate: true,
           createdAt: true,
+          updatedAt: true,
+          finishedAt: true,
           doctor: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          labTesting: {
             id: true,
             name: true,
             email: true,
@@ -895,45 +912,14 @@ export class StaffService {
     user: AuthenticatedUser,
   ) {
     this.logger.log('Starting Patient Files upload process');
-    let notificationRequest: CreateNotificationReqDto = {
-      title: 'Assign Lab Testing',
-      message: '',
-      type: TypeNotification.LAB_TASK,
-      senderId: user.id,
-      receiverId: uploadData.labTestingId as number,
-    };
     try {
-      const { patientId, doctorId, typeLabSession, ocrResult, labTestingId } =
-        uploadData;
-      let labTestingIdCheck: number | undefined | null = labTestingId;
+      const { patientId, typeLabSession, ocrResult } = uploadData;
       // Verify patient exists
       const patient = await this.patientRepository.findOne({
         where: { id: patientId },
       });
       if (!patient) {
         return errorPatient.patientNotFound;
-      }
-
-      // Verify doctor exists
-      const doctor = await this.userRepository.findOne({
-        where: { id: doctorId },
-      });
-      if (!doctor) {
-        return errorUser.userNotFound;
-      }
-
-      if (typeLabSession === TypeLabSession.TEST) {
-        if (!labTestingId) {
-          return errorLabTesting.labTestingIdNotFound;
-        }
-        const labTesting = await this.userRepository.findOne({
-          where: { id: labTestingId },
-        });
-        if (!labTesting) {
-          return errorLabTesting.labTestingNotFound;
-        }
-      } else {
-        labTestingIdCheck = null;
       }
       // Generate unique labcode and barcode if not provided
       const number = String(Math.floor(Math.random() * 999) + 1).padStart(
@@ -949,16 +935,11 @@ export class StaffService {
         labcode: defaultLabcode,
         barcode: defaultBarcode,
         requestDate: new Date(),
-        doctorId,
-        labTestingId: labTestingIdCheck,
         typeLabSession,
         metadata: {},
       });
       await this.labSessionRepository.save(labSession);
       this.logger.log(`Created new lab session with ID: ${labSession.id}`);
-      if (typeLabSession === TypeLabSession.TEST) {
-        notificationRequest.message = `You have been assigned lab session #${labSession.id} by ${user.name}.`;
-      }
 
       // Upload files and create patient file records
       for (let i = 0; i < files.length; i++) {
@@ -1036,11 +1017,41 @@ export class StaffService {
       this.logger.error('Failed to upload patient files', error);
       throw new InternalServerErrorException(error.message);
     } finally {
-      if (uploadData.typeLabSession === TypeLabSession.TEST) {
-        this.logger.log('Sending notification for lab task creation');
-        await this.notificationService.createNotification(notificationRequest);
-      }
       this.logger.log('Patient files upload process completed');
+    }
+  }
+
+  async assignDoctorAndLabTestingLabSession(
+    id: number,
+    assignLabSessionDto: AssignLabSessionDto,
+  ) {
+    try {
+      this.logger.log('Starting Lab Session update process');
+      const { doctorId, labTestingId } = assignLabSessionDto;
+      const labSession = await this.labSessionRepository.findOne({
+        where: { id },
+      });
+      if (!labSession) {
+        return errorLabSession.labSessionNotFound;
+      }
+      if (!doctorId) {
+        return errorLabSession.doctorIdRequired;
+      }
+      if (labSession.typeLabSession === TypeLabSession.TEST && !labTestingId) {
+        return errorLabSession.labTestingIdRequired;
+      }
+      Object.assign(labSession, assignLabSessionDto);
+      const updatedLabSession =
+        await this.labSessionRepository.save(labSession);
+      return {
+        message: 'Lab session updated successfully',
+        labSession: updatedLabSession,
+      };
+    } catch (error) {
+      this.logger.error('Failed to update lab session', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Lab Session update process completed');
     }
   }
 }

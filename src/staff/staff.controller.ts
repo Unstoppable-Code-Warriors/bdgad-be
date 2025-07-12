@@ -365,14 +365,6 @@ export class StaffController {
   }
 
   @ApiTags('Staff - Patients')
-  @Get('patients/:patientId/sessions')
-  @AuthZ([Role.STAFF])
-  @ApiOperation({ summary: 'Get all lab sessions of a patient' })
-  async getLabSessionsByPatientId(@Param('patientId') patientId: number) {
-    return this.staffService.getLabSessionsByPatientId(patientId);
-  }
-
-  @ApiTags('Staff - Patients')
   @Put('patients/:patientId')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Update a folder patient' })
@@ -415,6 +407,15 @@ export class StaffController {
   }
 
   // Session api
+
+  @ApiTags('Staff - Sessions')
+  @Get('patients/:patientId/sessions')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Get all lab sessions of a patient' })
+  async getLabSessionsByPatientId(@Param('patientId') patientId: number) {
+    return this.staffService.getLabSessionsByPatientId(patientId);
+  }
+
   @ApiTags('Staff - Sessions')
   @Get('sessions/:sessionId')
   @AuthZ([Role.STAFF])

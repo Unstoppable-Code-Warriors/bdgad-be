@@ -271,7 +271,7 @@ export class AnalysisService {
       relations: {
         patient: true,
         doctor: true,
-        analysis: true,
+        validation: true,
         fastqFiles: {
           creator: true,
           rejector: true,
@@ -303,7 +303,7 @@ export class AnalysisService {
           email: true,
           metadata: true,
         },
-        analysis: {
+        validation: {
           id: true,
           name: true,
           email: true,

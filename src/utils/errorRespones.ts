@@ -124,3 +124,47 @@ export const errorUploadFile = {
     400,
   ),
 };
+
+export const errorFastQ = {
+  fastQFileNotFound: new ErrorResponse(
+    'FASTQ_FILE_NOT_FOUND',
+    'FastQ file not found',
+    404,
+  ),
+  onlyFastQFiles: new ErrorResponse(
+    'ONLY_FASTQ_FILES',
+    'Only FastQ files (.fastq, .fq, .fastq.gz, .fq.gz) are allowed',
+    400,
+  ),
+  fileSizeExceeded: new ErrorResponse(
+    'FILE_SIZE_EXCEEDED',
+    'File size exceeded',
+    400,
+  ),
+};
+
+export const errorAnalysis = {
+  analysisNotFound: new ErrorResponse(
+    'ANALYSIS_NOT_FOUND',
+    'Analysis not found',
+    404,
+  ),
+  analysisIdRequired: new ErrorResponse(
+    'ANALYSIS_ID_REQUIRED',
+    'Analysis id required',
+    400,
+  ),
+};
+
+export const errorValidation = {
+  validationNotFound: new ErrorResponse(
+    'VALIDATION_NOT_FOUND',
+    'Validation not found',
+    404,
+  ),
+  validationIdRequired: new ErrorResponse(
+    'VALIDATION_ID_REQUIRED',
+    'Validation id required',
+    400,
+  ),
+};

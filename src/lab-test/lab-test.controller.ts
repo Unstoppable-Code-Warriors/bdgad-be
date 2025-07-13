@@ -12,6 +12,7 @@ import {
   UseGuards,
   BadRequestException,
   Delete,
+  Put,
 } from '@nestjs/common';
 import { LabTestService } from './lab-test.service';
 import {
@@ -30,18 +31,65 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiQuery,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
+import { errorFastQ } from 'src/utils/errorRespones';
 
 @Controller('lab-test')
 @UseGuards(AuthGuard, RolesGuard)
-@ApiTags('Lab Test')
 @ApiSecurity('token')
 export class LabTestController {
   constructor(private readonly labTestService: LabTestService) {}
 
+  @ApiTags('Lab Test - Sessions')
+  @ApiOperation({ summary: 'Get all lab test sessions' })
   @Get('sessions')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term (applies to patient fields)',
+  })
+  @ApiQuery({
+    name: 'searchField',
+    required: false,
+    type: String,
+    description: 'Field to apply search on (default: fullName)',
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description: 'Start date filter in YYYY-MM-DD format',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description: 'End date filter in YYYY-MM-DD format',
+  })
   async findAllSession(
     @Query() query: PaginationQueryDto,
     @User() user: AuthenticatedUser,
@@ -50,18 +98,50 @@ export class LabTestController {
     return this.labTestService.findAllSession(query, user);
   }
 
+  @ApiTags('Lab Test - Sessions')
+  @ApiOperation({ summary: 'Get lab test session by id' })
   @Get('sessions/:id')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   async findSessionById(
     @Param('id', ParseIntPipe) id: number,
-    @User() user: AuthenticatedUser,
   ): Promise<LabSessionWithAllFastqResponseDto> {
     return this.labTestService.findSessionById(id);
   }
 
-  // upload fastq file from form-data
-  @Post('session/:id/fastq')
+  @ApiTags('Lab Test - Assign analysis')
+  @Put('session/:sessionId/analysis/:analysisId')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
+  @ApiOperation({ summary: 'Assign analysis to session' })
+  async assignAnalysis(
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Param('analysisId', ParseIntPipe) analysisId: number,
+  ): Promise<{ message: string }> {
+    await this.labTestService.assignAnalysis(sessionId, analysisId);
+    return {
+      message: 'Analysis assigned successfully',
+    };
+  }
+
+  // upload fastq file from form-data
+  @ApiTags('Lab Test - Fastq files')
+  @ApiOperation({ summary: 'Upload FastQ file' })
+  @Post('session/:sessionId/fastq')
+  @AuthZ([Role.LAB_TESTING_TECHNICIAN])
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload a FASTQ file',
+    required: true,
+    schema: {
+      type: 'object',
+      properties: {
+        fastq: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['fastq'],
+    },
+  })
   @UseInterceptors(
     FileInterceptor('fastq', {
       fileFilter: (req, file, cb) => {
@@ -95,30 +175,29 @@ export class LabTestController {
     }),
   )
   async uploadFastQ(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('sessionId', ParseIntPipe) sessionId: number,
     @UploadedFile() file: Express.Multer.File,
     @User() user: AuthenticatedUser,
-  ): Promise<void> {
+  ) {
     if (!file) {
-      throw new BadRequestException(
-        'No file provided. Please select a FastQ file to upload.',
-      );
+      return errorFastQ.fastQFileNotFound;
     }
 
     try {
-      return this.labTestService.uploadFastQ(id, file, user);
+      return this.labTestService.uploadFastQ(sessionId, file, user);
     } catch (error) {
       if (error.message.includes('Only FastQ files')) {
-        throw new BadRequestException(error.message);
+        return errorFastQ.onlyFastQFiles;
       }
       if (error.message.includes('exceeds maximum allowed size')) {
-        throw new BadRequestException(error.message);
+        return errorFastQ.fileSizeExceeded;
       }
-      throw error;
     }
   }
 
   // download fastq file - returns presigned URL
+  @ApiTags('Lab Test - Fastq files')
+  @ApiOperation({ summary: 'Download FastQ file' })
   @Get('fastq/:fastqFileId/download')
   @AuthZ([
     Role.LAB_TESTING_TECHNICIAN,
@@ -128,7 +207,6 @@ export class LabTestController {
   ])
   async downloadFastQ(
     @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
-    @User() user: AuthenticatedUser,
   ): Promise<FastqDownloadResponseDto> {
     const downloadUrl = await this.labTestService.downloadFastQ(fastqFileId);
     const expiresIn = 3600; // 1 hour in seconds
@@ -142,6 +220,8 @@ export class LabTestController {
   }
 
   // delete fastq file - only allowed when status is 'uploaded'
+  @ApiTags('Lab Test - Fastq files')
+  @ApiOperation({ summary: 'Delete FastQ file' })
   @Delete('fastq/:fastqFileId')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   async deleteFastQ(
@@ -155,6 +235,8 @@ export class LabTestController {
   }
 
   // send fastq file to analysis - updates status to 'wait_for_approval'
+  @ApiTags('Lab Test - Fastq files')
+  @ApiOperation({ summary: 'Send FastQ file to analysis' })
   @Post('fastq/:fastqFileId/send-to-analysis')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   async sendToAnalysis(

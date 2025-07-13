@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
@@ -20,6 +21,8 @@ import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { S3Service } from '../utils/s3.service';
 import { S3Bucket } from '../utils/constant';
+import { errorAnalysis, errorLabSession } from 'src/utils/errorRespones';
+import { User } from 'src/entities/user.entity';
 
 @Injectable()
 export class LabTestService {
@@ -30,6 +33,8 @@ export class LabTestService {
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(FastqFile)
     private fastqFileRepository: Repository<FastqFile>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
 
   /**
@@ -75,6 +80,7 @@ export class LabTestService {
         .createQueryBuilder('labSession')
         .leftJoinAndSelect('labSession.patient', 'patient')
         .leftJoinAndSelect('labSession.doctor', 'doctor')
+        .leftJoinAndSelect('labSession.analysis', 'analysis')
         .leftJoin('labSession.fastqFiles', 'fastqFile')
         .select([
           'labSession.id',
@@ -91,12 +97,16 @@ export class LabTestService {
           'patient.personalId',
           'patient.citizenId',
           'patient.createdAt',
+          'analysis.id',
+          'analysis.name',
+          'analysis.email',
           'doctor.id',
           'doctor.name',
           'doctor.email',
           'doctor.metadata',
         ])
-        .where('labSession.labTestingId = :userId', { userId: user.id });
+        .where('labSession.labTestingId = :userId', { userId: user.id })
+        .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
     // Apply search functionality (search by patient personalId and fullName)
     if (search && search.trim()) {
@@ -133,7 +143,7 @@ export class LabTestService {
       });
     }
 
-    // // Apply dynamic sorting for all columns
+    // Apply dynamic sorting for all columns
     // if (sortBy && sortOrder) {
     //   const allowedSortFields = {
     //     // Lab Session fields
@@ -262,6 +272,7 @@ export class LabTestService {
       relations: {
         patient: true,
         doctor: true,
+        analysis: true,
         fastqFiles: {
           creator: true,
           rejector: true,
@@ -285,6 +296,12 @@ export class LabTestService {
           createdAt: true,
         },
         doctor: {
+          id: true,
+          name: true,
+          email: true,
+          metadata: true,
+        },
+        analysis: {
           id: true,
           name: true,
           email: true,
@@ -470,6 +487,30 @@ export class LabTestService {
     }
   }
 
+  async assignAnalysis(sessionId: number, analysisId: number) {
+    try {
+      const session = await this.labSessionRepository.findOne({
+        where: { id: sessionId },
+      });
+
+      if (!session) {
+        return errorLabSession.labSessionNotFound;
+      }
+
+      const analysis = await this.userRepository.findOne({
+        where: { id: analysisId },
+      });
+
+      if (!analysis) {
+        return errorAnalysis.analysisNotFound;
+      }
+
+      session.analysisId = analysisId;
+      await this.labSessionRepository.save(session);
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
   async sendToAnalysis(
     fastqFileId: number,
     user: AuthenticatedUser,
@@ -489,6 +530,15 @@ export class LabTestService {
     if (fastqFile.status !== FastqFileStatus.UPLOADED) {
       throw new BadRequestException(
         `Cannot send FastQ file to analysis. Only files with status 'uploaded' can be sent to analysis. Current status: ${fastqFile.status}`,
+      );
+    }
+    const AnalysisSession = await this.labSessionRepository.findOne({
+      where: { id: fastqFile.sessionId },
+    });
+
+    if (!AnalysisSession?.analysisId) {
+      throw new BadRequestException(
+        `Cannot send FastQ file to analysis. Analysis session not found`,
       );
     }
 

@@ -32,6 +32,7 @@ export class ValidationService {
 
   async findAllPatientsWithLatestEtlResults(
     query: PaginationQueryDto,
+    user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<ValidationSessionWithLatestEtlResponseDto>> {
     const {
       page = 1,
@@ -78,7 +79,9 @@ export class ValidationService {
             EtlResultStatus.APPROVED,
           ],
         },
-      );
+      )
+      .where('labSession.validationId = :userId', { userId: user.id })
+      .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
     // Apply search functionality
     if (search && search.trim()) {
@@ -375,6 +378,14 @@ export class ValidationService {
     }
 
     await this.etlResultRepository.update(etlResultId, updateData);
+    const labSession = await this.labSessionRepository.findOne({
+      where: { id: etlResult?.sessionId },
+    });
+
+    if (labSession) {
+      labSession.finishedAt = new Date();
+      await this.labSessionRepository.save(labSession);
+    }
 
     return { message: 'ETL result accepted successfully' };
   }

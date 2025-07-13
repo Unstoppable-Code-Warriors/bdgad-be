@@ -30,25 +30,31 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 @Controller('validation')
 @UseGuards(AuthGuard, RolesGuard)
-@ApiTags('Validation')
 @ApiSecurity('token')
 export class ValidationController {
   constructor(private readonly validationService: ValidationService) {}
 
+  @ApiTags('Validation - Sessions')
   @Get('patients')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
   async findAllPatientsWithLatestEtlResults(
     @Query() query: PaginationQueryDto,
-    @User() _user: AuthenticatedUser,
+    @User() user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<ValidationSessionWithLatestEtlResponseDto>> {
-    return this.validationService.findAllPatientsWithLatestEtlResults(query);
+    return this.validationService.findAllPatientsWithLatestEtlResults(
+      query,
+      user,
+    );
   }
 
+  @ApiTags('Validation - Sessions')
+  @ApiOperation({ summary: 'Get a validation session' })
+  @ApiParam({ name: 'id', type: Number })
   @Get(':id')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   async findOne(
@@ -57,6 +63,9 @@ export class ValidationController {
     return this.validationService.findOne(id);
   }
 
+  @ApiTags('Validation - ETL Results')
+  @ApiOperation({ summary: 'Download an ETL result' })
+  @ApiParam({ name: 'etlResultId', type: Number })
   @Get('etl-result/:etlResultId/download')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   async downloadEtlResult(
@@ -74,6 +83,9 @@ export class ValidationController {
     };
   }
 
+  @ApiTags('Validation - ETL Results')
+  @ApiOperation({ summary: 'Reject an ETL result' })
+  @ApiParam({ name: 'etlResultId', type: Number })
   @Put('etl-result/:etlResultId/reject')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -89,6 +101,9 @@ export class ValidationController {
     );
   }
 
+  @ApiTags('Validation - ETL Results')
+  @ApiOperation({ summary: 'Accept an ETL result' })
+  @ApiParam({ name: 'etlResultId', type: Number })
   @Put('etl-result/:etlResultId/accept')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))

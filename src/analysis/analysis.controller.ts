@@ -28,25 +28,28 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 @Controller('analysis')
 @UseGuards(AuthGuard, RolesGuard)
-@ApiTags('Analysis')
 @ApiSecurity('token')
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
 
+  @ApiTags('Analysis - Sessions')
+  @ApiOperation({ summary: 'Find All Analysis Sessions' })
   @Get('sessions')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
   async findAllAnalysisSessions(
     @Query() query: PaginationQueryDto,
-    @User() _user: AuthenticatedUser,
+    @User() user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<AnalysisSessionWithLatestResponseDto>> {
-    return this.analysisService.findAllAnalysisSessions(query);
+    return this.analysisService.findAllAnalysisSessions(query, user);
   }
 
+  @ApiTags('Analysis - Sessions')
+  @ApiOperation({ summary: 'Find Analysis Session By Id' })
   @Get('sessions/:id')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async findAnalysisSessionById(
@@ -56,6 +59,18 @@ export class AnalysisController {
     return this.analysisService.findAnalysisSessionById(id);
   }
 
+  @ApiTags('Analysis - Assign Validation')
+  @ApiOperation({ summary: 'Assign Validation' })
+  @Put('sessions/:sessionId/validation/:validationId')
+  @ApiParam({ name: 'sessionId', type: Number })
+  @ApiParam({ name: 'validationId', type: Number })
+  @AuthZ([Role.ANALYSIS_TECHNICIAN])
+  async assignValidation(sessionId: number, validationId: number) {
+    return this.analysisService.assignValidation(sessionId, validationId);
+  }
+
+  @ApiTags('Analysis - Process')
+  @ApiOperation({ summary: 'Process Analysis' })
   @Post('process/:fastqFileId')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async processAnalysis(
@@ -65,6 +80,8 @@ export class AnalysisController {
     return this.analysisService.processAnalysis(fastqFileId, user);
   }
 
+  @ApiTags('Analysis - Reject')
+  @ApiOperation({ summary: 'Reject Analysis' })
   @Put('fastq/:fastqFileId/reject')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -80,6 +97,8 @@ export class AnalysisController {
     );
   }
 
+  @ApiTags('Analysis - ETL Results')
+  @ApiOperation({ summary: 'Download ETL Result' })
   @Get('etl-result/:etlResultId/download')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async downloadEtlResult(
@@ -97,6 +116,8 @@ export class AnalysisController {
     };
   }
 
+  @ApiTags('Analysis - ETL Results')
+  @ApiOperation({ summary: 'Send ETL Result To Validation' })
   @Post('etl-result/:etlResultId/send-to-validation')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async sendEtlResultToValidation(
@@ -106,6 +127,8 @@ export class AnalysisController {
     return this.analysisService.sendEtlResultToValidation(etlResultId, user);
   }
 
+  @ApiTags('Analysis - ETL Results')
+  @ApiOperation({ summary: 'Retry ETL Process' })
   @Post('etl-result/:etlResultId/retry')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async retryEtlProcess(

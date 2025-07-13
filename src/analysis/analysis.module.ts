@@ -6,9 +6,10 @@ import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile } from '../entities/fastq-file.entity';
 import { EtlResult } from '../entities/etl-result.entity';
 import { S3Service } from '../utils/s3.service';
+import { User } from 'src/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([LabSession, FastqFile, EtlResult])],
+  imports: [TypeOrmModule.forFeature([LabSession, FastqFile, EtlResult, User])],
   controllers: [AnalysisController],
   providers: [AnalysisService, S3Service],
   exports: [AnalysisService],

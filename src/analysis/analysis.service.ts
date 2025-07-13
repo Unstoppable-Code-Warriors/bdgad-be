@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, In } from 'typeorm';
@@ -20,6 +21,8 @@ import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { S3Service } from '../utils/s3.service';
 import { S3Bucket } from '../utils/constant';
+import { errorLabSession, errorValidation } from 'src/utils/errorRespones';
+import { User } from 'src/entities/user.entity';
 
 @Injectable()
 export class AnalysisService {
@@ -32,10 +35,13 @@ export class AnalysisService {
     private fastqFileRepository: Repository<FastqFile>,
     @InjectRepository(EtlResult)
     private etlResultRepository: Repository<EtlResult>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
 
   async findAllAnalysisSessions(
     query: PaginationQueryDto,
+    user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<AnalysisSessionWithLatestResponseDto>> {
     const {
       search,
@@ -54,6 +60,7 @@ export class AnalysisService {
         .createQueryBuilder('labSession')
         .leftJoinAndSelect('labSession.patient', 'patient')
         .leftJoinAndSelect('labSession.doctor', 'doctor')
+        .leftJoinAndSelect('labSession.validation', 'validation')
         .select([
           'labSession.id',
           'labSession.labcode',
@@ -73,6 +80,10 @@ export class AnalysisService {
           'doctor.name',
           'doctor.email',
           'doctor.metadata',
+          'validation.id',
+          'validation.name',
+          'validation.email',
+          'validation.metadata',
         ])
         // Include sessions that have FastQ files with WAIT_FOR_APPROVAL, REJECTED, or APPROVED status
         .innerJoin(
@@ -86,7 +97,9 @@ export class AnalysisService {
               FastqFileStatus.APPROVED,
             ],
           },
-        );
+        )
+        .where('labSession.analysisId = :userId', { userId: user.id })
+        .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
     // Apply search functionality (search by patient personalId and fullName)
     if (search && search.trim()) {
@@ -259,6 +272,7 @@ export class AnalysisService {
       relations: {
         patient: true,
         doctor: true,
+        analysis: true,
         fastqFiles: {
           creator: true,
           rejector: true,
@@ -286,6 +300,12 @@ export class AnalysisService {
           createdAt: true,
         },
         doctor: {
+          id: true,
+          name: true,
+          email: true,
+          metadata: true,
+        },
+        analysis: {
           id: true,
           name: true,
           email: true,
@@ -591,7 +611,14 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
   async sendEtlResultToValidation(
     etlResultId: number,
     user: AuthenticatedUser,
-  ): Promise<{ message: string }> {
+  ) {
+    const labSession = await this.labSessionRepository.findOne({
+      where: { id: etlResultId },
+    });
+
+    if (!labSession?.validationId) {
+      return errorValidation.validationIdRequired;
+    }
     // Find the ETL result that's completed
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
@@ -613,6 +640,32 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     return {
       message: 'ETL result sent to validation successfully',
     };
+  }
+
+  async assignValidation(sessionId: number, validationId: number) {
+    try {
+      const labSession = await this.labSessionRepository.findOne({
+        where: { id: sessionId },
+      });
+
+      if (!labSession) {
+        return errorLabSession.labSessionNotFound;
+      }
+
+      const validation = await this.userRepository.findOne({
+        where: { id: validationId },
+      });
+
+      if (!validation) {
+        return errorValidation.validationNotFound;
+      }
+
+      labSession.validationId = validationId;
+      await this.labSessionRepository.save(labSession);
+      return 'Validation assigned successfully';
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
   }
 
   async retryEtlProcess(

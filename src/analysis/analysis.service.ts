@@ -615,8 +615,8 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       where: { id: etlResultId },
     });
 
-    if (!labSession?.validationId) {
-      return errorValidation.validationIdRequired;
+    if (!labSession) {
+      return errorLabSession.labSessionNotFound;
     }
 
     if (!labSession.validationId && validationId) {

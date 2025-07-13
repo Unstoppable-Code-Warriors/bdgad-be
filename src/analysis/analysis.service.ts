@@ -611,8 +611,19 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     user: AuthenticatedUser,
     validationId: number,
   ) {
+    // Find the ETL result that's completed
+    const etlResult = await this.etlResultRepository.findOne({
+      where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
+      relations: { session: true },
+    });
+
+    if (!etlResult) {
+      throw new NotFoundException(
+        `Completed ETL result with ID ${etlResultId} not found`,
+      );
+    }
     const labSession = await this.labSessionRepository.findOne({
-      where: { id: etlResultId },
+      where: { id: etlResult.session.id },
     });
 
     if (!labSession) {
@@ -626,17 +637,6 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     if (!labSession.validationId && !validationId) {
       return errorValidation.validationIdRequired;
-    }
-    // Find the ETL result that's completed
-    const etlResult = await this.etlResultRepository.findOne({
-      where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
-      relations: { session: true },
-    });
-
-    if (!etlResult) {
-      throw new NotFoundException(
-        `Completed ETL result with ID ${etlResultId} not found`,
-      );
     }
 
     // Update ETL result status to WAIT_FOR_APPROVAL

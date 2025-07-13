@@ -67,7 +67,7 @@ export class AnalysisService {
           'patient.phone',
           'patient.address',
           'patient.personalId',
-          'patient.healthInsuranceCode',
+          'patient.citizenId',
           'patient.createdAt',
           'doctor.id',
           'doctor.name',
@@ -125,50 +125,50 @@ export class AnalysisService {
     }
 
     // Apply dynamic sorting
-    if (sortBy && sortOrder) {
-      const allowedSortFields = {
-        id: 'labSession.id',
-        labcode: 'labSession.labcode',
-        barcode: 'labSession.barcode',
-        requestDate: 'labSession.requestDate',
-        createdAt: 'labSession.createdAt',
-        'patient.fullName': 'patient.fullName',
-        'patient.personalId': 'patient.personalId',
-        'doctor.name': 'doctor.name',
-        fullName: 'patient.fullName',
-        personalId: 'patient.personalId',
-        doctorName: 'doctor.name',
-      };
+    // if (sortBy && sortOrder) {
+    //   const allowedSortFields = {
+    //     id: 'labSession.id',
+    //     labcode: 'labSession.labcode',
+    //     barcode: 'labSession.barcode',
+    //     requestDate: 'labSession.requestDate',
+    //     createdAt: 'labSession.createdAt',
+    //     'patient.fullName': 'patient.fullName',
+    //     'patient.personalId': 'patient.personalId',
+    //     'doctor.name': 'doctor.name',
+    //     fullName: 'patient.fullName',
+    //     personalId: 'patient.personalId',
+    //     doctorName: 'doctor.name',
+    //   };
 
-      const sortField = allowedSortFields[sortBy];
-      if (sortField) {
-        queryBuilder.orderBy(sortField, sortOrder);
-      } else {
-        // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
-        queryBuilder
-          .addSelect('fastqFile.status', 'fastqStatus')
-          .orderBy(
-            `CASE fastqFile.status 
-             WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1 
-             WHEN '${FastqFileStatus.REJECTED}' THEN 2 
-             WHEN '${FastqFileStatus.APPROVED}' THEN 3 
-             ELSE 4 END`,
-          )
-          .addOrderBy('labSession.createdAt', 'DESC');
-      }
-    } else {
-      // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
-      queryBuilder
-        .addSelect('fastqFile.status', 'fastqStatus')
-        .orderBy(
-          `CASE fastqFile.status 
-           WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1 
-           WHEN '${FastqFileStatus.REJECTED}' THEN 2 
-           WHEN '${FastqFileStatus.APPROVED}' THEN 3 
-           ELSE 4 END`,
-        )
-        .addOrderBy('labSession.createdAt', 'DESC');
-    }
+    //   const sortField = allowedSortFields[sortBy];
+    //   if (sortField) {
+    //     queryBuilder.orderBy(sortField, sortOrder);
+    //   } else {
+    //     // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
+    //     queryBuilder
+    //       .addSelect('fastqFile.status', 'fastqStatus')
+    //       .orderBy(
+    //         `CASE fastqFile.status
+    //          WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1
+    //          WHEN '${FastqFileStatus.REJECTED}' THEN 2
+    //          WHEN '${FastqFileStatus.APPROVED}' THEN 3
+    //          ELSE 4 END`,
+    //       )
+    //       .addOrderBy('labSession.createdAt', 'DESC');
+    //   }
+    // } else {
+    //   // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
+    //   queryBuilder
+    //     .addSelect('fastqFile.status', 'fastqStatus')
+    //     .orderBy(
+    //       `CASE fastqFile.status
+    //        WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1
+    //        WHEN '${FastqFileStatus.REJECTED}' THEN 2
+    //        WHEN '${FastqFileStatus.APPROVED}' THEN 3
+    //        ELSE 4 END`,
+    //     )
+    //     .addOrderBy('labSession.createdAt', 'DESC');
+    // }
 
     // Apply pagination
     queryBuilder.skip((page - 1) * limit).take(limit);

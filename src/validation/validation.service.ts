@@ -59,7 +59,7 @@ export class ValidationService {
         'patient.phone',
         'patient.address',
         'patient.personalId',
-        'patient.healthInsuranceCode',
+        'patient.citizenId',
         'patient.createdAt',
         'doctor.id',
         'doctor.name',
@@ -90,50 +90,50 @@ export class ValidationService {
     }
 
     // Apply dynamic sorting
-    if (sortBy && sortOrder) {
-      const allowedSortFields = {
-        id: 'labSession.id',
-        labcode: 'labSession.labcode',
-        barcode: 'labSession.barcode',
-        requestDate: 'labSession.requestDate',
-        createdAt: 'labSession.createdAt',
-        'patient.fullName': 'patient.fullName',
-        'patient.personalId': 'patient.personalId',
-        'doctor.name': 'doctor.name',
-        fullName: 'patient.fullName',
-        personalId: 'patient.personalId',
-        doctorName: 'doctor.name',
-      };
+    // if (sortBy && sortOrder) {
+    //   const allowedSortFields = {
+    //     id: 'labSession.id',
+    //     labcode: 'labSession.labcode',
+    //     barcode: 'labSession.barcode',
+    //     requestDate: 'labSession.requestDate',
+    //     createdAt: 'labSession.createdAt',
+    //     'patient.fullName': 'patient.fullName',
+    //     'patient.personalId': 'patient.personalId',
+    //     'doctor.name': 'doctor.name',
+    //     fullName: 'patient.fullName',
+    //     personalId: 'patient.personalId',
+    //     doctorName: 'doctor.name',
+    //   };
 
-      const sortField = allowedSortFields[sortBy];
-      if (sortField) {
-        queryBuilder.orderBy(sortField, sortOrder);
-      } else {
-        // Default sort by ETL status priority then by creation date
-        queryBuilder
-          .addSelect('etlResult.status', 'etlStatus')
-          .orderBy(
-            `CASE etlResult.status 
-             WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1 
-             WHEN '${EtlResultStatus.REJECTED}' THEN 2 
-             WHEN '${EtlResultStatus.APPROVED}' THEN 3 
-             ELSE 4 END`,
-          )
-          .addOrderBy('labSession.createdAt', 'DESC');
-      }
-    } else {
-      // Default sort by ETL status priority then by creation date
-      queryBuilder
-        .addSelect('etlResult.status', 'etlStatus')
-        .orderBy(
-          `CASE etlResult.status 
-           WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1 
-           WHEN '${EtlResultStatus.REJECTED}' THEN 2 
-           WHEN '${EtlResultStatus.APPROVED}' THEN 3 
-           ELSE 4 END`,
-        )
-        .addOrderBy('labSession.createdAt', 'DESC');
-    }
+    //   const sortField = allowedSortFields[sortBy];
+    //   if (sortField) {
+    //     queryBuilder.orderBy(sortField, sortOrder);
+    //   } else {
+    //     // Default sort by ETL status priority then by creation date
+    //     queryBuilder
+    //       .addSelect('etlResult.status', 'etlStatus')
+    //       .orderBy(
+    //         `CASE etlResult.status
+    //          WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1
+    //          WHEN '${EtlResultStatus.REJECTED}' THEN 2
+    //          WHEN '${EtlResultStatus.APPROVED}' THEN 3
+    //          ELSE 4 END`,
+    //       )
+    //       .addOrderBy('labSession.createdAt', 'DESC');
+    //   }
+    // } else {
+    //   // Default sort by ETL status priority then by creation date
+    //   queryBuilder
+    //     .addSelect('etlResult.status', 'etlStatus')
+    //     .orderBy(
+    //       `CASE etlResult.status
+    //        WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1
+    //        WHEN '${EtlResultStatus.REJECTED}' THEN 2
+    //        WHEN '${EtlResultStatus.APPROVED}' THEN 3
+    //        ELSE 4 END`,
+    //     )
+    //     .addOrderBy('labSession.createdAt', 'DESC');
+    // }
 
     // Apply pagination
     queryBuilder.skip((page - 1) * limit).take(limit);

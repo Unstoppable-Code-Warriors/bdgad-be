@@ -94,7 +94,6 @@ export class LabTestService {
           'patient.dateOfBirth',
           'patient.phone',
           'patient.address',
-          'patient.personalId',
           'patient.citizenId',
           'patient.createdAt',
           'analysis.id',
@@ -112,7 +111,7 @@ export class LabTestService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(patient.personalId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
+        '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -291,7 +290,6 @@ export class LabTestService {
           dateOfBirth: true,
           phone: true,
           address: true,
-          personalId: true,
           citizenId: true,
           createdAt: true,
         },
@@ -486,35 +484,7 @@ export class LabTestService {
       throw new Error(`Failed to delete FastQ file: ${error.message}`);
     }
   }
-
-  async assignAnalysis(sessionId: number, analysisId: number) {
-    try {
-      const session = await this.labSessionRepository.findOne({
-        where: { id: sessionId },
-      });
-
-      if (!session) {
-        return errorLabSession.labSessionNotFound;
-      }
-
-      const analysis = await this.userRepository.findOne({
-        where: { id: analysisId },
-      });
-
-      if (!analysis) {
-        return errorAnalysis.analysisNotFound;
-      }
-
-      session.analysisId = analysisId;
-      await this.labSessionRepository.save(session);
-    } catch (error) {
-      throw new InternalServerErrorException(error.message);
-    }
-  }
-  async sendToAnalysis(
-    fastqFileId: number,
-    user: AuthenticatedUser,
-  ): Promise<void> {
+  async sendToAnalysis(fastqFileId: number, analysisId: number) {
     // Find the FastQ file record
     const fastqFile = await this.fastqFileRepository.findOne({
       where: { id: fastqFileId },
@@ -535,11 +505,15 @@ export class LabTestService {
     const AnalysisSession = await this.labSessionRepository.findOne({
       where: { id: fastqFile.sessionId },
     });
+    if (!AnalysisSession) {
+      return errorLabSession.labSessionNotFound;
+    }
 
-    if (!AnalysisSession?.analysisId) {
-      throw new BadRequestException(
-        `Cannot send FastQ file to analysis. Analysis session not found`,
-      );
+    if (!AnalysisSession?.analysisId && !analysisId) {
+      return errorAnalysis.analysisIdRequired;
+    } else if (!AnalysisSession?.analysisId && analysisId) {
+      AnalysisSession.analysisId = analysisId;
+      await this.labSessionRepository.save(AnalysisSession);
     }
 
     try {

@@ -129,11 +129,10 @@ GET /lab-test/sessions?page=1&limit=50&filter={"status":"completed"}&sortBy=requ
       "patient": {
         "id": 1,
         "fullName": "John Doe",
-        "personalId": "123456789",
         "dateOfBirth": "1990-01-01",
         "phone": "+1234567890",
         "address": "123 Main St",
-        "healthInsuranceCode": "HIC001",
+        "citizenId": "HIC001",
         "createdAt": "2024-01-15T09:00:00Z"
       },
       "doctor": {

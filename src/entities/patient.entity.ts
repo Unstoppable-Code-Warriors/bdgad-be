@@ -25,9 +25,6 @@ export class Patient {
   @Column({ type: 'text', nullable: true })
   address: string;
 
-  @Column({ name: 'personal_id', unique: true })
-  personalId: string;
-
   @Column({ name: 'citizen_id', unique: true })
   citizenId: string;
 

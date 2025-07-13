@@ -59,7 +59,6 @@ export class ValidationService {
         'patient.dateOfBirth',
         'patient.phone',
         'patient.address',
-        'patient.personalId',
         'patient.citizenId',
         'patient.createdAt',
         'doctor.id',
@@ -87,7 +86,7 @@ export class ValidationService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(patient.fullName) LIKE :search OR LOWER(patient.personalId) LIKE :search OR LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
+        '(LOWER(patient.fullName) LIKE :search OR LOWER(patient.citizenId) LIKE :search OR LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -183,7 +182,6 @@ export class ValidationService {
             dateOfBirth: session.patient.dateOfBirth,
             phone: session.patient.phone,
             address: session.patient.address,
-            personalId: session.patient.personalId,
             citizenId: session.patient.citizenId,
             createdAt: session.patient.createdAt,
           },

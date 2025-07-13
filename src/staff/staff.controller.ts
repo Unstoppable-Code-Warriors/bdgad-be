@@ -311,8 +311,8 @@ export class StaffController {
     name: 'searchField',
     required: false,
     type: String,
-    description: 'Search field (fullName, citizenId, personalId)',
-    enum: ['fullName', 'citizenId', 'personalId'],
+    description: 'Search field (fullName, citizenId)',
+    enum: ['fullName', 'citizenId'],
   })
   @ApiQuery({
     name: 'dateFrom',
@@ -345,7 +345,6 @@ export class StaffController {
           dateOfBirth: '1990-01-01T00:00:00.000Z',
           phone: '0912345678',
           address: '123 Đường ABC, Quận 1, TP.HCM',
-          personalId: '123456789',
           citizenId: '012345678901',
         },
       },

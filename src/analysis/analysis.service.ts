@@ -73,7 +73,6 @@ export class AnalysisService {
           'patient.dateOfBirth',
           'patient.phone',
           'patient.address',
-          'patient.personalId',
           'patient.citizenId',
           'patient.createdAt',
           'doctor.id',
@@ -105,7 +104,7 @@ export class AnalysisService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(patient.personalId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
+        '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -295,7 +294,6 @@ export class AnalysisService {
           dateOfBirth: true,
           phone: true,
           address: true,
-          personalId: true,
           citizenId: true,
           createdAt: true,
         },
@@ -611,12 +609,22 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
   async sendEtlResultToValidation(
     etlResultId: number,
     user: AuthenticatedUser,
+    validationId: number,
   ) {
     const labSession = await this.labSessionRepository.findOne({
       where: { id: etlResultId },
     });
 
     if (!labSession?.validationId) {
+      return errorValidation.validationIdRequired;
+    }
+
+    if (!labSession.validationId && validationId) {
+      labSession.validationId = validationId;
+      await this.labSessionRepository.save(labSession);
+    }
+
+    if (!labSession.validationId && !validationId) {
       return errorValidation.validationIdRequired;
     }
     // Find the ETL result that's completed
@@ -640,32 +648,6 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     return {
       message: 'ETL result sent to validation successfully',
     };
-  }
-
-  async assignValidation(sessionId: number, validationId: number) {
-    try {
-      const labSession = await this.labSessionRepository.findOne({
-        where: { id: sessionId },
-      });
-
-      if (!labSession) {
-        return errorLabSession.labSessionNotFound;
-      }
-
-      const validation = await this.userRepository.findOne({
-        where: { id: validationId },
-      });
-
-      if (!validation) {
-        return errorValidation.validationNotFound;
-      }
-
-      labSession.validationId = validationId;
-      await this.labSessionRepository.save(labSession);
-      return 'Validation assigned successfully';
-    } catch (error) {
-      throw new InternalServerErrorException(error.message);
-    }
   }
 
   async retryEtlProcess(

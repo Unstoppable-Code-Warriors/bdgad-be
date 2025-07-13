@@ -411,15 +411,11 @@ export class StaffService {
     try {
       const { fullName, citizenId } = createPatientDto;
 
-      const personalId = Math.floor(
-        1000000000 + Math.random() * 9000000000,
-      ).toString();
       const patient = this.patientRepository.create({
         fullName: fullName.trim(),
         dateOfBirth: new Date('1995-07-05'),
         phone: '081234567890',
         address: 'Jl. Raya No. 123',
-        personalId,
         citizenId: citizenId.trim(),
         createdAt: new Date(),
       });
@@ -450,7 +446,7 @@ export class StaffService {
 
       // Global search functionality - search by the specified field
       if (search) {
-        const validSearchFields = ['fullName', 'citizenId', 'personalId'];
+        const validSearchFields = ['fullName', 'citizenId'];
         const fieldToSearch = validSearchFields.includes(searchField)
           ? searchField
           : 'fullName';
@@ -563,7 +559,6 @@ export class StaffService {
           dateOfBirth: true,
           phone: true,
           address: true,
-          personalId: true,
           citizenId: true,
           createdAt: true,
           labSessions: {

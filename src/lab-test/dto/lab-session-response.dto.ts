@@ -4,7 +4,6 @@ export class PatientResponseDto {
   dateOfBirth: Date;
   phone: string;
   address: string;
-  personalId: string;
   citizenId: string;
   createdAt: Date;
 }

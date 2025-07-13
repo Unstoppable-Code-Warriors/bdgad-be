@@ -108,20 +108,6 @@ export class LabTestController {
     return this.labTestService.findSessionById(id);
   }
 
-  @ApiTags('Lab Test - Assign analysis')
-  @Put('session/:sessionId/analysis/:analysisId')
-  @AuthZ([Role.LAB_TESTING_TECHNICIAN])
-  @ApiOperation({ summary: 'Assign analysis to session' })
-  async assignAnalysis(
-    @Param('sessionId', ParseIntPipe) sessionId: number,
-    @Param('analysisId', ParseIntPipe) analysisId: number,
-  ): Promise<{ message: string }> {
-    await this.labTestService.assignAnalysis(sessionId, analysisId);
-    return {
-      message: 'Analysis assigned successfully',
-    };
-  }
-
   // upload fastq file from form-data
   @ApiTags('Lab Test - Fastq files')
   @ApiOperation({ summary: 'Upload FastQ file' })
@@ -237,13 +223,13 @@ export class LabTestController {
   // send fastq file to analysis - updates status to 'wait_for_approval'
   @ApiTags('Lab Test - Fastq files')
   @ApiOperation({ summary: 'Send FastQ file to analysis' })
-  @Post('fastq/:fastqFileId/send-to-analysis')
+  @Post('fastq/:fastqFileId/analysis/:analysisId')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   async sendToAnalysis(
     @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
-    @User() user: AuthenticatedUser,
+    @Param('analysisId', ParseIntPipe) analysisId: number,
   ): Promise<{ message: string }> {
-    await this.labTestService.sendToAnalysis(fastqFileId, user);
+    await this.labTestService.sendToAnalysis(fastqFileId, analysisId);
     return {
       message: 'FastQ file sent to analysis successfully',
     };

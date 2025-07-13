@@ -59,16 +59,6 @@ export class AnalysisController {
     return this.analysisService.findAnalysisSessionById(id);
   }
 
-  @ApiTags('Analysis - Assign Validation')
-  @ApiOperation({ summary: 'Assign Validation' })
-  @Put('sessions/:sessionId/validation/:validationId')
-  @ApiParam({ name: 'sessionId', type: Number })
-  @ApiParam({ name: 'validationId', type: Number })
-  @AuthZ([Role.ANALYSIS_TECHNICIAN])
-  async assignValidation(sessionId: number, validationId: number) {
-    return this.analysisService.assignValidation(sessionId, validationId);
-  }
-
   @ApiTags('Analysis - Process')
   @ApiOperation({ summary: 'Process Analysis' })
   @Post('process/:fastqFileId')
@@ -118,13 +108,18 @@ export class AnalysisController {
 
   @ApiTags('Analysis - ETL Results')
   @ApiOperation({ summary: 'Send ETL Result To Validation' })
-  @Post('etl-result/:etlResultId/send-to-validation')
+  @Post('etl-result/:etlResultId/validation/:validationId')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async sendEtlResultToValidation(
     @Param('etlResultId', ParseIntPipe) etlResultId: number,
+    @Param('validationId', ParseIntPipe) validationId: number,
     @User() user: AuthenticatedUser,
   ): Promise<{ message: string }> {
-    return this.analysisService.sendEtlResultToValidation(etlResultId, user);
+    return this.analysisService.sendEtlResultToValidation(
+      etlResultId,
+      user,
+      validationId,
+    );
   }
 
   @ApiTags('Analysis - ETL Results')

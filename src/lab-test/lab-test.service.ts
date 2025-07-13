@@ -57,10 +57,7 @@ export class LabTestService {
     };
   }
 
-  async findAllSession(
-    query: PaginationQueryDto,
-    user: AuthenticatedUser,
-  ): Promise<PaginatedResponseDto<LabSessionWithFastqResponseDto>> {
+  async findAllSession(query: PaginationQueryDto, user: AuthenticatedUser) {
     const {
       search,
       filter,
@@ -92,7 +89,7 @@ export class LabTestService {
           'patient.phone',
           'patient.address',
           'patient.personalId',
-          'patient.healthInsuranceCode',
+          'patient.citizenId',
           'patient.createdAt',
           'doctor.id',
           'doctor.name',
@@ -136,71 +133,71 @@ export class LabTestService {
       });
     }
 
-    // Apply dynamic sorting for all columns
-    if (sortBy && sortOrder) {
-      const allowedSortFields = {
-        // Lab Session fields
-        id: 'labSession.id',
-        labcode: 'labSession.labcode',
-        barcode: 'labSession.barcode',
-        requestDate: 'labSession.requestDate',
-        createdAt: 'labSession.createdAt',
+    // // Apply dynamic sorting for all columns
+    // if (sortBy && sortOrder) {
+    //   const allowedSortFields = {
+    //     // Lab Session fields
+    //     id: 'labSession.id',
+    //     labcode: 'labSession.labcode',
+    //     barcode: 'labSession.barcode',
+    //     requestDate: 'labSession.requestDate',
+    //     createdAt: 'labSession.createdAt',
 
-        // Patient fields
-        'patient.id': 'patient.id',
-        'patient.fullName': 'patient.fullName',
-        'patient.personalId': 'patient.personalId',
-        'patient.dateOfBirth': 'patient.dateOfBirth',
-        'patient.phone': 'patient.phone',
-        'patient.address': 'patient.address',
-        'patient.healthInsuranceCode': 'patient.healthInsuranceCode',
-        'patient.createdAt': 'patient.createdAt',
+    //     // Patient fields
+    //     'patient.id': 'patient.id',
+    //     'patient.fullName': 'patient.fullName',
+    //     'patient.personalId': 'patient.personalId',
+    //     'patient.dateOfBirth': 'patient.dateOfBirth',
+    //     'patient.phone': 'patient.phone',
+    //     'patient.address': 'patient.address',
+    //     'patient.citizenId': 'patient.citizenId',
+    //     'patient.createdAt': 'patient.createdAt',
 
-        // Doctor fields
-        'doctor.id': 'doctor.id',
-        'doctor.name': 'doctor.name',
-        'doctor.email': 'doctor.email',
+    //     // Doctor fields
+    //     'doctor.id': 'doctor.id',
+    //     'doctor.name': 'doctor.name',
+    //     'doctor.email': 'doctor.email',
 
-        // Shorthand for common fields
-        fullName: 'patient.fullName',
-        personalId: 'patient.personalId',
-        doctorName: 'doctor.name',
-        doctorEmail: 'doctor.email',
-      };
+    //     // Shorthand for common fields
+    //     fullName: 'patient.fullName',
+    //     personalId: 'patient.personalId',
+    //     doctorName: 'doctor.name',
+    //     doctorEmail: 'doctor.email',
+    //   };
 
-      const sortField = allowedSortFields[sortBy];
-      if (sortField) {
-        queryBuilder.orderBy(sortField, sortOrder);
-      } else {
-        // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
-        queryBuilder
-          .addSelect('fastqFile.status', 'fastqStatus')
-          .orderBy(
-            `CASE 
-             WHEN fastqFile.status IS NULL THEN 1 
-             WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2 
-             WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3 
-             WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4 
-             WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5 
-             ELSE 6 END`,
-          )
-          .addOrderBy('labSession.createdAt', 'DESC');
-      }
-    } else {
-      // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
-      queryBuilder
-        .addSelect('fastqFile.status', 'fastqStatus')
-        .orderBy(
-          `CASE 
-           WHEN fastqFile.status IS NULL THEN 1 
-           WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2 
-           WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3 
-           WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4 
-           WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5 
-           ELSE 6 END`,
-        )
-        .addOrderBy('labSession.createdAt', 'DESC');
-    }
+    //   const sortField = allowedSortFields[sortBy];
+    //   if (sortField) {
+    //     queryBuilder.orderBy(sortField, sortOrder);
+    //   } else {
+    //     // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
+    //     queryBuilder
+    //       .addSelect('fastqFile.status', 'fastqStatus')
+    //       .orderBy(
+    //         `CASE
+    //          WHEN fastqFile.status IS NULL THEN 1
+    //          WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2
+    //          WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3
+    //          WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4
+    //          WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5
+    //          ELSE 6 END`,
+    //       )
+    //       .addOrderBy('labSession.createdAt', 'DESC');
+    //   }
+    // } else {
+    //   // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
+    //   queryBuilder
+    //     .addSelect('fastqFile.status', 'fastqStatus')
+    //     .orderBy(
+    //       `CASE
+    //        WHEN fastqFile.status IS NULL THEN 1
+    //        WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2
+    //        WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3
+    //        WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4
+    //        WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5
+    //        ELSE 6 END`,
+    //     )
+    //     .addOrderBy('labSession.createdAt', 'DESC');
+    // }
 
     // Apply pagination
     queryBuilder.skip((page - 1) * limit).take(limit);

@@ -67,28 +67,36 @@ export class StaffService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async ocrFilePath(patientFileId: number) {
-    const patientFile = await this.patientFileRepository.findOne({
-      where: { id: patientFileId },
-    });
+  async ocrFilePath(file: Express.Multer.File) {
+    const timestamp = Date.now();
 
-    if (!patientFile) {
-      return errorPatientFile.patientFileNotFound;
-    }
-    // Send to OCR service
-    const s3key = this.s3Service.extractKeyFromUrl(
-      patientFile.filePath,
-      S3Bucket.PATIENT_FILES,
+    // Properly decode UTF-8 filename
+    let originalFileName = Buffer.from(file.originalname, 'binary').toString(
+      'utf8',
+    );
+    let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
+
+    // Create a safe S3 key
+    const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
+
+    const s3Url = await this.s3Service.uploadFile(
+      S3Bucket.OCR_FILE_TEMP,
+      s3Key,
+      file.buffer,
+      file.mimetype,
     );
 
+    const s3KeyExtract = this.s3Service.extractKeyFromUrl(
+      s3Url,
+      S3Bucket.OCR_FILE_TEMP,
+    );
     const presignedUrl = await this.s3Service.generatePresigned(
-      S3Bucket.PATIENT_FILES,
-      s3key,
+      S3Bucket.OCR_FILE_TEMP,
+      s3KeyExtract,
       3600,
     );
 
     const ocrServiceUrl = this.configService.get<string>('OCR_SERVICE');
-
     if (!ocrServiceUrl) {
       this.logger.warn('OCR_SERVICE not configured, skipping OCR processing');
       return errorOCR.ocrServiceUrlNotFound;

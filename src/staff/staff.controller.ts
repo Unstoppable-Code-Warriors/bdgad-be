@@ -41,6 +41,7 @@ import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 import { PatientFile } from 'src/entities/patient-file.entity';
+import * as path from 'path';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -49,15 +50,45 @@ export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
   @ApiTags('Staff - OCR file')
-  @Post('/staff/ocr/:patientFileId')
+  @Post('/ocr')
   @ApiOperation({
     summary: 'Ocr file path',
   })
   @AuthZ([Role.STAFF])
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowedExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+        if (allowedExt.includes(ext)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only image files are allowed!'), false);
+        }
+      },
+    }),
+  )
   async uploadMedicalTestRequisition(
-    @Param('patientFileId') PatientFileId: number,
+    @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.staffService.ocrFilePath(PatientFileId);
+    return this.staffService.ocrFilePath(file);
   }
 
   // General Files api

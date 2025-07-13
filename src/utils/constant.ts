@@ -21,6 +21,7 @@ export enum S3Bucket {
   MASTER_FILES = 'master-files',
   GENERAL_FILES = 'general-files',
   PATIENT_FILES = 'patient-files',
+  OCR_FILE_TEMP = 'ocr-file-temp',
 }
 
 export enum Role {

@@ -412,7 +412,7 @@ export class AnalysisService {
       message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt`,
       type: TypeNotification.LAB_TASK,
       senderId: user.id,
-      receiverId: fastqFile.creator.id,
+      receiverId: fastqFile.createdBy,
     });
 
     // Check if analysis is already in progress for this session
@@ -595,7 +595,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     fastqFileId: number,
     redoReason: string,
     user: AuthenticatedUser,
-  ): Promise<{ message: string }> {
+  ) {
     // Find the FastQ file that's pending approval or approved
     const fastqFile = await this.fastqFileRepository.findOne({
       where: {
@@ -618,13 +618,19 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     await this.fastqFileRepository.save(fastqFile);
 
-    await this.notificationService.createNotification({
-      title: `Trạng thái file Fastq #${fastqFile.id}.`,
-      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối`,
-      type: TypeNotification.LAB_TASK,
-      senderId: user.id,
-      receiverId: fastqFile.creator.id,
-    });
+    try {
+      this.notificationService.createNotification({
+        title: `Trạng thái file Fastq #${fastqFile.id}.`,
+        message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối`,
+        type: TypeNotification.LAB_TASK,
+        senderId: user.id,
+        receiverId: fastqFile.createdBy,
+      });
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Failed to create notification for FastQ file rejection: ${error.message}`,
+      );
+    }
 
     // If there are any pending or processing ETL results for this session, mark them as failed
     const pendingEtlResults = await this.etlResultRepository.find({

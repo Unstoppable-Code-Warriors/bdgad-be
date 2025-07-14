@@ -845,7 +845,15 @@ export class StaffService {
   async assignDoctorAndLabTestingLabSession(
     id: number,
     assignLabSessionDto: AssignLabSessionDto,
+    user: AuthenticatedUser,
   ) {
+    let notificationReq = {
+      title: `Assign Lab Testing task`,
+      message: '',
+      type: TypeNotification.LAB_TASK,
+      senderId: user.id,
+      receiverId: assignLabSessionDto.labTestingId!,
+    };
     try {
       this.logger.log('Starting Lab Session update process');
       const { doctorId, labTestingId } = assignLabSessionDto;
@@ -864,6 +872,7 @@ export class StaffService {
       Object.assign(labSession, assignLabSessionDto);
       const updatedLabSession =
         await this.labSessionRepository.save(labSession);
+      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode} bởi ${user.name}.`;
       return {
         message: 'Lab session updated successfully',
         labSession: updatedLabSession,
@@ -872,6 +881,7 @@ export class StaffService {
       this.logger.error('Failed to update lab session', error);
       throw new InternalServerErrorException(error.message);
     } finally {
+      this.notificationService.createNotification(notificationReq);
       this.logger.log('Lab Session update process completed');
     }
   }

@@ -526,6 +526,7 @@ export class LabTestService {
     }
 
     if (AnalysisSession?.analysisId) {
+      notificationReq.type = TypeNotification.ANALYSIS_TASK;
       notificationReq.message = `File Fastq #${fastqFile.id} của lần khám với mã labcode ${AnalysisSession.labcode} và mã barcode ${AnalysisSession.barcode} đã được gửi mới`;
     }
 

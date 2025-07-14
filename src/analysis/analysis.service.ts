@@ -25,6 +25,7 @@ import { errorLabSession, errorValidation } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
+import e from 'express';
 
 @Injectable()
 export class AnalysisService {
@@ -681,10 +682,27 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     if (!labSession.validationId && validationId) {
       labSession.validationId = validationId;
       await this.labSessionRepository.save(labSession);
+      await this.notificationService.createNotification({
+        title: `Chỉ định thẩm định.`,
+        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`,
+        type: TypeNotification.VALIDATION_TASK,
+        senderId: user.id,
+        receiverId: validationId,
+      });
     }
 
     if (!labSession.validationId && !validationId) {
       return errorValidation.validationIdRequired;
+    }
+
+    if (labSession.validationId) {
+      await this.notificationService.createNotification({
+        title: `Chỉ định thẩm định.`,
+        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${labSession.barcode} đã được gửi mới`,
+        type: TypeNotification.VALIDATION_TASK,
+        senderId: user.id,
+        receiverId: validationId,
+      });
     }
 
     // Update ETL result status to WAIT_FOR_APPROVAL
@@ -692,13 +710,6 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     etlResult.comment = 'Sent to validation for review';
     etlResult.commentBy = user.id;
     await this.etlResultRepository.save(etlResult);
-    await this.notificationService.createNotification({
-      title: `Chỉ định thẩm định.`,
-      message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`,
-      type: TypeNotification.VALIDATION_TASK,
-      senderId: user.id,
-      receiverId: validationId,
-    });
 
     return {
       message: 'ETL result sent to validation successfully',

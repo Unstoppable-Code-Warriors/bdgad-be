@@ -760,6 +760,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         ]),
       },
       order: { createdAt: 'DESC' },
+      relations: { session: true },
     });
 
     if (
@@ -769,6 +770,13 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       latestFastqFile.status = FastqFileStatus.APPROVED;
       latestFastqFile.approveBy = user.id;
       await this.fastqFileRepository.save(latestFastqFile);
+      await this.notificationService.createNotification({
+        title: `Trạng thái file Fastq #${latestFastqFile.id}.`,
+        message: `File Fastq #${latestFastqFile.id} của lần khám với Barcode ${latestFastqFile.session?.barcode} đã được duyệt`,
+        type: TypeNotification.LAB_TASK,
+        senderId: user.id,
+        receiverId: latestFastqFile.createdBy,
+      });
     }
 
     // Reset the ETL result for retry

@@ -20,15 +20,20 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { S3Service } from '../utils/s3.service';
-import { S3Bucket } from '../utils/constant';
+import { S3Bucket, TypeNotification } from '../utils/constant';
 import { errorAnalysis, errorLabSession } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
+import { CreateMultiNotificationReqDto } from 'src/notification/dto/create-notifications.req.dto';
+import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
+import { Notifications } from 'src/entities/notification.entity';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class LabTestService {
   constructor(
     private readonly configService: ConfigService,
     private readonly s3Service: S3Service,
+    private readonly notificationService: NotificationService,
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(FastqFile)
@@ -484,7 +489,18 @@ export class LabTestService {
       throw new Error(`Failed to delete FastQ file: ${error.message}`);
     }
   }
-  async sendToAnalysis(fastqFileId: number, analysisId: number) {
+  async sendToAnalysis(
+    fastqFileId: number,
+    analysisId: number,
+    user: AuthenticatedUser,
+  ) {
+    let notificationReq: CreateNotificationReqDto = {
+      title: 'Chỉ định phân tích.',
+      message: '',
+      type: TypeNotification.LAB_TASK,
+      senderId: user.id,
+      receiverId: analysisId,
+    };
     // Find the FastQ file record
     const fastqFile = await this.fastqFileRepository.findOne({
       where: { id: fastqFileId },
@@ -513,7 +529,8 @@ export class LabTestService {
       return errorAnalysis.analysisIdRequired;
     } else if (!AnalysisSession?.analysisId && analysisId) {
       AnalysisSession.analysisId = analysisId;
-      await this.labSessionRepository.save(AnalysisSession);
+      const labSession = await this.labSessionRepository.save(AnalysisSession);
+      notificationReq.message = `Bạn đã được chỉ định phân tích lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode} bởi ${user.name}.`;
     }
 
     try {
@@ -524,6 +541,8 @@ export class LabTestService {
       throw new Error(
         `Failed to send FastQ file to analysis: ${error.message}`,
       );
+    } finally {
+      await this.notificationService.createNotification(notificationReq);
     }
   }
 }

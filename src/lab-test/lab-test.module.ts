@@ -7,9 +7,15 @@ import { LabSession } from '../entities/lab-session.entity';
 import { User } from 'src/entities/user.entity';
 import { Patient } from 'src/entities/patient.entity';
 import { S3Service } from '../utils/s3.service';
+import { Notifications } from 'src/entities/notification.entity';
+import { NotificationService } from 'src/notification/notification.service';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FastqFile, LabSession, User, Patient])],
+  imports: [
+    TypeOrmModule.forFeature([FastqFile, LabSession, User, Patient]),
+    NotificationModule,
+  ],
   controllers: [LabTestController],
   providers: [LabTestService, S3Service],
 })

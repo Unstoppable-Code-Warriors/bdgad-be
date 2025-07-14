@@ -409,7 +409,7 @@ export class AnalysisService {
     await this.fastqFileRepository.save(fastqFile);
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq #${fastqFile.id}.`,
-      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt bởi ${user.id}.`,
+      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt`,
       type: TypeNotification.LAB_TASK,
       senderId: user.id,
       receiverId: fastqFile.creator.id,
@@ -620,7 +620,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq #${fastqFile.id}.`,
-      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối bởi ${user.id}.`,
+      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối`,
       type: TypeNotification.LAB_TASK,
       senderId: user.id,
       receiverId: fastqFile.creator.id,
@@ -688,7 +688,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     await this.etlResultRepository.save(etlResult);
     await this.notificationService.createNotification({
       title: `Chỉ định thẩm định.`,
-      message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode} bởi ${user.name}.`,
+      message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`,
       type: TypeNotification.VALIDATION_TASK,
       senderId: user.id,
       receiverId: validationId,

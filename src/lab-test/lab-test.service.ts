@@ -530,7 +530,7 @@ export class LabTestService {
     } else if (!AnalysisSession?.analysisId && analysisId) {
       AnalysisSession.analysisId = analysisId;
       const labSession = await this.labSessionRepository.save(AnalysisSession);
-      notificationReq.message = `Bạn đã được chỉ định phân tích lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode} bởi ${user.name}.`;
+      notificationReq.message = `Bạn đã được chỉ định phân tích lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`;
     }
 
     try {

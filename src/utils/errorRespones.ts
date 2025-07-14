@@ -168,3 +168,11 @@ export const errorValidation = {
     400,
   ),
 };
+
+export const errorNotification = {
+  notificationNotFound: new ErrorResponse(
+    'NOTIFICATION_NOT_FOUND',
+    'Notification not found',
+    404,
+  ),
+};

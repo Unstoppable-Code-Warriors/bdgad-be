@@ -20,15 +20,18 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { S3Service } from '../utils/s3.service';
-import { S3Bucket } from '../utils/constant';
+import { S3Bucket, TypeNotification } from '../utils/constant';
 import { errorLabSession, errorValidation } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
+import { NotificationService } from 'src/notification/notification.service';
+import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 
 @Injectable()
 export class AnalysisService {
   constructor(
     private readonly configService: ConfigService,
     private readonly s3Service: S3Service,
+    private readonly notificationService: NotificationService,
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(FastqFile)
@@ -404,6 +407,13 @@ export class AnalysisService {
     fastqFile.status = FastqFileStatus.APPROVED;
     fastqFile.approveBy = user.id;
     await this.fastqFileRepository.save(fastqFile);
+    await this.notificationService.createNotification({
+      title: `Trạng thái file Fastq #${fastqFile.id}.`,
+      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt bởi ${user.id}.`,
+      type: TypeNotification.LAB_TASK,
+      senderId: user.id,
+      receiverId: fastqFile.creator.id,
+    });
 
     // Check if analysis is already in progress for this session
     const existingEtl = await this.etlResultRepository.findOne({
@@ -429,15 +439,17 @@ export class AnalysisService {
     await this.etlResultRepository.save(etlResult);
 
     // Start mock ETL pipeline (async)
-    this.runMockEtlPipeline(etlResult, fastqFile.session.labcode).catch(
-      async (error) => {
-        // Mark as failed if pipeline fails
-        etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Processing failed: ${error.message}`;
-        await this.etlResultRepository.save(etlResult);
-      },
-    );
-
+    this.runMockEtlPipeline(
+      etlResult,
+      fastqFile.session.labcode,
+      fastqFile.session.barcode,
+      user.id,
+    ).catch(async (error) => {
+      // Mark as failed if pipeline fails
+      etlResult.status = EtlResultStatus.FAILED;
+      etlResult.comment = `Processing failed: ${error.message}`;
+      await this.etlResultRepository.save(etlResult);
+    });
     return {
       message: 'Analysis pipeline started successfully',
     };
@@ -446,7 +458,11 @@ export class AnalysisService {
   private async runMockEtlPipeline(
     etlResult: EtlResult,
     labcode: string,
+    barcode: string,
+    userId: number,
   ): Promise<void> {
+    const notificaitonReqs: CreateNotificationReqDto[] = [];
+
     try {
       // Update status to processing
       etlResult.status = EtlResultStatus.PROCESSING;
@@ -481,12 +497,30 @@ export class AnalysisService {
       etlResult.resultPath = resultPath;
       etlResult.etlCompletedAt = new Date();
       await this.etlResultRepository.save(etlResult);
+      notificaitonReqs.push({
+        title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+        message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thành công.`,
+        type: TypeNotification.ANALYSIS_TASK,
+        senderId: userId,
+        receiverId: userId,
+      });
     } catch (error) {
       // Handle pipeline failure
       etlResult.status = EtlResultStatus.FAILED;
       etlResult.comment = `ETL Pipeline failed: ${error.message}`;
       await this.etlResultRepository.save(etlResult);
+      notificaitonReqs.push({
+        title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+        message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thất bại.`,
+        type: TypeNotification.ANALYSIS_TASK,
+        senderId: userId,
+        receiverId: userId,
+      });
       throw error;
+    } finally {
+      await this.notificationService.createNotifications({
+        notifications: notificaitonReqs,
+      });
     }
   }
 
@@ -584,6 +618,14 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     await this.fastqFileRepository.save(fastqFile);
 
+    await this.notificationService.createNotification({
+      title: `Trạng thái file Fastq #${fastqFile.id}.`,
+      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối bởi ${user.id}.`,
+      type: TypeNotification.LAB_TASK,
+      senderId: user.id,
+      receiverId: fastqFile.creator.id,
+    });
+
     // If there are any pending or processing ETL results for this session, mark them as failed
     const pendingEtlResults = await this.etlResultRepository.find({
       where: {
@@ -644,6 +686,13 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     etlResult.comment = 'Sent to validation for review';
     etlResult.commentBy = user.id;
     await this.etlResultRepository.save(etlResult);
+    await this.notificationService.createNotification({
+      title: `Chỉ định thẩm định.`,
+      message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode} bởi ${user.name}.`,
+      type: TypeNotification.VALIDATION_TASK,
+      senderId: user.id,
+      receiverId: validationId,
+    });
 
     return {
       message: 'ETL result sent to validation successfully',
@@ -714,15 +763,18 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     await this.etlResultRepository.save(etlResult);
 
     // Start mock ETL pipeline (async) for retry
-    this.runMockEtlPipeline(etlResult, etlResult.session.labcode).catch(
-      async (error) => {
-        // Mark as failed if pipeline fails again
-        etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Retry failed: ${error.message}`;
-        etlResult.commentBy = user.id;
-        await this.etlResultRepository.save(etlResult);
-      },
-    );
+    this.runMockEtlPipeline(
+      etlResult,
+      etlResult.session.labcode,
+      etlResult.session.barcode,
+      user.id,
+    ).catch(async (error) => {
+      // Mark as failed if pipeline fails again
+      etlResult.status = EtlResultStatus.FAILED;
+      etlResult.comment = `Retry failed: ${error.message}`;
+      etlResult.commentBy = user.id;
+      await this.etlResultRepository.save(etlResult);
+    });
 
     return {
       message: 'ETL process retry started successfully',

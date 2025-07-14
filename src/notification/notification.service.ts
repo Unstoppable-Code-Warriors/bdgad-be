@@ -8,6 +8,7 @@ import { Notifications } from 'src/entities/notification.entity';
 import { Repository } from 'typeorm';
 import { CreateNotificationReqDto } from './dto/create-notification.req.dto';
 import { QueryNotificaiton } from './dto/query-notification.req.dto';
+import { CreateMultiNotificationReqDto } from './dto/create-notifications.req.dto';
 
 @Injectable()
 export class NotificationService {
@@ -36,6 +37,27 @@ export class NotificationService {
     } catch (error) {
       this.logger.error('Failed to create notification', error);
       throw new InternalServerErrorException('Fail to create notification');
+    }
+  }
+
+  async createNotifications(
+    createMultiNotificationReqDto: CreateMultiNotificationReqDto,
+  ) {
+    this.logger.log('Start batch create notifications');
+    try {
+      const { notifications } = createMultiNotificationReqDto;
+
+      const newNotifications = notifications.map((notif) =>
+        this.notificationRepository.create(notif),
+      );
+
+      const savedNotifications =
+        await this.notificationRepository.save(newNotifications);
+
+      return savedNotifications;
+    } catch (error) {
+      this.logger.error('Failed to batch create notifications', error);
+      throw new InternalServerErrorException('Fail to create notifications');
     }
   }
 

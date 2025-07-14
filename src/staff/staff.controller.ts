@@ -413,10 +413,12 @@ export class StaffController {
   async assignLabSession(
     @Param('sessionId') sessionId: number,
     @Body() assignLabSessionDto: AssignLabSessionDto,
+    @User() user: AuthenticatedUser,
   ) {
     return this.staffService.assignDoctorAndLabTestingLabSession(
       sessionId,
       assignLabSessionDto,
+      user,
     );
   }
 

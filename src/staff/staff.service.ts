@@ -848,7 +848,7 @@ export class StaffService {
     user: AuthenticatedUser,
   ) {
     let notificationReq = {
-      title: `Assign Lab Testing task`,
+      title: 'Chỉ định xét nghiệm.',
       message: '',
       type: TypeNotification.LAB_TASK,
       senderId: user.id,

@@ -228,8 +228,9 @@ export class LabTestController {
   async sendToAnalysis(
     @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
     @Param('analysisId', ParseIntPipe) analysisId: number,
+    @User() user: AuthenticatedUser,
   ): Promise<{ message: string }> {
-    await this.labTestService.sendToAnalysis(fastqFileId, analysisId);
+    await this.labTestService.sendToAnalysis(fastqFileId, analysisId, user);
     return {
       message: 'FastQ file sent to analysis successfully',
     };

@@ -15,8 +15,9 @@ import {
 } from '../common/dto/pagination.dto';
 import { ValidationSessionWithLatestEtlResponseDto } from './dto/validation-response.dto';
 import { S3Service } from '../utils/s3.service';
-import { S3Bucket } from '../utils/constant';
+import { S3Bucket, TypeNotification } from '../utils/constant';
 import { In } from 'typeorm';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class ValidationService {
@@ -28,6 +29,7 @@ export class ValidationService {
     @InjectRepository(FastqFile)
     private fastqFileRepository: Repository<FastqFile>,
     private s3Service: S3Service,
+    private notificationService: NotificationService,
   ) {}
 
   async findAllPatientsWithLatestEtlResults(
@@ -310,6 +312,9 @@ export class ValidationService {
   ): Promise<{ message: string }> {
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },
+      relations: {
+        session: true,
+      },
     });
 
     if (!etlResult) {
@@ -328,6 +333,13 @@ export class ValidationService {
       status: EtlResultStatus.REJECTED,
       redoReason: reason,
       rejectBy: user.id,
+    });
+    await this.notificationService.createNotification({
+      title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã bị từ chối bởi ${user.name}.`,
+      type: TypeNotification.ANALYSIS_TASK,
+      senderId: user.id,
+      receiverId: etlResult.session.analysisId!,
     });
 
     // Find and update the latest FastQ file status to WAIT_FOR_APPROVAL
@@ -352,6 +364,9 @@ export class ValidationService {
   ): Promise<{ message: string }> {
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },
+      relations: {
+        session: true,
+      },
     });
 
     if (!etlResult) {
@@ -369,6 +384,13 @@ export class ValidationService {
     const updateData: Partial<EtlResult> = {
       status: EtlResultStatus.APPROVED,
     };
+    await this.notificationService.createNotification({
+      title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã được duyệt bởi ${user.name}.`,
+      type: TypeNotification.ANALYSIS_TASK,
+      senderId: user.id,
+      receiverId: etlResult.session.analysisId!,
+    });
 
     if (comment) {
       updateData.comment = comment;

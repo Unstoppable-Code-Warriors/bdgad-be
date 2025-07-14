@@ -498,8 +498,8 @@ export class AnalysisService {
       etlResult.etlCompletedAt = new Date();
       await this.etlResultRepository.save(etlResult);
       notificaitonReqs.push({
-        title: `Trạng thái file ETL Result #${etlResult.id}.`,
-        message: `Quá trình xử lý file ETL Result #${etlResult.id} của lần khám với Barcode ${barcode} thành công.`,
+        title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+        message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thành công.`,
         type: TypeNotification.ANALYSIS_TASK,
         senderId: userId,
         receiverId: userId,
@@ -510,8 +510,8 @@ export class AnalysisService {
       etlResult.comment = `ETL Pipeline failed: ${error.message}`;
       await this.etlResultRepository.save(etlResult);
       notificaitonReqs.push({
-        title: `Trạng thái file ETL Result #${etlResult.id}.`,
-        message: `Quá trình xử lý file ETL Result #${etlResult.id} của lần khám với Barcode ${barcode} thất bại.`,
+        title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+        message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thất bại.`,
         type: TypeNotification.ANALYSIS_TASK,
         senderId: userId,
         receiverId: userId,

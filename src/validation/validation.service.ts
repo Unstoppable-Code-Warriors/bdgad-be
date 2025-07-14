@@ -336,7 +336,7 @@ export class ValidationService {
     });
     await this.notificationService.createNotification({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
-      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã bị từ chối bởi ${user.name}.`,
+      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã bị từ chối`,
       type: TypeNotification.ANALYSIS_TASK,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,
@@ -386,7 +386,7 @@ export class ValidationService {
     };
     await this.notificationService.createNotification({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
-      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã được duyệt bởi ${user.name}.`,
+      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã được duyệt`,
       type: TypeNotification.ANALYSIS_TASK,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,

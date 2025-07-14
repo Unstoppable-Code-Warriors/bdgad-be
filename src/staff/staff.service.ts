@@ -872,7 +872,7 @@ export class StaffService {
       Object.assign(labSession, assignLabSessionDto);
       const updatedLabSession =
         await this.labSessionRepository.save(labSession);
-      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode} bởi ${user.name}.`;
+      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`;
       return {
         message: 'Lab session updated successfully',
         labSession: updatedLabSession,

@@ -3,7 +3,9 @@ import {
   Controller,
   Get,
   Logger,
+  Param,
   Post,
+  Put,
   Query,
   UseGuards,
   UsePipes,
@@ -12,6 +14,7 @@ import {
 import {
   ApiBody,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiSecurity,
   ApiTags,
@@ -65,25 +68,20 @@ export class NotificationController {
     return this.notificationService.getNotifications(query);
   }
 
-  //   @Post()
-  //   @ApiOperation({ summary: 'Create notification' })
-  //   @ApiBody({
-  //     type: CreateNotificationReqDto,
-  //     examples: {
-  //       createNotificationReqDto: {
-  //         title: 'title',
-  //         message: 'message',
-  //         type: TypeNotification.SYSTEM,
-  //         senderId: 6,
-  //         receiverId: 12,
-  //       } as any,
-  //     },
-  //   })
-  //   createNotification(
-  //     @Body() createNotificationReqDto: CreateNotificationReqDto,
-  //   ) {
-  //     return this.notificationService.createNotification(
-  //       createNotificationReqDto,
-  //     );
-  //   }
+  @Put(':notificationId')
+  @ApiOperation({ summary: 'Update notification read status' })
+  @ApiParam({
+    name: 'notificationId',
+    type: Number,
+    description: 'ID of the notification to update',
+  })
+  async updateNotificationReadStatus(
+    @Param('notificationId') notificationId: number,
+  ) {
+    const notification =
+      await this.notificationService.updateNotificationReadStatus(
+        notificationId,
+      );
+    return notification;
+  }
 }

@@ -9,6 +9,8 @@ import { Repository } from 'typeorm';
 import { CreateNotificationReqDto } from './dto/create-notification.req.dto';
 import { QueryNotificaiton } from './dto/query-notification.req.dto';
 import { CreateMultiNotificationReqDto } from './dto/create-notifications.req.dto';
+import { error } from 'console';
+import { errorNotification } from 'src/utils/errorRespones';
 
 @Injectable()
 export class NotificationService {
@@ -115,6 +117,31 @@ export class NotificationService {
     } catch (error) {
       this.logger.error('Failed to get notifications', error);
       throw new InternalServerErrorException('Fail to get notifications');
+    }
+  }
+
+  async updateNotificationReadStatus(notificationId: number) {
+    this.logger.log(
+      `Start updating notification read status for ID: ${notificationId}`,
+    );
+    try {
+      const notification = await this.notificationRepository.findOne({
+        where: { id: notificationId },
+      });
+
+      if (!notification) {
+        this.logger.warn(`Notification with ID ${notificationId} not found`);
+        return errorNotification.notificationNotFound;
+      }
+
+      notification.isRead = true;
+      await this.notificationRepository.save(notification);
+      return notification;
+    } catch (error) {
+      this.logger.error('Failed to update notification read status', error);
+      throw new InternalServerErrorException(
+        'Fail to update notification read status',
+      );
     }
   }
 }

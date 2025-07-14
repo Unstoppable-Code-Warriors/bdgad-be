@@ -407,15 +407,9 @@ export class AnalysisService {
     fastqFile.status = FastqFileStatus.APPROVED;
     fastqFile.approveBy = user.id;
     await this.fastqFileRepository.save(fastqFile);
-
-    const labSession = await this.labSessionRepository.findOne({
-      where: {
-        id: fastqFile.sessionId,
-      },
-    });
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq #${fastqFile.id}.`,
-      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${labSession?.barcode} đã được duyệt bởi ${user.id}.`,
+      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt bởi ${user.id}.`,
       type: TypeNotification.LAB_TASK,
       senderId: user.id,
       receiverId: fastqFile.creator.id,
@@ -623,6 +617,13 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     fastqFile.rejectBy = user.id;
 
     await this.fastqFileRepository.save(fastqFile);
+    await this.notificationService.createNotification({
+      title: `Trạng thái file Fastq #${fastqFile.id}.`,
+      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối bởi ${user.id}.`,
+      type: TypeNotification.LAB_TASK,
+      senderId: user.id,
+      receiverId: fastqFile.creator.id,
+    });
 
     // If there are any pending or processing ETL results for this session, mark them as failed
     const pendingEtlResults = await this.etlResultRepository.find({

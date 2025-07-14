@@ -410,7 +410,7 @@ export class AnalysisService {
     await this.fastqFileRepository.save(fastqFile);
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq #${fastqFile.id}.`,
-      message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt`,
+      message: `File Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt`,
       type: TypeNotification.LAB_TASK,
       senderId: user.id,
       receiverId: fastqFile.createdBy,
@@ -622,7 +622,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     try {
       this.notificationService.createNotification({
         title: `Trạng thái file Fastq #${fastqFile.id}.`,
-        message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối`,
+        message: `File Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối`,
         type: TypeNotification.LAB_TASK,
         senderId: user.id,
         receiverId: fastqFile.createdBy,

@@ -18,6 +18,7 @@ import { S3Service } from '../utils/s3.service';
 import { S3Bucket, TypeNotification } from '../utils/constant';
 import { In } from 'typeorm';
 import { NotificationService } from 'src/notification/notification.service';
+import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 
 @Injectable()
 export class ValidationService {
@@ -310,6 +311,7 @@ export class ValidationService {
     reason: string,
     user: AuthenticatedUser,
   ): Promise<{ message: string }> {
+    const notificationReqs: CreateNotificationReqDto[] = [];
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },
       relations: {
@@ -334,7 +336,7 @@ export class ValidationService {
       redoReason: reason,
       rejectBy: user.id,
     });
-    await this.notificationService.createNotification({
+    notificationReqs.push({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
       message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã bị từ chối`,
       type: TypeNotification.ANALYSIS_TASK,
@@ -346,14 +348,25 @@ export class ValidationService {
     const latestFastqFile = await this.fastqFileRepository.findOne({
       where: { sessionId: etlResult.sessionId },
       order: { createdAt: 'DESC' },
+      relations: { session: true },
     });
 
     if (latestFastqFile) {
       await this.fastqFileRepository.update(latestFastqFile.id, {
         status: FastqFileStatus.WAIT_FOR_APPROVAL,
       });
+      notificationReqs.push({
+        title: `Trạng thái file Fastq #${latestFastqFile.id}.`,
+        message: `File Fastq #${latestFastqFile.id} của lần khám với Barcode ${etlResult.session.barcode} đang chờ được duyệt`,
+        type: TypeNotification.LAB_TASK,
+        senderId: latestFastqFile.session.analysisId!,
+        receiverId: latestFastqFile.createdBy,
+      });
     }
 
+    await this.notificationService.createNotifications({
+      notifications: notificationReqs,
+    });
     return { message: 'ETL result rejected successfully' };
   }
 

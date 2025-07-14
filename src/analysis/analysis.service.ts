@@ -617,6 +617,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     fastqFile.rejectBy = user.id;
 
     await this.fastqFileRepository.save(fastqFile);
+
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq #${fastqFile.id}.`,
       message: `Trạng thái file Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối bởi ${user.id}.`,
@@ -685,6 +686,13 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     etlResult.comment = 'Sent to validation for review';
     etlResult.commentBy = user.id;
     await this.etlResultRepository.save(etlResult);
+    await this.notificationService.createNotification({
+      title: `Chỉ định thẩm định.`,
+      message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode} bởi ${user.name}.`,
+      type: TypeNotification.VALIDATION_TASK,
+      senderId: user.id,
+      receiverId: validationId,
+    });
 
     return {
       message: 'ETL result sent to validation successfully',

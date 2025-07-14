@@ -28,7 +28,13 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiOperation, ApiParam, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @Controller('analysis')
 @UseGuards(AuthGuard, RolesGuard)
@@ -74,12 +80,22 @@ export class AnalysisController {
   @ApiOperation({ summary: 'Reject Analysis' })
   @Put('fastq/:fastqFileId/reject')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
+  @ApiBody({
+    type: RejectFastqDto,
+    description: 'Reason for rejecting the FASTQ file',
+    examples: {
+      example1: {
+        summary: 'Example of rejection reason',
+        value: { redoReason: 'Insufficient quality of the FASTQ file' },
+      },
+    },
+  })
   @UsePipes(new ValidationPipe({ transform: true }))
   async rejectFastq(
     @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
     @Body() rejectDto: RejectFastqDto,
     @User() user: AuthenticatedUser,
-  ): Promise<{ message: string }> {
+  ) {
     return this.analysisService.rejectFastq(
       fastqFileId,
       rejectDto.redoReason,

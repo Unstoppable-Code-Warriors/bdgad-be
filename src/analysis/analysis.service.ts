@@ -679,6 +679,16 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       return errorLabSession.labSessionNotFound;
     }
 
+    if (labSession.validationId) {
+      await this.notificationService.createNotification({
+        title: `Chỉ định thẩm định.`,
+        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${labSession.barcode} đã được gửi mới`,
+        type: TypeNotification.VALIDATION_TASK,
+        senderId: user.id,
+        receiverId: validationId,
+      });
+    }
+
     if (!labSession.validationId && validationId) {
       labSession.validationId = validationId;
       await this.labSessionRepository.save(labSession);
@@ -693,16 +703,6 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     if (!labSession.validationId && !validationId) {
       return errorValidation.validationIdRequired;
-    }
-
-    if (labSession.validationId) {
-      await this.notificationService.createNotification({
-        title: `Chỉ định thẩm định.`,
-        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${labSession.barcode} đã được gửi mới`,
-        type: TypeNotification.VALIDATION_TASK,
-        senderId: user.id,
-        receiverId: validationId,
-      });
     }
 
     // Update ETL result status to WAIT_FOR_APPROVAL

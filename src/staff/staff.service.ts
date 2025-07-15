@@ -96,7 +96,10 @@ export class StaffService {
       3600,
     );
 
-    const ocrServiceUrl = this.configService.get<string>('OCR_SERVICE');
+    const ocrServiceUrl = this.configService
+      .get<string>('OCR_SERVICE')
+      ?.trim()
+      .replace(/^"|"$/g, '');
     if (!ocrServiceUrl) {
       this.logger.warn('OCR_SERVICE not configured, skipping OCR processing');
       return errorOCR.ocrServiceUrlNotFound;

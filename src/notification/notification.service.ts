@@ -9,7 +9,6 @@ import { Repository } from 'typeorm';
 import { CreateNotificationReqDto } from './dto/create-notification.req.dto';
 import { QueryNotificaiton } from './dto/query-notification.req.dto';
 import { CreateMultiNotificationReqDto } from './dto/create-notifications.req.dto';
-import { error } from 'console';
 import { errorNotification } from 'src/utils/errorRespones';
 
 @Injectable()
@@ -32,6 +31,8 @@ export class NotificationService {
         type,
         senderId,
         receiverId,
+        isRead: false,
+        createdAt: new Date(),
       });
 
       await this.notificationRepository.save(newNotification);
@@ -50,7 +51,11 @@ export class NotificationService {
       const { notifications } = createMultiNotificationReqDto;
 
       const newNotifications = notifications.map((notif) =>
-        this.notificationRepository.create(notif),
+        this.notificationRepository.create({
+          ...notif,
+          isRead: false,
+          createdAt: new Date(),
+        }),
       );
 
       const savedNotifications =

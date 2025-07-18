@@ -21,7 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { QueryNotificaiton } from './dto/query-notification.req.dto';
-import { TypeNotification } from 'src/utils/constant';
+import { TypeNotification, TypeTaskNotification, SubTypeNotification } from 'src/utils/constant';
 import { AuthGuard } from 'src/auth';
 import { CreateNotificationReqDto } from './dto/create-notification.req.dto';
 import { Transform } from 'class-transformer';
@@ -42,13 +42,45 @@ export class NotificationController {
     required: false,
   })
   @ApiQuery({
+    name: 'taskType',
+    enum: [
+      TypeTaskNotification.SYSTEM,
+      TypeTaskNotification.LAB_TASK,
+      TypeTaskNotification.ANALYSIS_TASK,
+      TypeTaskNotification.VALIDATION_TASK,
+    ],
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
     name: 'type',
     enum: [
-      TypeNotification.SYSTEM,
-      TypeNotification.LAB_TASK,
-      TypeNotification.ANALYSIS_TASK,
-      TypeNotification.VALIDATION_TASK,
+      TypeNotification.ACTION,
+      TypeNotification.PROCESS,
+      TypeNotification.INFO,
     ],
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'subType',
+    enum: [
+      SubTypeNotification.ACCEPT,
+      SubTypeNotification.REJECT,
+      SubTypeNotification.ASSIGN,
+      SubTypeNotification.RESEND,
+      SubTypeNotification.RETRY,
+    ],
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'labcode',
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'barcode',
     type: String,
     required: false,
   })

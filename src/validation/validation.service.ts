@@ -15,7 +15,12 @@ import {
 } from '../common/dto/pagination.dto';
 import { ValidationSessionWithLatestEtlResponseDto } from './dto/validation-response.dto';
 import { S3Service } from '../utils/s3.service';
-import { S3Bucket, TypeNotification } from '../utils/constant';
+import {
+  S3Bucket,
+  TypeNotification,
+  TypeTaskNotification,
+  SubTypeNotification,
+} from '../utils/constant';
 import { In } from 'typeorm';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
@@ -339,7 +344,11 @@ export class ValidationService {
     notificationReqs.push({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
       message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã bị từ chối`,
-      type: TypeNotification.ANALYSIS_TASK,
+      taskType: TypeTaskNotification.ANALYSIS_TASK,
+      type: TypeNotification.PROCESS,
+      subType: SubTypeNotification.REJECT,
+      labcode: etlResult.session.labcode,
+      barcode: etlResult.session.barcode,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,
     });
@@ -358,7 +367,11 @@ export class ValidationService {
       notificationReqs.push({
         title: `Trạng thái file Fastq #${latestFastqFile.id}.`,
         message: `File Fastq #${latestFastqFile.id} của lần khám với Barcode ${etlResult.session.barcode} đang chờ được duyệt`,
-        type: TypeNotification.LAB_TASK,
+        taskType: TypeTaskNotification.LAB_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.RETRY,
+        labcode: etlResult.session.labcode,
+        barcode: etlResult.session.barcode,
         senderId: latestFastqFile.session.analysisId!,
         receiverId: latestFastqFile.createdBy,
       });
@@ -400,7 +413,11 @@ export class ValidationService {
     await this.notificationService.createNotification({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
       message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã được duyệt`,
-      type: TypeNotification.ANALYSIS_TASK,
+      taskType: TypeTaskNotification.ANALYSIS_TASK,
+      type: TypeNotification.PROCESS,
+      subType: SubTypeNotification.ACCEPT,
+      labcode: etlResult.session.labcode,
+      barcode: etlResult.session.barcode,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,
     });

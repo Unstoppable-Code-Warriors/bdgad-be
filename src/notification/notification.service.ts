@@ -23,12 +23,26 @@ export class NotificationService {
   async createNotification(createNotificationReqDto: CreateNotificationReqDto) {
     this.logger.log('Start create notification');
     try {
-      const { title, message, type, senderId, receiverId } =
-        createNotificationReqDto;
+      const {
+        title,
+        message,
+        taskType,
+        type,
+        subType,
+        labcode,
+        barcode,
+        senderId,
+        receiverId,
+      } = createNotificationReqDto;
+
       const newNotification = await this.notificationRepository.create({
         title,
         message,
+        taskType,
         type,
+        subType,
+        labcode,
+        barcode,
         senderId,
         receiverId,
         isRead: false,
@@ -39,7 +53,7 @@ export class NotificationService {
       return newNotification;
     } catch (error) {
       this.logger.error('Failed to create notification', error);
-      throw new InternalServerErrorException('Fail to create notification');
+      throw new InternalServerErrorException('Failed to create notification');
     }
   }
 
@@ -64,7 +78,7 @@ export class NotificationService {
       return savedNotifications;
     } catch (error) {
       this.logger.error('Failed to batch create notifications', error);
-      throw new InternalServerErrorException('Fail to create notifications');
+      throw new InternalServerErrorException('Failed to create notifications');
     }
   }
 
@@ -74,12 +88,16 @@ export class NotificationService {
     try {
       const {
         receiverId,
+        taskType,
         type,
+        subType,
+        labcode,
+        barcode,
         isRead,
         sortOrder = 'DESC',
       } = queryNotificationDto;
       this.logger.log(
-        `Log get notifications query - receiverId: ${receiverId}, type: ${type}, isRead: ${isRead}, sortOrder: ${sortOrder}`,
+        `Log get notifications query - receiverId: ${receiverId}, taskType: ${taskType}, type: ${type}, subType: ${subType}, labcode: ${labcode}, barcode: ${barcode}, isRead: ${isRead}, sortOrder: ${sortOrder}`,
       );
 
       const queryBuilder = this.notificationRepository
@@ -90,7 +108,11 @@ export class NotificationService {
           'notification.id',
           'notification.title',
           'notification.message',
+          'notification.taskType',
           'notification.type',
+          'notification.subType',
+          'notification.labcode',
+          'notification.barcode',
           'sender.id',
           'sender.name',
           'sender.email',
@@ -107,8 +129,26 @@ export class NotificationService {
         });
       }
 
+      if (taskType) {
+        queryBuilder.andWhere('notification.taskType = :taskType', {
+          taskType,
+        });
+      }
+
       if (type) {
         queryBuilder.andWhere('notification.type = :type', { type });
+      }
+
+      if (subType) {
+        queryBuilder.andWhere('notification.subType = :subType', { subType });
+      }
+
+      if (labcode) {
+        queryBuilder.andWhere('notification.labcode = :labcode', { labcode });
+      }
+
+      if (barcode) {
+        queryBuilder.andWhere('notification.barcode = :barcode', { barcode });
       }
 
       if (isRead) {

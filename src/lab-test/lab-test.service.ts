@@ -20,7 +20,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { S3Service } from '../utils/s3.service';
-import { S3Bucket, TypeNotification } from '../utils/constant';
+import { S3Bucket, TypeNotification, TypeTaskNotification, SubTypeNotification } from '../utils/constant';
 import { errorAnalysis, errorLabSession } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
 import { CreateMultiNotificationReqDto } from 'src/notification/dto/create-notifications.req.dto';
@@ -497,7 +497,11 @@ export class LabTestService {
     let notificationReq: CreateNotificationReqDto = {
       title: 'Chỉ định phân tích.',
       message: '',
-      type: TypeNotification.LAB_TASK,
+      taskType: TypeTaskNotification.ANALYSIS_TASK,
+      type: TypeNotification.ACTION,
+      subType: SubTypeNotification.ASSIGN,
+      labcode: '',
+      barcode: '',
       senderId: user.id,
       receiverId: analysisId,
     };
@@ -526,8 +530,10 @@ export class LabTestService {
     }
 
     if (AnalysisSession?.analysisId) {
-      notificationReq.type = TypeNotification.ANALYSIS_TASK;
+      notificationReq.subType = SubTypeNotification.RESEND;
       notificationReq.message = `File Fastq #${fastqFile.id} của lần khám với mã labcode ${AnalysisSession.labcode} và mã barcode ${AnalysisSession.barcode} đã được gửi mới`;
+      notificationReq.labcode = AnalysisSession.labcode;
+      notificationReq.barcode = AnalysisSession.barcode;
     }
 
     if (!AnalysisSession?.analysisId && !analysisId) {
@@ -536,6 +542,8 @@ export class LabTestService {
       AnalysisSession.analysisId = analysisId;
       const labSession = await this.labSessionRepository.save(AnalysisSession);
       notificationReq.message = `Bạn đã được chỉ định phân tích lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`;
+      notificationReq.labcode = labSession.labcode;
+      notificationReq.barcode = labSession.barcode;
     }
 
     try {

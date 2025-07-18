@@ -13,7 +13,7 @@ import { firstValueFrom } from 'rxjs';
 import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
-import { S3Bucket, TypeLabSession, TypeNotification } from 'src/utils/constant';
+import { S3Bucket, TypeLabSession, TypeNotification, TypeTaskNotification, SubTypeNotification } from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import {
   PaginationQueryDto,
@@ -853,7 +853,11 @@ export class StaffService {
     let notificationReq = {
       title: 'Chỉ định xét nghiệm.',
       message: '',
-      type: TypeNotification.LAB_TASK,
+      taskType: TypeTaskNotification.LAB_TASK,
+      type: TypeNotification.ACTION,
+      subType: SubTypeNotification.ASSIGN,
+      labcode: '',
+      barcode: '',
       senderId: user.id,
       receiverId: assignLabSessionDto.labTestingId!,
     };
@@ -876,6 +880,8 @@ export class StaffService {
       const updatedLabSession =
         await this.labSessionRepository.save(labSession);
       notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`;
+      notificationReq.labcode = labSession.labcode;
+      notificationReq.barcode = labSession.barcode;
       this.notificationService.createNotification(notificationReq);
       return {
         message: 'Lab session updated successfully',

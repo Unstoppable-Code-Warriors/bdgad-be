@@ -20,7 +20,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { S3Service } from '../utils/s3.service';
-import { S3Bucket, TypeNotification } from '../utils/constant';
+import {
+  S3Bucket,
+  TypeNotification,
+  TypeTaskNotification,
+  SubTypeNotification,
+} from '../utils/constant';
 import { errorLabSession, errorValidation } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
 import { NotificationService } from 'src/notification/notification.service';
@@ -411,7 +416,11 @@ export class AnalysisService {
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq #${fastqFile.id}.`,
       message: `File Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt`,
-      type: TypeNotification.LAB_TASK,
+      taskType: TypeTaskNotification.LAB_TASK,
+      type: TypeNotification.PROCESS,
+      subType: SubTypeNotification.ACCEPT,
+      labcode: fastqFile.session?.labcode,
+      barcode: fastqFile.session?.barcode,
       senderId: user.id,
       receiverId: fastqFile.createdBy,
     });
@@ -501,7 +510,11 @@ export class AnalysisService {
       notificaitonReqs.push({
         title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
         message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thành công.`,
-        type: TypeNotification.ANALYSIS_TASK,
+        taskType: TypeTaskNotification.ANALYSIS_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.ACCEPT,
+        labcode: labcode,
+        barcode: barcode,
         senderId: userId,
         receiverId: userId,
       });
@@ -513,7 +526,11 @@ export class AnalysisService {
       notificaitonReqs.push({
         title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
         message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thất bại.`,
-        type: TypeNotification.ANALYSIS_TASK,
+        taskType: TypeTaskNotification.ANALYSIS_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.REJECT,
+        labcode: labcode,
+        barcode: barcode,
         senderId: userId,
         receiverId: userId,
       });
@@ -623,7 +640,11 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       this.notificationService.createNotification({
         title: `Trạng thái file Fastq #${fastqFile.id}.`,
         message: `File Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối`,
-        type: TypeNotification.LAB_TASK,
+        taskType: TypeTaskNotification.LAB_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.REJECT,
+        labcode: fastqFile?.session?.labcode,
+        barcode: fastqFile?.session?.barcode,
         senderId: user.id,
         receiverId: fastqFile.createdBy,
       });
@@ -683,7 +704,11 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       await this.notificationService.createNotification({
         title: `Chỉ định thẩm định.`,
         message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${labSession.barcode} đã được gửi mới`,
-        type: TypeNotification.VALIDATION_TASK,
+        taskType: TypeTaskNotification.VALIDATION_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.RESEND,
+        labcode: labSession.labcode,
+        barcode: labSession.barcode,
         senderId: user.id,
         receiverId: validationId,
       });
@@ -695,7 +720,11 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       await this.notificationService.createNotification({
         title: `Chỉ định thẩm định.`,
         message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`,
-        type: TypeNotification.VALIDATION_TASK,
+        taskType: TypeTaskNotification.VALIDATION_TASK,
+        type: TypeNotification.ACTION,
+        subType: SubTypeNotification.ASSIGN,
+        labcode: labSession.labcode,
+        barcode: labSession.barcode,
         senderId: user.id,
         receiverId: validationId,
       });
@@ -770,13 +799,23 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       latestFastqFile.status = FastqFileStatus.APPROVED;
       latestFastqFile.approveBy = user.id;
       await this.fastqFileRepository.save(latestFastqFile);
-      await this.notificationService.createNotification({
-        title: `Trạng thái file Fastq #${latestFastqFile.id}.`,
-        message: `File Fastq #${latestFastqFile.id} của lần khám với Barcode ${latestFastqFile.session?.barcode} đã được duyệt`,
-        type: TypeNotification.LAB_TASK,
-        senderId: user.id,
-        receiverId: latestFastqFile.createdBy,
-      });
+      await this.notificationService
+        .createNotification({
+          title: `Trạng thái file Fastq #${latestFastqFile.id}.`,
+          message: `File Fastq #${latestFastqFile.id} của lần khám với Barcode ${latestFastqFile.session?.barcode} đã được duyệt`,
+          taskType: TypeTaskNotification.LAB_TASK,
+          type: TypeNotification.PROCESS,
+          subType: SubTypeNotification.RETRY,
+          labcode: latestFastqFile.session?.labcode,
+          barcode: latestFastqFile.session?.barcode,
+          senderId: user.id,
+          receiverId: latestFastqFile.createdBy,
+        })
+        .catch((error) => {
+          throw new InternalServerErrorException(
+            `Failed to create notification for FastQ file approval: ${error.message}`,
+          );
+        });
     }
 
     // Reset the ETL result for retry

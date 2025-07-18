@@ -1,4 +1,8 @@
-import { TypeNotification } from 'src/utils/constant';
+import {
+  SubTypeNotification,
+  TypeNotification,
+  TypeTaskNotification,
+} from 'src/utils/constant';
 import {
   Column,
   Entity,
@@ -19,11 +23,23 @@ export class Notifications {
   @Column({ name: 'message' })
   message: string;
 
+  @Column({ name: 'task_type', enum: TypeTaskNotification, nullable: false })
+  taskType: string;
+
   @Column({ name: 'type', enum: TypeNotification, nullable: false })
   type: string;
 
+  @Column({ name: 'sub_type', enum: SubTypeNotification, nullable: false })
+  subType: string;
+
   @Column({ name: 'sender_id' })
   senderId: number;
+
+  @Column({ name: 'lab_code', nullable: true })
+  labcode: string;
+
+  @Column({ name: 'barcode', nullable: true })
+  barcode: string;
 
   @ManyToOne(() => User, {
     cascade: true,

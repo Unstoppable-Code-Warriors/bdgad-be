@@ -1,6 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsString } from 'class-validator';
-import { TypeNotification } from 'src/utils/constant';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  SubTypeNotification,
+  TypeNotification,
+  TypeTaskNotification,
+} from 'src/utils/constant';
 
 export class CreateNotificationReqDto {
   @ApiProperty({ example: 'title' })
@@ -11,9 +15,27 @@ export class CreateNotificationReqDto {
   @ApiProperty({ example: 'message' })
   message: string;
 
+  @IsEnum(TypeTaskNotification)
+  @ApiProperty({ example: 'system', enum: TypeTaskNotification })
+  taskType: TypeTaskNotification;
+
   @IsEnum(TypeNotification)
-  @ApiProperty({ example: TypeNotification.SYSTEM, enum: TypeNotification })
+  @ApiProperty({ example: 'INFO', enum: TypeNotification })
   type: TypeNotification;
+
+  @IsEnum(SubTypeNotification)
+  @ApiProperty({ example: 'assign', enum: SubTypeNotification })
+  subType: SubTypeNotification;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty({ example: 'LAB001', required: false })
+  labcode?: string;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty({ example: 'BAR001', required: false })
+  barcode?: string;
 
   @IsNumber()
   @ApiProperty({ example: 6 })

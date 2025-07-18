@@ -37,9 +37,23 @@ export enum TypeLabSession {
   VALIDATION = 'validation',
 }
 
-export enum TypeNotification {
+export enum TypeTaskNotification {
   SYSTEM = 'system',
   LAB_TASK = 'lab_task',
   VALIDATION_TASK = 'validation_task',
   ANALYSIS_TASK = 'analysis_task',
+}
+
+export enum TypeNotification {
+  ACTION = 'ACTION',
+  PROCESS = 'PROCESS',
+  INFO = 'INFO',
+}
+
+export enum SubTypeNotification {
+  ACCEPT = 'accept',
+  REJECT = 'reject',
+  ASSIGN = 'assign',
+  RESEND = 'resend',
+  RETRY = 'retry',
 }

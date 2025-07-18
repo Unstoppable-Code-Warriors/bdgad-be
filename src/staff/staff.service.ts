@@ -876,6 +876,7 @@ export class StaffService {
       const updatedLabSession =
         await this.labSessionRepository.save(labSession);
       notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`;
+      this.notificationService.createNotification(notificationReq);
       return {
         message: 'Lab session updated successfully',
         labSession: updatedLabSession,
@@ -884,7 +885,6 @@ export class StaffService {
       this.logger.error('Failed to update lab session', error);
       throw new InternalServerErrorException(error.message);
     } finally {
-      this.notificationService.createNotification(notificationReq);
       this.logger.log('Lab Session update process completed');
     }
   }

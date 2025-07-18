@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
 import {
@@ -542,12 +542,11 @@ export class LabTestService {
       // Update the status to WAIT_FOR_APPROVAL
       fastqFile.status = FastqFileStatus.WAIT_FOR_APPROVAL;
       await this.fastqFileRepository.save(fastqFile);
+      await this.notificationService.createNotification(notificationReq);
     } catch (error) {
-      throw new Error(
+      throw new InternalServerErrorException(
         `Failed to send FastQ file to analysis: ${error.message}`,
       );
-    } finally {
-      await this.notificationService.createNotification(notificationReq);
     }
   }
 }

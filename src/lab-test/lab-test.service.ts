@@ -75,7 +75,6 @@ export class LabTestService {
   async findAllSession(query: PaginationQueryDto, user: AuthenticatedUser) {
     const {
       search,
-      searchField = 'fullName',
       filter,
       sortBy,
       sortOrder,
@@ -118,23 +117,13 @@ export class LabTestService {
         .where('labSession.labTestingId = :userId', { userId: user.id })
         .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
+    // Apply search functionality (search by labcode and barcode)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
-
-      const searchFieldMapping = {
-        fullName: 'LOWER(patient.fullName)',
-        citizenId: 'LOWER(patient.citizenId)',
-        labcode: 'LOWER(labSession.labcode)',
-        barcode: 'LOWER(labSession.barcode)',
-        phone: 'LOWER(patient.phone)',
-        address: 'LOWER(patient.address)',
-      };
-
-      const fieldToSearch =
-        searchFieldMapping[searchField] || searchFieldMapping['fullName'];
-      queryBuilder.andWhere(`${fieldToSearch} LIKE :search`, {
-        search: searchTerm,
-      });
+      queryBuilder.andWhere(
+        '(LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
+        { search: searchTerm },
+      );
     }
 
     // Apply date range filtering on requestDate

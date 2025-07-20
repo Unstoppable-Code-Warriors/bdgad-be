@@ -498,21 +498,16 @@ export class StaffService {
         dateFrom,
         dateTo,
         sortOrder = 'ASC',
-        searchField = 'fullName', // Default search field
       } = query;
 
       const queryBuilder = this.patientRepository.createQueryBuilder('patient');
 
-      // Global search functionality - search by the specified field
+      // Global search functionality - search by citizenId and fullName
       if (search) {
-        const validSearchFields = ['fullName', 'citizenId'];
-        const fieldToSearch = validSearchFields.includes(searchField)
-          ? searchField
-          : 'fullName';
-
+        const searchTerm = `%${search.trim().toLowerCase()}%`;
         queryBuilder.andWhere(
-          `LOWER(patient.${fieldToSearch}) LIKE LOWER(:search)`,
-          { search: `%${search}%` },
+          '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
+          { search: searchTerm },
         );
       }
 

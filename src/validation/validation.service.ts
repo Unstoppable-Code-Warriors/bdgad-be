@@ -90,11 +90,11 @@ export class ValidationService {
       .where('labSession.validationId = :userId', { userId: user.id })
       .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
-    // Apply search functionality
+    // Apply search functionality (search by labcode and barcode)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(patient.fullName) LIKE :search OR LOWER(patient.citizenId) LIKE :search OR LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
+        '(LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }

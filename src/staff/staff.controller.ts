@@ -49,6 +49,46 @@ import * as path from 'path';
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
+  @ApiTags('Test')
+  @Post('/test')
+  @ApiOperation({
+    summary: 'Test',
+  })
+  @AuthZ([Role.STAFF])
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowedExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+
+        if (allowedExt.includes(ext)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only image files are allowed!'), false);
+        }
+      },
+    }),
+  )
+  async test(@UploadedFile() file: Express.Multer.File) {
+    return this.staffService.test(file);
+  }
+
   @ApiTags('Staff - OCR file')
   @Post('/ocr')
   @ApiOperation({

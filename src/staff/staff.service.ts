@@ -13,7 +13,13 @@ import { firstValueFrom } from 'rxjs';
 import { In, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
-import { S3Bucket, TypeLabSession, TypeNotification, TypeTaskNotification, SubTypeNotification } from 'src/utils/constant';
+import {
+  S3Bucket,
+  TypeLabSession,
+  TypeNotification,
+  TypeTaskNotification,
+  SubTypeNotification,
+} from 'src/utils/constant';
 import { AuthenticatedUser } from 'src/auth';
 import {
   PaginationQueryDto,
@@ -66,6 +72,56 @@ export class StaffService {
     private readonly userRepository: Repository<User>,
     private readonly notificationService: NotificationService,
   ) {}
+
+  async test(file: Express.Multer.File) {
+    this.logger.log('Starting OCR file processing');
+    const timestamp = Date.now();
+
+    // Properly decode UTF-8 filename
+    let originalFileName = Buffer.from(file.originalname, 'binary').toString(
+      'utf8',
+    );
+    let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
+
+    // Create a safe S3 key
+    const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
+
+    const s3Url = await this.s3Service.uploadFile(
+      S3Bucket.OCR_FILE_TEMP,
+      s3Key,
+      file.buffer,
+      file.mimetype,
+    );
+
+    const s3KeyExtract = this.s3Service.extractKeyFromUrl(
+      s3Url,
+      S3Bucket.OCR_FILE_TEMP,
+    );
+    const presignedUrl = await this.s3Service.generatePresigned(
+      S3Bucket.OCR_FILE_TEMP,
+      s3KeyExtract,
+      3600,
+    );
+
+    const ocrServiceUrl = this.configService
+      .get<string>('OCR_SERVICE')
+      ?.trim()
+      .replace(/^"|"$/g, '');
+    if (!ocrServiceUrl) {
+      this.logger.warn('OCR_SERVICE not configured, skipping OCR processing');
+      return errorOCR.ocrServiceUrlNotFound;
+    }
+
+    this.logger.log(`OCR service URL configured: ${ocrServiceUrl}`);
+    const ocrEndpoint = `${ocrServiceUrl}/process_document?url=${encodeURIComponent(presignedUrl)}`;
+    this.logger.log(`OCR endpoint: ${ocrEndpoint}`);
+    const encode = encodeURIComponent(presignedUrl);
+    return {
+      url: presignedUrl,
+      urlEncoded: encode,
+      ocrEndpoint: ocrEndpoint,
+    };
+  }
 
   async ocrFilePath(file: Express.Multer.File) {
     const timestamp = Date.now();

@@ -54,6 +54,7 @@ export class AnalysisService {
   ): Promise<PaginatedResponseDto<AnalysisSessionWithLatestResponseDto>> {
     const {
       search,
+      searchField = 'fullName',
       filter,
       sortBy,
       sortOrder,
@@ -109,13 +110,23 @@ export class AnalysisService {
         .where('labSession.analysisId = :userId', { userId: user.id })
         .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
-    // Apply search functionality (search by patient personalId and fullName)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
-      queryBuilder.andWhere(
-        '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
-        { search: searchTerm },
-      );
+
+      const searchFieldMapping = {
+        fullName: 'LOWER(patient.fullName)',
+        citizenId: 'LOWER(patient.citizenId)',
+        labcode: 'LOWER(labSession.labcode)',
+        barcode: 'LOWER(labSession.barcode)',
+        phone: 'LOWER(patient.phone)',
+        address: 'LOWER(patient.address)',
+      };
+
+      const fieldToSearch =
+        searchFieldMapping[searchField] || searchFieldMapping['fullName'];
+      queryBuilder.andWhere(`${fieldToSearch} LIKE :search`, {
+        search: searchTerm,
+      });
     }
 
     // Apply date range filtering on requestDate

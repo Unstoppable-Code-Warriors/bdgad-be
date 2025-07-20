@@ -9,13 +9,16 @@ import { Repository } from 'typeorm';
 import { CreateNotificationReqDto } from './dto/create-notification.req.dto';
 import { QueryNotificaiton } from './dto/query-notification.req.dto';
 import { CreateMultiNotificationReqDto } from './dto/create-notifications.req.dto';
-import { errorNotification } from 'src/utils/errorRespones';
+import { errorNotification, errorUserAuthen } from 'src/utils/errorRespones';
+import { User } from 'src/entities/user.entity';
 
 @Injectable()
 export class NotificationService {
   constructor(
     @InjectRepository(Notifications)
     private readonly notificationRepository: Repository<Notifications>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   private logger = new Logger(NotificationService.name);
@@ -82,9 +85,7 @@ export class NotificationService {
     }
   }
 
-  async getNotifications(
-    queryNotificationDto: QueryNotificaiton,
-  ): Promise<Notifications[]> {
+  async getNotifications(queryNotificationDto: QueryNotificaiton) {
     try {
       const {
         receiverId,
@@ -99,6 +100,14 @@ export class NotificationService {
       this.logger.log(
         `Log get notifications query - receiverId: ${receiverId}, taskType: ${taskType}, type: ${type}, subType: ${subType}, labcode: ${labcode}, barcode: ${barcode}, isRead: ${isRead}, sortOrder: ${sortOrder}`,
       );
+
+      const receiver = this.userRepository.findOne({
+        where: { id: receiverId },
+      });
+      if (!receiver) {
+        this.logger.warn(`Receiver with ID ${receiverId} not found`);
+        return errorUserAuthen.userNotFound;
+      }
 
       const queryBuilder = this.notificationRepository
         .createQueryBuilder('notification')

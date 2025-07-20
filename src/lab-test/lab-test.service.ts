@@ -20,7 +20,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { S3Service } from '../utils/s3.service';
-import { S3Bucket, TypeNotification, TypeTaskNotification, SubTypeNotification } from '../utils/constant';
+import {
+  S3Bucket,
+  TypeNotification,
+  TypeTaskNotification,
+  SubTypeNotification,
+} from '../utils/constant';
 import { errorAnalysis, errorLabSession } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
 import { CreateMultiNotificationReqDto } from 'src/notification/dto/create-notifications.req.dto';
@@ -70,6 +75,7 @@ export class LabTestService {
   async findAllSession(query: PaginationQueryDto, user: AuthenticatedUser) {
     const {
       search,
+      searchField = 'fullName',
       filter,
       sortBy,
       sortOrder,
@@ -112,13 +118,23 @@ export class LabTestService {
         .where('labSession.labTestingId = :userId', { userId: user.id })
         .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
-    // Apply search functionality (search by patient personalId and fullName)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
-      queryBuilder.andWhere(
-        '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
-        { search: searchTerm },
-      );
+
+      const searchFieldMapping = {
+        fullName: 'LOWER(patient.fullName)',
+        citizenId: 'LOWER(patient.citizenId)',
+        labcode: 'LOWER(labSession.labcode)',
+        barcode: 'LOWER(labSession.barcode)',
+        phone: 'LOWER(patient.phone)',
+        address: 'LOWER(patient.address)',
+      };
+
+      const fieldToSearch =
+        searchFieldMapping[searchField] || searchFieldMapping['fullName'];
+      queryBuilder.andWhere(`${fieldToSearch} LIKE :search`, {
+        search: searchTerm,
+      });
     }
 
     // Apply date range filtering on requestDate

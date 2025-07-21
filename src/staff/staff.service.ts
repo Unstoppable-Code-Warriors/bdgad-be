@@ -632,6 +632,7 @@ export class StaffService {
         },
         relations: {
           doctor: true,
+          patient: true,
           labTesting: true,
           patientFiles: true,
         },
@@ -644,6 +645,14 @@ export class StaffService {
           createdAt: true,
           updatedAt: true,
           finishedAt: true,
+          patient: {
+            id: true,
+            fullName: true,
+            dateOfBirth: true,
+            phone: true,
+            address: true,
+            citizenId: true,
+          },
           doctor: {
             id: true,
             name: true,

@@ -623,6 +623,15 @@ export class StaffService {
       if (!patient) {
         return errorPatient.patientNotFound;
       }
+
+      const patientData = {
+        id: patient.id,
+        fullName: patient.fullName,
+        dateOfBirth: patient.dateOfBirth,
+        phone: patient.phone,
+        address: patient.address,
+        citizenId: patient.citizenId,
+      };
       const labSessions = patient.labSessions.flatMap(
         (labSession) => labSession.id,
       );
@@ -632,7 +641,6 @@ export class StaffService {
         },
         relations: {
           doctor: true,
-          patient: true,
           labTesting: true,
           patientFiles: true,
         },
@@ -645,14 +653,6 @@ export class StaffService {
           createdAt: true,
           updatedAt: true,
           finishedAt: true,
-          patient: {
-            id: true,
-            fullName: true,
-            dateOfBirth: true,
-            phone: true,
-            address: true,
-            citizenId: true,
-          },
           doctor: {
             id: true,
             name: true,
@@ -670,7 +670,7 @@ export class StaffService {
           },
         },
       });
-      return labSessionData;
+      return { labSessionData, patientData };
     } catch (error) {
       this.logger.error('Failed to get Patient by ID', error);
       throw new InternalServerErrorException(error.message);

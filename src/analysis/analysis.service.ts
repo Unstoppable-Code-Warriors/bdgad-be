@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder, In } from 'typeorm';
+import { Repository, SelectQueryBuilder, In, Not } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
@@ -586,12 +586,15 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
   async downloadEtlResult(etlResultId: number): Promise<string> {
     const etlResult = await this.etlResultRepository.findOne({
-      where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
+      where: {
+        id: etlResultId,
+        status: Not(In([EtlResultStatus.FAILED, EtlResultStatus.PROCESSING])),
+      },
     });
 
     if (!etlResult) {
       throw new NotFoundException(
-        `Completed ETL result with ID ${etlResultId} not found`,
+        `ETL result with ID ${etlResultId} not found or not available for download`,
       );
     }
 
@@ -736,7 +739,8 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     // Update ETL result status to WAIT_FOR_APPROVAL
     etlResult.status = EtlResultStatus.WAIT_FOR_APPROVAL;
-    etlResult.comment = 'Sent to validation for review';
+    //vietnamese please
+    etlResult.comment = 'Gửi thẩm định để xem xét';
     etlResult.commentBy = user.id;
     await this.etlResultRepository.save(etlResult);
 

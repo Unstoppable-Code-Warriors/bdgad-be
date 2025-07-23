@@ -66,6 +66,11 @@ export const errorPatient = {
     'Patient has lab session',
     400,
   ),
+  citizenIdExists: new ErrorResponse(
+    'CITIZEN_ID_EXISTS',
+    'Citizen ID already exists for another patient',
+    400,
+  ),
 };
 
 export const errorLabSession = {
@@ -180,11 +185,7 @@ export const errorNotification = {
     'Invalid task type provided',
     400,
   ),
-  invalidType: new ErrorResponse(
-    'INVALID_TYPE',
-    'Invalid type provided',
-    400,
-  ),
+  invalidType: new ErrorResponse('INVALID_TYPE', 'Invalid type provided', 400),
   invalidSubType: new ErrorResponse(
     'INVALID_SUB_TYPE',
     'Invalid sub type provided',

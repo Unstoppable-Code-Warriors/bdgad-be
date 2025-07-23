@@ -558,6 +558,10 @@ export class StaffService {
       if (!patient) {
         return errorPatient.patientNotFound;
       }
+
+      if (updatePatientDto.citizenId === patient.citizenId) {
+        return errorPatient.citizenIdExists;
+      }
       Object.assign(patient, updatePatientDto);
 
       const updatedPatient = await this.patientRepository.save(patient);

@@ -28,7 +28,7 @@ export class LabSession {
   @Column()
   barcode: string;
 
-  @Column({ name: 'request_date', type: 'date' })
+  @Column({ type: 'varchar', nullable: true })
   requestDate: Date;
 
   @CreateDateColumn({

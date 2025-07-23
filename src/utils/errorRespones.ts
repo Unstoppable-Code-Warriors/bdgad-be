@@ -175,4 +175,19 @@ export const errorNotification = {
     'Notification not found',
     404,
   ),
+  invalidTaskType: new ErrorResponse(
+    'INVALID_TASK_TYPE',
+    'Invalid task type provided',
+    400,
+  ),
+  invalidType: new ErrorResponse(
+    'INVALID_TYPE',
+    'Invalid type provided',
+    400,
+  ),
+  invalidSubType: new ErrorResponse(
+    'INVALID_SUB_TYPE',
+    'Invalid sub type provided',
+    400,
+  ),
 };

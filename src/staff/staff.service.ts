@@ -559,17 +559,35 @@ export class StaffService {
         return errorPatient.patientNotFound;
       }
 
-      if (updatePatientDto.citizenId === patient.citizenId) {
-        return errorPatient.citizenIdExists;
+      //validate duplicate citizenId
+      if (updatePatientDto.citizenId) {
+        const existingPatient = await this.patientRepository.findOne({
+          where: { citizenId: updatePatientDto.citizenId },
+        });
+        if (existingPatient && existingPatient.id !== id) {
+          return errorPatient.citizenIdExists;
+        }
       }
-      Object.assign(patient, updatePatientDto);
-
-      const updatedPatient = await this.patientRepository.save(patient);
 
       return {
-        message: 'Patient updated successfully',
-        patient: updatedPatient,
+        updatePatientDto: updatePatientDto,
+        patient: {
+          id: patient.id,
+          fullName: patient.fullName,
+          dateOfBirth: patient.dateOfBirth,
+          phone: patient.phone,
+          address: patient.address,
+          citizenId: patient.citizenId,
+        },
       };
+      // Object.assign(patient, updatePatientDto);
+
+      // const updatedPatient = await this.patientRepository.save(patient);
+
+      // return {
+      //   message: 'Patient updated successfully',
+      //   patient: updatedPatient,
+      // };
     } catch (error) {
       this.logger.error('Failed to update Patient', error);
       throw new InternalServerErrorException(error.message);

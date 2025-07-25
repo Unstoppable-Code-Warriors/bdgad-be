@@ -11,8 +11,8 @@ import {
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
 import { PatientFile } from './patient-file.entity';
-import { FastqFile } from './fastq-file.entity';
 import { EtlResult } from './etl-result.entity';
+import { FastqFilePair } from './fastq-file-pair';
 
 @Entity('lab_sessions')
 export class LabSession {
@@ -104,10 +104,10 @@ export class LabSession {
   })
   patientFiles: PatientFile[];
 
-  @OneToMany(() => FastqFile, (fastqFile) => fastqFile.session, {
+  @OneToMany(() => FastqFilePair, (fastqFilePair) => fastqFilePair.session, {
     cascade: true,
   })
-  fastqFiles: FastqFile[];
+  fastqFilePairs: FastqFilePair[];
 
   @OneToMany(() => EtlResult, (etlResult) => etlResult.session, {
     cascade: true,

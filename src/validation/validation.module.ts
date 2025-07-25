@@ -4,13 +4,13 @@ import { ValidationController } from './validation.controller';
 import { ValidationService } from './validation.service';
 import { LabSession } from '../entities/lab-session.entity';
 import { EtlResult } from '../entities/etl-result.entity';
-import { FastqFile } from '../entities/fastq-file.entity';
+import { FastqFilePair } from '../entities/fastq-file-pair';
 import { S3Service } from '../utils/s3.service';
 import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([LabSession, EtlResult, FastqFile]),
+    TypeOrmModule.forFeature([LabSession, EtlResult, FastqFilePair]),
     NotificationModule,
   ],
   controllers: [ValidationController],

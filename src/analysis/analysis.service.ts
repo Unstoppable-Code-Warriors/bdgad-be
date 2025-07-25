@@ -7,7 +7,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, In, Not } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
-import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
+import { FastqFile } from '../entities/fastq-file.entity';
+import { FastqFilePair, FastqFileStatus } from '../entities/fastq-file-pair';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
 import {
   AnalysisSessionWithLatestResponseDto,
@@ -40,8 +41,8 @@ export class AnalysisService {
     private readonly notificationService: NotificationService,
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
-    @InjectRepository(FastqFile)
-    private fastqFileRepository: Repository<FastqFile>,
+    @InjectRepository(FastqFilePair)
+    private fastqFilePairRepository: Repository<FastqFilePair>,
     @InjectRepository(EtlResult)
     private etlResultRepository: Repository<EtlResult>,
     @InjectRepository(User)
@@ -93,11 +94,11 @@ export class AnalysisService {
           'validation.email',
           'validation.metadata',
         ])
-        // Include sessions that have FastQ files with WAIT_FOR_APPROVAL, REJECTED, or APPROVED status
+        // Include sessions that have FastQ file pairs with WAIT_FOR_APPROVAL, REJECTED, or APPROVED status
         .innerJoin(
-          'labSession.fastqFiles',
-          'fastqFile',
-          'fastqFile.status IN (:...allowedStatuses)',
+          'labSession.fastqFilePairs',
+          'fastqFilePair',
+          'fastqFilePair.status IN (:...allowedStatuses)',
           {
             allowedStatuses: [
               FastqFileStatus.WAIT_FOR_APPROVAL,
@@ -197,11 +198,11 @@ export class AnalysisService {
     // Execute query
     const [sessions, total] = await queryBuilder.getManyAndCount();
 
-    // For each session, get the latest FastQ file and ETL result
+    // For each session, get the latest FastQ file pair and ETL result
     const sessionsWithLatest = await Promise.all(
       sessions.map(async (session) => {
-        const [latestFastqFile, latestEtlResult] = await Promise.all([
-          this.fastqFileRepository.findOne({
+        const [latestFastqFilePair, latestEtlResult] = await Promise.all([
+          this.fastqFilePairRepository.findOne({
             where: {
               sessionId: session.id,
               status: In([
@@ -210,15 +211,21 @@ export class AnalysisService {
                 FastqFileStatus.APPROVED,
               ]),
             },
-            relations: { creator: true, rejector: true },
+            relations: { 
+              creator: true, 
+              rejector: true,
+              fastqFileR1: true,
+              fastqFileR2: true 
+            },
             select: {
               id: true,
-              filePath: true,
               createdAt: true,
               status: true,
               redoReason: true,
               creator: { id: true, name: true, email: true },
               rejector: { id: true, name: true, email: true },
+              fastqFileR1: { id: true, filePath: true, createdAt: true },
+              fastqFileR2: { id: true, filePath: true, createdAt: true },
             },
             order: { createdAt: 'DESC' },
           }),
@@ -241,7 +248,7 @@ export class AnalysisService {
 
         return {
           ...session,
-          latestFastqFile,
+          latestFastqFile: latestFastqFilePair,
           latestEtlResult,
         };
       }),
@@ -253,11 +260,11 @@ export class AnalysisService {
   async findAnalysisSessionById(
     id: number,
   ): Promise<AnalysisSessionDetailResponseDto> {
-    // First check if the session has FastQ files with allowed statuses
+    // First check if the session has FastQ file pairs with allowed statuses
     const sessionWithFastq = await this.labSessionRepository.findOne({
       where: {
         id,
-        fastqFiles: {
+        fastqFilePairs: {
           status: In([
             FastqFileStatus.WAIT_FOR_APPROVAL,
             FastqFileStatus.REJECTED,
@@ -265,13 +272,13 @@ export class AnalysisService {
           ]),
         },
       },
-      relations: { fastqFiles: true },
-      select: { id: true, fastqFiles: { status: true } },
+      relations: { fastqFilePairs: true },
+      select: { id: true, fastqFilePairs: { status: true } },
     });
 
     if (!sessionWithFastq) {
       throw new NotFoundException(
-        `Analysis session with ID ${id} not found or no FastQ files with valid status`,
+        `Analysis session with ID ${id} not found or no FastQ file pairs with valid status`,
       );
     }
 
@@ -281,9 +288,11 @@ export class AnalysisService {
         patient: true,
         doctor: true,
         validation: true,
-        fastqFiles: {
+        fastqFilePairs: {
           creator: true,
           rejector: true,
+          fastqFileR1: true,
+          fastqFileR2: true,
         },
         etlResults: {
           rejector: true,
@@ -318,12 +327,21 @@ export class AnalysisService {
           email: true,
           metadata: true,
         },
-        fastqFiles: {
+        fastqFilePairs: {
           id: true,
-          filePath: true,
           createdAt: true,
           status: true,
           redoReason: true,
+          fastqFileR1: {
+            id: true,
+            filePath: true,
+            createdAt: true,
+          },
+          fastqFileR2: {
+            id: true,
+            filePath: true,
+            createdAt: true,
+          },
           creator: {
             id: true,
             name: true,
@@ -360,19 +378,19 @@ export class AnalysisService {
       throw new NotFoundException(`Analysis session with ID ${id} not found`);
     }
 
-    // Filter FastQ files to only include allowed statuses
-    session.fastqFiles = session.fastqFiles.filter(
-      (file) =>
-        file.status &&
+    // Filter FastQ file pairs to only include allowed statuses
+    session.fastqFilePairs = session.fastqFilePairs.filter(
+      (filePair) =>
+        filePair.status &&
         [
           FastqFileStatus.WAIT_FOR_APPROVAL,
           FastqFileStatus.REJECTED,
           FastqFileStatus.APPROVED,
-        ].includes(file.status),
+        ].includes(filePair.status),
     );
 
-    // Sort FastQ files by createdAt in descending order (newest first)
-    session.fastqFiles.sort((a, b) => {
+    // Sort FastQ file pairs by createdAt in descending order (newest first)
+    session.fastqFilePairs.sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
@@ -384,51 +402,54 @@ export class AnalysisService {
       );
     });
 
-    return session;
+    return {
+      ...session,
+      fastqFiles: session.fastqFilePairs, // Map fastqFilePairs to fastqFiles for backward compatibility
+    };
   }
 
   async processAnalysis(
-    fastqFileId: number,
+    fastqFilePairId: number,
     user: AuthenticatedUser,
   ): Promise<{ message: string }> {
-    // Find the FastQ file
-    const fastqFile = await this.fastqFileRepository.findOne({
+    // Find the FastQ file pair
+    const fastqFilePair = await this.fastqFilePairRepository.findOne({
       where: {
-        id: fastqFileId,
+        id: fastqFilePairId,
         status: In([
           FastqFileStatus.WAIT_FOR_APPROVAL,
           FastqFileStatus.APPROVED,
         ]),
       },
-      relations: { session: true },
+      relations: { session: true, creator: true },
     });
 
-    if (!fastqFile) {
+    if (!fastqFilePair) {
       throw new NotFoundException(
-        `Approved FastQ file with ID ${fastqFileId} not found`,
+        `Approved FastQ file pair with ID ${fastqFilePairId} not found`,
       );
     }
 
-    // update fastq file status to APPROVED
-    fastqFile.status = FastqFileStatus.APPROVED;
-    fastqFile.approveBy = user.id;
-    await this.fastqFileRepository.save(fastqFile);
+    // update fastq file pair status to APPROVED
+    fastqFilePair.status = FastqFileStatus.APPROVED;
+    fastqFilePair.approveBy = user.id;
+    await this.fastqFilePairRepository.save(fastqFilePair);
     await this.notificationService.createNotification({
-      title: `Trạng thái file Fastq #${fastqFile.id}.`,
-      message: `File Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile.session?.barcode} đã được duyệt`,
+      title: `Trạng thái file Fastq pair #${fastqFilePair.id}.`,
+      message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair.session?.barcode} đã được duyệt`,
       taskType: TypeTaskNotification.LAB_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.ACCEPT,
-      labcode: fastqFile.session?.labcode,
-      barcode: fastqFile.session?.barcode,
+      labcode: fastqFilePair.session?.labcode,
+      barcode: fastqFilePair.session?.barcode,
       senderId: user.id,
-      receiverId: fastqFile.createdBy,
+      receiverId: fastqFilePair.createdBy,
     });
 
     // Check if analysis is already in progress for this session
     const existingEtl = await this.etlResultRepository.findOne({
       where: {
-        sessionId: fastqFile.sessionId,
+        sessionId: fastqFilePair.sessionId,
         status: EtlResultStatus.PROCESSING,
       },
     });
@@ -441,7 +462,7 @@ export class AnalysisService {
 
     // Create ETL result entry with pending status
     const etlResult = this.etlResultRepository.create({
-      sessionId: fastqFile.sessionId,
+      sessionId: fastqFilePair.sessionId,
       resultPath: '',
       etlCompletedAt: new Date(),
     });
@@ -451,8 +472,8 @@ export class AnalysisService {
     // Start mock ETL pipeline (async)
     this.runMockEtlPipeline(
       etlResult,
-      fastqFile.session.labcode,
-      fastqFile.session.barcode,
+      fastqFilePair.session.labcode,
+      fastqFilePair.session.barcode,
       user.id,
     ).catch(async (error) => {
       // Mark as failed if pipeline fails
@@ -613,54 +634,54 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
   }
 
   async rejectFastq(
-    fastqFileId: number,
+    fastqFilePairId: number,
     redoReason: string,
     user: AuthenticatedUser,
   ) {
-    // Find the FastQ file that's pending approval or approved
-    const fastqFile = await this.fastqFileRepository.findOne({
+    // Find the FastQ file pair that's pending approval or approved
+    const fastqFilePair = await this.fastqFilePairRepository.findOne({
       where: {
-        id: fastqFileId,
+        id: fastqFilePairId,
         status: FastqFileStatus.WAIT_FOR_APPROVAL,
       },
-      relations: { session: true },
+      relations: { session: true, creator: true },
     });
 
-    if (!fastqFile) {
+    if (!fastqFilePair) {
       throw new NotFoundException(
-        `FastQ file with ID ${fastqFileId} not found or not in wait_for_approval status`,
+        `FastQ file pair with ID ${fastqFilePairId} not found or not in wait_for_approval status`,
       );
     }
 
-    // Update FastQ file status to rejected with redo reason
-    fastqFile.status = FastqFileStatus.REJECTED;
-    fastqFile.redoReason = redoReason;
-    fastqFile.rejectBy = user.id;
+    // Update FastQ file pair status to rejected with redo reason
+    fastqFilePair.status = FastqFileStatus.REJECTED;
+    fastqFilePair.redoReason = redoReason;
+    fastqFilePair.rejectBy = user.id;
 
-    await this.fastqFileRepository.save(fastqFile);
+    await this.fastqFilePairRepository.save(fastqFilePair);
 
     try {
       this.notificationService.createNotification({
-        title: `Trạng thái file Fastq #${fastqFile.id}.`,
-        message: `File Fastq #${fastqFile.id} của lần khám với Barcode ${fastqFile?.session.barcode} đã bị từ chối`,
+        title: `Trạng thái file Fastq pair #${fastqFilePair.id}.`,
+        message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair?.session.barcode} đã bị từ chối`,
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.REJECT,
-        labcode: fastqFile?.session?.labcode,
-        barcode: fastqFile?.session?.barcode,
+        labcode: fastqFilePair?.session?.labcode,
+        barcode: fastqFilePair?.session?.barcode,
         senderId: user.id,
-        receiverId: fastqFile.createdBy,
+        receiverId: fastqFilePair.createdBy,
       });
     } catch (error) {
       throw new InternalServerErrorException(
-        `Failed to create notification for FastQ file rejection: ${error.message}`,
+        `Failed to create notification for FastQ file pair rejection: ${error.message}`,
       );
     }
 
     // If there are any pending or processing ETL results for this session, mark them as failed
     const pendingEtlResults = await this.etlResultRepository.find({
       where: {
-        sessionId: fastqFile.sessionId,
+        sessionId: fastqFilePair.sessionId,
         status: EtlResultStatus.PROCESSING,
       },
     });
@@ -668,14 +689,14 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     if (pendingEtlResults.length > 0) {
       for (const etlResult of pendingEtlResults) {
         etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Analysis cancelled due to FastQ file rejection: ${redoReason}`;
+        etlResult.comment = `Analysis cancelled due to FastQ file pair rejection: ${redoReason}`;
         etlResult.rejectBy = user.id;
         await this.etlResultRepository.save(etlResult);
       }
     }
 
     return {
-      message: `FastQ file rejected successfully. Reason: ${redoReason}`,
+      message: `FastQ file pair rejected successfully. Reason: ${redoReason}`,
     };
   }
 
@@ -782,8 +803,8 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       );
     }
 
-    // Find and update the latest FastQ file status to APPROVED
-    const latestFastqFile = await this.fastqFileRepository.findOne({
+    // Find and update the latest FastQ file pair status to APPROVED
+    const latestFastqFilePair = await this.fastqFilePairRepository.findOne({
       where: {
         sessionId: etlResult.sessionId,
         status: In([
@@ -793,31 +814,31 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         ]),
       },
       order: { createdAt: 'DESC' },
-      relations: { session: true },
+      relations: { session: true, creator: true },
     });
 
     if (
-      latestFastqFile &&
-      latestFastqFile.status !== FastqFileStatus.APPROVED
+      latestFastqFilePair &&
+      latestFastqFilePair.status !== FastqFileStatus.APPROVED
     ) {
-      latestFastqFile.status = FastqFileStatus.APPROVED;
-      latestFastqFile.approveBy = user.id;
-      await this.fastqFileRepository.save(latestFastqFile);
+      latestFastqFilePair.status = FastqFileStatus.APPROVED;
+      latestFastqFilePair.approveBy = user.id;
+      await this.fastqFilePairRepository.save(latestFastqFilePair);
       await this.notificationService
         .createNotification({
-          title: `Trạng thái file Fastq #${latestFastqFile.id}.`,
-          message: `File Fastq #${latestFastqFile.id} của lần khám với Barcode ${latestFastqFile.session?.barcode} đã được duyệt`,
+          title: `Trạng thái file Fastq pair #${latestFastqFilePair.id}.`,
+          message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${latestFastqFilePair.session?.barcode} đã được duyệt`,
           taskType: TypeTaskNotification.LAB_TASK,
           type: TypeNotification.PROCESS,
           subType: SubTypeNotification.RETRY,
-          labcode: latestFastqFile.session?.labcode,
-          barcode: latestFastqFile.session?.barcode,
+          labcode: latestFastqFilePair.session?.labcode,
+          barcode: latestFastqFilePair.session?.barcode,
           senderId: user.id,
-          receiverId: latestFastqFile.createdBy,
+          receiverId: latestFastqFilePair.createdBy,
         })
         .catch((error) => {
           throw new InternalServerErrorException(
-            `Failed to create notification for FastQ file approval: ${error.message}`,
+            `Failed to create notification for FastQ file pair approval: ${error.message}`,
           );
         });
     }

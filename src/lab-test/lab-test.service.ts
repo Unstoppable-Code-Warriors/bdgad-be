@@ -7,7 +7,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
-import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
+import { FastqFile } from '../entities/fastq-file.entity';
+import { FastqFilePair, FastqFileStatus } from '../entities/fastq-file-pair';
 import {
   LabSessionWithFastqResponseDto,
   LabSessionWithAllFastqResponseDto,
@@ -43,6 +44,8 @@ export class LabTestService {
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(FastqFile)
     private fastqFileRepository: Repository<FastqFile>,
+    @InjectRepository(FastqFilePair)
+    private fastqFilePairRepository: Repository<FastqFilePair>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
   ) {}

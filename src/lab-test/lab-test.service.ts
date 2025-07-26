@@ -109,7 +109,7 @@ export class LabTestService {
         .leftJoinAndSelect('labSession.patient', 'patient')
         .leftJoinAndSelect('labSession.doctor', 'doctor')
         .leftJoinAndSelect('labSession.analysis', 'analysis')
-        .leftJoin('labSession.fastqFiles', 'fastqFile')
+        .leftJoin('labSession.fastqFilePairs', 'fastqFilePairs')
         .select([
           'labSession.id',
           'labSession.labcode',
@@ -286,7 +286,7 @@ export class LabTestService {
 
         return {
           ...session,
-          latestFastqFile: latestFastqFilePair
+          latestFastqFilePair: latestFastqFilePair
             ? this.mapFastqFilePairToDto(latestFastqFilePair)
             : null,
         };
@@ -390,7 +390,7 @@ export class LabTestService {
 
     return {
       ...session,
-      fastqFiles: sortedFastqFilePairs.map((filePair) =>
+      fastqFilePairs: sortedFastqFilePairs.map((filePair) =>
         this.mapFastqFilePairToDto(filePair),
       ),
     };
@@ -434,8 +434,7 @@ export class LabTestService {
 
       // Upload both files to S3 and create FastqFile records
       const uploadPromises = files.map(async (file, index) => {
-        const fileType = index === 0 ? 'R1' : 'R2';
-        const s3Key = `fastq/${id}/${timestamp}_${fileType}_${file.originalname}`;
+        const s3Key = `fastq/${id}/${timestamp}_${file.originalname}`;
 
         // Upload file to S3 (Cloudflare R2)
         const s3Url = await this.s3Service.uploadFile(
@@ -561,16 +560,16 @@ export class LabTestService {
       // Wait for S3 deletions to complete
       await Promise.all(deletePromises);
 
-      // Delete the FastQ file records from database
+      // Delete the FastQ file pair record FIRST (to remove foreign key constraints)
+      await this.fastqFilePairRepository.remove(fastqFilePair);
+
+      // Then delete the FastQ file records from database
       if (fastqFilePair.fastqFileR1) {
         await this.fastqFileRepository.remove(fastqFilePair.fastqFileR1);
       }
       if (fastqFilePair.fastqFileR2) {
         await this.fastqFileRepository.remove(fastqFilePair.fastqFileR2);
       }
-
-      // Delete the FastQ file pair record
-      await this.fastqFilePairRepository.remove(fastqFilePair);
 
       return {
         message: 'FastQ file pair and associated files deleted successfully',

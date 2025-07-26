@@ -71,12 +71,12 @@ export class AnalysisSessionResponseDto {
 }
 
 export class AnalysisSessionWithLatestResponseDto extends AnalysisSessionResponseDto {
-  latestFastqFile: FastqFilePairResponseDto | null;
+  latestFastqPairFile: FastqFilePairResponseDto | null;
   latestEtlResult: EtlResultResponseDto | null;
 }
 
 export class AnalysisSessionDetailResponseDto extends AnalysisSessionResponseDto {
-  fastqFiles: FastqFilePairResponseDto[];
+  fastqFilePairs: FastqFilePairResponseDto[];
   etlResults: EtlResultResponseDto[];
 }
 

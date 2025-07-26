@@ -251,7 +251,7 @@ export class AnalysisService {
 
         return {
           ...session,
-          latestFastqFile: latestFastqFilePair,
+          latestFastqPairFile: latestFastqFilePair,
           latestEtlResult,
         };
       }),
@@ -407,7 +407,7 @@ export class AnalysisService {
 
     return {
       ...session,
-      fastqFiles: session.fastqFilePairs, // Map fastqFilePairs to fastqFiles for backward compatibility
+      fastqFilePairs: session.fastqFilePairs, // Map fastqFilePairs to fastqFiles for backward compatibility
     };
   }
 

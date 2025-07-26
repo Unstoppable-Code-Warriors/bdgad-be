@@ -52,11 +52,11 @@ export class LabSessionResponseDto {
 }
 
 export class LabSessionWithFastqResponseDto extends LabSessionResponseDto {
-  latestFastqFile: FastqFilePairResponseDto | null;
+  latestFastqFilePair: FastqFilePairResponseDto | null;
 }
 
 export class LabSessionWithAllFastqResponseDto extends LabSessionResponseDto {
-  fastqFiles: FastqFilePairResponseDto[];
+  fastqFilePairs: FastqFilePairResponseDto[];
 }
 
 export class FastqDownloadResponseDto {

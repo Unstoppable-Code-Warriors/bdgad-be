@@ -216,13 +216,13 @@ export class LabTestController {
   // delete fastq file - only allowed when status is 'uploaded'
   @ApiTags('Lab Test - Fastq files')
   @ApiOperation({ summary: 'Delete FastQ file' })
-  @Delete('fastq/:fastqFileId')
+  @Delete('fastq/:fastqFilePairId')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   async deleteFastQ(
-    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @Param('fastqFilePairId', ParseIntPipe) fastqFilePairId: number,
     @User() user: AuthenticatedUser,
   ): Promise<{ message: string }> {
-    await this.labTestService.deleteFastQ(fastqFileId, user);
+    await this.labTestService.deleteFastQ(fastqFilePairId, user);
     return {
       message: 'FastQ file deleted successfully',
     };
@@ -231,14 +231,14 @@ export class LabTestController {
   // send fastq file to analysis - updates status to 'wait_for_approval'
   @ApiTags('Lab Test - Fastq files')
   @ApiOperation({ summary: 'Send FastQ file to analysis' })
-  @Post('fastq/:fastqFileId/analysis/:analysisId')
+  @Post('fastq/:fastqFilePairId/analysis/:analysisId')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   async sendToAnalysis(
-    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @Param('fastqFilePairId', ParseIntPipe) fastqFilePairId: number,
     @Param('analysisId', ParseIntPipe) analysisId: number,
     @User() user: AuthenticatedUser,
   ): Promise<{ message: string }> {
-    await this.labTestService.sendToAnalysis(fastqFileId, analysisId, user);
+    await this.labTestService.sendToAnalysis(fastqFilePairId, analysisId, user);
     return {
       message: 'FastQ file sent to analysis successfully',
     };

@@ -7,7 +7,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
-import { FastqFile, FastqFileStatus } from '../entities/fastq-file.entity';
+import {
+  FastqFilePair,
+  FastqFileStatus,
+} from '../entities/fastq-file-pair.entity';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import {
   PaginationQueryDto,
@@ -32,8 +35,8 @@ export class ValidationService {
     private labSessionRepository: Repository<LabSession>,
     @InjectRepository(EtlResult)
     private etlResultRepository: Repository<EtlResult>,
-    @InjectRepository(FastqFile)
-    private fastqFileRepository: Repository<FastqFile>,
+    @InjectRepository(FastqFilePair)
+    private fastqFilePairRepository: Repository<FastqFilePair>,
     private s3Service: S3Service,
     private notificationService: NotificationService,
   ) {}
@@ -353,27 +356,27 @@ export class ValidationService {
       receiverId: etlResult.session.analysisId!,
     });
 
-    // Find and update the latest FastQ file status to WAIT_FOR_APPROVAL
-    const latestFastqFile = await this.fastqFileRepository.findOne({
+    // Find and update the latest FastQ file pair status to WAIT_FOR_APPROVAL
+    const latestFastqFilePair = await this.fastqFilePairRepository.findOne({
       where: { sessionId: etlResult.sessionId },
       order: { createdAt: 'DESC' },
-      relations: { session: true },
+      relations: { session: true, creator: true },
     });
 
-    if (latestFastqFile) {
-      await this.fastqFileRepository.update(latestFastqFile.id, {
+    if (latestFastqFilePair) {
+      await this.fastqFilePairRepository.update(latestFastqFilePair.id, {
         status: FastqFileStatus.WAIT_FOR_APPROVAL,
       });
       notificationReqs.push({
-        title: `Trạng thái file Fastq #${latestFastqFile.id}.`,
-        message: `File Fastq #${latestFastqFile.id} của lần khám với Barcode ${etlResult.session.barcode} đang chờ được duyệt`,
+        title: `Trạng thái file Fastq pair #${latestFastqFilePair.id}.`,
+        message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${etlResult.session.barcode} đang chờ được duyệt`,
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.RETRY,
         labcode: etlResult.session.labcode,
         barcode: etlResult.session.barcode,
-        senderId: latestFastqFile.session.analysisId!,
-        receiverId: latestFastqFile.createdBy,
+        senderId: latestFastqFilePair.session.analysisId!,
+        receiverId: latestFastqFilePair.createdBy,
       });
     }
 

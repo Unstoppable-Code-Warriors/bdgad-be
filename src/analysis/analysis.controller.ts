@@ -67,37 +67,37 @@ export class AnalysisController {
 
   @ApiTags('Analysis - Process')
   @ApiOperation({ summary: 'Process Analysis' })
-  @Post('process/:fastqFileId')
+  @Post('process/:fastqFilePairId')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   async processAnalysis(
-    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @Param('fastqFilePairId', ParseIntPipe) fastqFilePairId: number,
     @User() user: AuthenticatedUser,
   ): Promise<{ message: string }> {
-    return this.analysisService.processAnalysis(fastqFileId, user);
+    return this.analysisService.processAnalysis(fastqFilePairId, user);
   }
 
   @ApiTags('Analysis - Reject')
   @ApiOperation({ summary: 'Reject Analysis' })
-  @Put('fastq/:fastqFileId/reject')
+  @Put('fastq/:fastqFilePairId/reject')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   @ApiBody({
     type: RejectFastqDto,
-    description: 'Reason for rejecting the FASTQ file',
+    description: 'Reason for rejecting the FASTQ file pair',
     examples: {
       example1: {
         summary: 'Example of rejection reason',
-        value: { redoReason: 'Insufficient quality of the FASTQ file' },
+        value: { redoReason: 'Insufficient quality of the FASTQ file pair' },
       },
     },
   })
   @UsePipes(new ValidationPipe({ transform: true }))
   async rejectFastq(
-    @Param('fastqFileId', ParseIntPipe) fastqFileId: number,
+    @Param('fastqFilePairId', ParseIntPipe) fastqFilePairId: number,
     @Body() rejectDto: RejectFastqDto,
     @User() user: AuthenticatedUser,
   ) {
     return this.analysisService.rejectFastq(
-      fastqFileId,
+      fastqFilePairId,
       rejectDto.redoReason,
       user,
     );

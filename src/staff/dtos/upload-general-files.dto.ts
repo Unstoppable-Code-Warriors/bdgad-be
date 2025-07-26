@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsOptional, IsNumber, IsString, MaxLength } from 'class-validator';
 
 export class UploadGeneralFilesDto {
@@ -8,6 +9,7 @@ export class UploadGeneralFilesDto {
     required: false,
   })
   @IsOptional()
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   categoryGeneralFileId: number;
 

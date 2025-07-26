@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { User } from './user.entity';
+import { CategoryGeneralFile } from './category-general-file.entity';
 
 @Entity('general_files')
 export class GeneralFile {
@@ -26,6 +27,16 @@ export class GeneralFile {
 
   @Column({ type: 'text' })
   description: string;
+
+  @Column({ name: 'category_id', nullable: true })
+  categoryId: number;
+
+  @ManyToOne(() => CategoryGeneralFile, (category) => category.generalFiles, {
+    cascade: true,
+    nullable: true,
+  })
+  @JoinColumn({ name: 'category_id' })
+  category: CategoryGeneralFile;
 
   @Column({ name: 'uploaded_by' })
   uploadedBy: number;

@@ -10,6 +10,7 @@ import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { User } from 'src/entities/user.entity';
 import { NotificationModule } from 'src/notification/notification.module';
+import { CategoryGeneralFileModule } from 'src/category-general-file/category-general-file.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { NotificationModule } from 'src/notification/notification.module';
       User,
     ]),
     NotificationModule,
+    CategoryGeneralFileModule,
   ],
   controllers: [StaffController],
   providers: [StaffService, S3Service],

@@ -2,10 +2,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
-  NotFoundException,
 } from '@nestjs/common';
-import * as path from 'path';
-import * as fs from 'fs';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
@@ -28,24 +25,21 @@ import {
 import {
   errorGeneralFile,
   errorLabSession,
-  errorLabTesting,
   errorOCR,
   errorPatient,
   errorPatientFile,
-  errorUser,
 } from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
 import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
-import { User } from 'src/entities/user.entity';
 import { GeneralFile } from 'src/entities/general-file.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
-import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
+import { CategoryGeneralFileService } from 'src/category-general-file/category-general-file.service';
 
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
@@ -68,9 +62,8 @@ export class StaffService {
     private readonly labSessionRepository: Repository<LabSession>,
     @InjectRepository(PatientFile)
     private readonly patientFileRepository: Repository<PatientFile>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     private readonly notificationService: NotificationService,
+    private readonly categoryGeneralFileService: CategoryGeneralFileService,
   ) {}
 
   async test(file: Express.Multer.File) {
@@ -197,9 +190,12 @@ export class StaffService {
   async uploadGeneralFiles(
     files: Express.Multer.File[],
     user: AuthenticatedUser,
+    categoryGeneralFileId: number,
+    description?: string,
   ) {
     this.logger.log('Starting General Files upload process');
     try {
+      await this.categoryGeneralFileService.findOne(categoryGeneralFileId);
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const timestamp = Date.now();
@@ -231,7 +227,8 @@ export class StaffService {
           fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
           fileSize: file.size,
           filePath: s3Url,
-          description: 'General File',
+          description: description || 'General File',
+          categoryId: categoryGeneralFileId,
           uploadedBy: user.id,
           uploadedAt: new Date(),
         });
@@ -317,6 +314,7 @@ export class StaffService {
         where: { id },
         relations: {
           uploader: true,
+          category: true,
         },
         select: {
           id: true,
@@ -332,6 +330,11 @@ export class StaffService {
             name: true,
             email: true,
             metadata: true,
+          },
+          category: {
+            id: true,
+            name: true,
+            description: true,
           },
         },
       });
@@ -349,7 +352,9 @@ export class StaffService {
     }
   }
 
-  async getAllGeneralFiles(query: PaginationQueryDto) {
+  async getAllGeneralFiles(
+    query: PaginationQueryDto & { categoryGeneralFileId?: number },
+  ) {
     this.logger.log('Starting General File get all process');
     try {
       const {
@@ -361,11 +366,13 @@ export class StaffService {
         dateTo,
         sortBy = 'uploadedAt',
         sortOrder = 'DESC',
+        categoryGeneralFileId,
       } = query;
 
       const queryBuilder = this.generalFileRepository
         .createQueryBuilder('generalFile')
         .leftJoinAndSelect('generalFile.uploader', 'uploader')
+        .leftJoinAndSelect('generalFile.category', 'category')
         .select([
           'generalFile.id',
           'generalFile.fileName',
@@ -379,7 +386,17 @@ export class StaffService {
           'uploader.name',
           'uploader.email',
           'uploader.metadata',
+          'category.id',
+          'category.name',
+          'category.description',
         ]);
+
+      // Filter by category if provided
+      if (categoryGeneralFileId) {
+        queryBuilder.andWhere('generalFile.categoryId = :categoryId', {
+          categoryId: categoryGeneralFileId,
+        });
+      }
 
       // Global search functionality
       if (search) {

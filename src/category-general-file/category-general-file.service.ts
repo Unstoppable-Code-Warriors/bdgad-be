@@ -52,12 +52,16 @@ export class CategoryGeneralFileService {
         name: true,
         description: true,
       },
+      relations: {
+        generalFiles: true,
+      },
     });
 
     return categories.map((category) => ({
       id: category.id,
       name: category.name,
       description: category.description,
+      generalFiles: category.generalFiles || [],
     }));
   }
 

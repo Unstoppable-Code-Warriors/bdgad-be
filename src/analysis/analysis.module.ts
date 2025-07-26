@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalysisService } from './analysis.service';
 import { AnalysisController } from './analysis.controller';
 import { LabSession } from '../entities/lab-session.entity';
-import { FastqFilePair } from '../entities/fastq-file-pair';
+import { FastqFilePair } from '../entities/fastq-file-pair.entity';
 import { EtlResult } from '../entities/etl-result.entity';
 import { S3Service } from '../utils/s3.service';
 import { User } from 'src/entities/user.entity';

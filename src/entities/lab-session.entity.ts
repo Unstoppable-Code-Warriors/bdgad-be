@@ -12,7 +12,7 @@ import { Patient } from './patient.entity';
 import { User } from './user.entity';
 import { PatientFile } from './patient-file.entity';
 import { EtlResult } from './etl-result.entity';
-import { FastqFilePair } from './fastq-file-pair';
+import { FastqFilePair } from './fastq-file-pair.entity';
 
 @Entity('lab_sessions')
 export class LabSession {

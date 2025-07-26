@@ -7,8 +7,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
-import { FastqFile } from '../entities/fastq-file.entity';
-import { FastqFilePair, FastqFileStatus } from '../entities/fastq-file-pair';
+import {
+  FastqFilePair,
+  FastqFileStatus,
+} from '../entities/fastq-file-pair.entity';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import {
   PaginationQueryDto,

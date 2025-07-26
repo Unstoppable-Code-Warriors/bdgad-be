@@ -8,7 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile } from '../entities/fastq-file.entity';
-import { FastqFilePair, FastqFileStatus } from '../entities/fastq-file-pair';
+import {
+  FastqFilePair,
+  FastqFileStatus,
+} from '../entities/fastq-file-pair.entity';
 import {
   LabSessionWithFastqResponseDto,
   LabSessionWithAllFastqResponseDto,
@@ -54,7 +57,9 @@ export class LabTestService {
   /**
    * Map FastqFilePair entity to FastqFilePairResponseDto
    */
-  private mapFastqFilePairToDto(fastqFilePair: FastqFilePair): FastqFilePairResponseDto {
+  private mapFastqFilePairToDto(
+    fastqFilePair: FastqFilePair,
+  ): FastqFilePairResponseDto {
     return {
       id: fastqFilePair.id,
       createdAt: fastqFilePair.createdAt,
@@ -385,7 +390,9 @@ export class LabTestService {
 
     return {
       ...session,
-      fastqFiles: sortedFastqFilePairs.map((filePair) => this.mapFastqFilePairToDto(filePair)),
+      fastqFiles: sortedFastqFilePairs.map((filePair) =>
+        this.mapFastqFilePairToDto(filePair),
+      ),
     };
   }
 
@@ -396,7 +403,9 @@ export class LabTestService {
   ): Promise<{ message: string; fastqFilePairId: number }> {
     // Validate files
     if (!files || files.length !== 2) {
-      throw new BadRequestException('Exactly 2 FastQ files are required (R1 and R2)');
+      throw new BadRequestException(
+        'Exactly 2 FastQ files are required (R1 and R2)',
+      );
     }
 
     // Validate file extensions for both files
@@ -422,12 +431,12 @@ export class LabTestService {
 
     try {
       const timestamp = Date.now();
-      
+
       // Upload both files to S3 and create FastqFile records
       const uploadPromises = files.map(async (file, index) => {
         const fileType = index === 0 ? 'R1' : 'R2';
         const s3Key = `fastq/${id}/${timestamp}_${fileType}_${file.originalname}`;
-        
+
         // Upload file to S3 (Cloudflare R2)
         const s3Url = await this.s3Service.uploadFile(
           S3Bucket.FASTQ_FILE,
@@ -462,7 +471,9 @@ export class LabTestService {
         fastqFilePairId: savedPair.id,
       };
     } catch (error) {
-      throw new InternalServerErrorException(`Failed to upload FastQ file pair: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Failed to upload FastQ file pair: ${error.message}`,
+      );
     }
   }
 
@@ -533,7 +544,7 @@ export class LabTestService {
           S3Bucket.FASTQ_FILE,
         );
         deletePromises.push(
-          this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3KeyR1)
+          this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3KeyR1),
         );
       }
 
@@ -543,7 +554,7 @@ export class LabTestService {
           S3Bucket.FASTQ_FILE,
         );
         deletePromises.push(
-          this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3KeyR2)
+          this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3KeyR2),
         );
       }
 
@@ -572,74 +583,6 @@ export class LabTestService {
   }
 
   /**
-   * Create a FastqFilePair from two FastqFile entities
-   */
-  async createFastqFilePair(
-    sessionId: number,
-    fastqFileR1Id: number,
-    fastqFileR2Id: number,
-    user: AuthenticatedUser,
-  ): Promise<{ message: string; fastqFilePairId: number }> {
-    // Validate that both files exist
-    const [fastqFileR1, fastqFileR2] = await Promise.all([
-      this.fastqFileRepository.findOne({
-        where: { id: fastqFileR1Id },
-      }),
-      this.fastqFileRepository.findOne({
-        where: { id: fastqFileR2Id },
-      }),
-    ]);
-
-    if (!fastqFileR1) {
-      throw new NotFoundException(`FastQ file R1 with id ${fastqFileR1Id} not found`);
-    }
-
-    if (!fastqFileR2) {
-      throw new NotFoundException(`FastQ file R2 with id ${fastqFileR2Id} not found`);
-    }
-
-    // Check if either file is already part of a pair
-    const [existingPairR1, existingPairR2] = await Promise.all([
-      this.fastqFilePairRepository.findOne({
-        where: [
-          { fastqFileR1Id: fastqFileR1Id },
-          { fastqFileR2Id: fastqFileR1Id },
-        ],
-      }),
-      this.fastqFilePairRepository.findOne({
-        where: [
-          { fastqFileR1Id: fastqFileR2Id },
-          { fastqFileR2Id: fastqFileR2Id },
-        ],
-      }),
-    ]);
-
-    if (existingPairR1) {
-      throw new BadRequestException(`FastQ file R1 is already part of a file pair`);
-    }
-
-    if (existingPairR2) {
-      throw new BadRequestException(`FastQ file R2 is already part of a file pair`);
-    }
-
-    // Create the FastqFilePair
-    const fastqFilePair = this.fastqFilePairRepository.create({
-      sessionId,
-      fastqFileR1Id,
-      fastqFileR2Id,
-      createdBy: user.id,
-      status: FastqFileStatus.UPLOADED,
-    });
-
-    const savedPair = await this.fastqFilePairRepository.save(fastqFilePair);
-
-    return {
-      message: 'FastQ file pair created successfully',
-      fastqFilePairId: savedPair.id,
-    };
-  }
-
-  /**
    * Send a FastqFilePair to analysis
    */
   async sendToAnalysis(
@@ -654,7 +597,9 @@ export class LabTestService {
     });
 
     if (!fastqFilePair) {
-      throw new NotFoundException(`FastQ file pair with id ${fastqFilePairId} not found`);
+      throw new NotFoundException(
+        `FastQ file pair with id ${fastqFilePairId} not found`,
+      );
     }
 
     // Check if the pair status allows sending to analysis
@@ -670,9 +615,9 @@ export class LabTestService {
     }
 
     let notificationReq: CreateNotificationReqDto = {
-      title: `Phân công task phân tích`,
+      title: `Chỉ định task phân tích`,
       message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${session.labcode} và mã barcode ${session.barcode}`,
-      taskType: TypeTaskNotification.LAB_TASK,
+      taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.ACTION,
       subType: SubTypeNotification.ASSIGN,
       labcode: session.labcode,

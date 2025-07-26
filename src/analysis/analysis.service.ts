@@ -8,7 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, In, Not } from 'typeorm';
 import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile } from '../entities/fastq-file.entity';
-import { FastqFilePair, FastqFileStatus } from '../entities/fastq-file-pair';
+import {
+  FastqFilePair,
+  FastqFileStatus,
+} from '../entities/fastq-file-pair.entity';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
 import {
   AnalysisSessionWithLatestResponseDto,
@@ -211,11 +214,11 @@ export class AnalysisService {
                 FastqFileStatus.APPROVED,
               ]),
             },
-            relations: { 
-              creator: true, 
+            relations: {
+              creator: true,
               rejector: true,
               fastqFileR1: true,
-              fastqFileR2: true 
+              fastqFileR2: true,
             },
             select: {
               id: true,

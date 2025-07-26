@@ -4,7 +4,7 @@ import { ValidationController } from './validation.controller';
 import { ValidationService } from './validation.service';
 import { LabSession } from '../entities/lab-session.entity';
 import { EtlResult } from '../entities/etl-result.entity';
-import { FastqFilePair } from '../entities/fastq-file-pair';
+import { FastqFilePair } from '../entities/fastq-file-pair.entity';
 import { S3Service } from '../utils/s3.service';
 import { NotificationModule } from 'src/notification/notification.module';
 

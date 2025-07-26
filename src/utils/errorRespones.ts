@@ -192,3 +192,46 @@ export const errorNotification = {
     400,
   ),
 };
+
+export const errorCategoryGeneralFile = {
+  categoryNotFound: new ErrorResponse(
+    'CATEGORY_NOT_FOUND',
+    'Category not found',
+    404,
+  ),
+  categoryAlreadyExists: new ErrorResponse(
+    'CATEGORY_ALREADY_EXISTS',
+    'Category with the same name already exists',
+    409,
+  ),
+  categoryIdRequired: new ErrorResponse(
+    'CATEGORY_ID_REQUIRED',
+    'Category id is required',
+    400,
+  ),
+  categoryNameRequired: new ErrorResponse(
+    'CATEGORY_NAME_REQUIRED',
+    'Category name is required',
+    400,
+  ),
+  categoryDescriptionTooLong: new ErrorResponse(
+    'CATEGORY_DESCRIPTION_TOO_LONG',
+    'Category description must be less than 500 characters',
+    400,
+  ),
+  categoryNameTooLong: new ErrorResponse(
+    'CATEGORY_NAME_TOO_LONG',
+    'Category name must be less than 100 characters',
+    400,
+  ),
+  categoryFilesNotFound: new ErrorResponse(
+    'CATEGORY_FILES_NOT_FOUND',
+    'Category files not found',
+    404,
+  ),
+  categoryHasFiles: new ErrorResponse(
+    'CATEGORY_HAS_FILES',
+    'Cannot delete category. There are associated general files. Please reassign or delete the files first.',
+    400,
+  ),
+};

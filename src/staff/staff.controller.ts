@@ -37,6 +37,8 @@ import {
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
+import { UploadGeneralFilesDto } from './dtos/upload-general-files.dto';
+import { GeneralFilesQueryDto } from './dtos/general-files-query.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
@@ -151,8 +153,17 @@ export class StaffController {
             format: 'binary',
           },
         },
+        categoryGeneralFileId: {
+          type: 'number',
+          description: 'Category ID for the general files',
+        },
+        description: {
+          type: 'string',
+          description: 'Description for the uploaded files',
+          example: 'Important documents',
+        },
       },
-      required: ['files'],
+      required: ['files', 'categoryGeneralFileId'],
     },
   })
   @UseInterceptors(
@@ -198,13 +209,19 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async uploadGeneralFiles(
     @UploadedFiles() files: { files?: Express.Multer.File[] },
+    @Body() uploadDto: UploadGeneralFilesDto,
     @User() user: AuthenticatedUser,
   ) {
     if (!files.files || files.files.length === 0) {
       return errorUploadFile.fileNotFound;
     }
 
-    return this.staffService.uploadGeneralFiles(files.files, user);
+    return this.staffService.uploadGeneralFiles(
+      files.files,
+      user,
+      uploadDto.categoryGeneralFileId,
+      uploadDto.description,
+    );
   }
 
   @ApiTags('Staff - General Files')
@@ -299,8 +316,14 @@ export class StaffController {
     description: 'Sort order (ASC or DESC)',
     enum: ['ASC', 'DESC'],
   })
+  @ApiQuery({
+    name: 'categoryGeneralFileId',
+    required: false,
+    type: Number,
+    description: 'Filter by category ID',
+  })
   @UsePipes(new ValidationPipe({ transform: true }))
-  async getAllGeneralFiles(@Query() query: PaginationQueryDto) {
+  async getAllGeneralFiles(@Query() query: GeneralFilesQueryDto) {
     return this.staffService.getAllGeneralFiles(query);
   }
 

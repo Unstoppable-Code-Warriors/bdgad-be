@@ -19,8 +19,15 @@ export class FastqFileResponseDto {
   id: number;
   filePath: string;
   createdAt: Date;
+}
+
+export class FastqFilePairResponseDto {
+  id: number;
+  createdAt: Date;
   status: string | null;
   redoReason: string | null;
+  fastqFileR1: FastqFileResponseDto;
+  fastqFileR2: FastqFileResponseDto;
   creator: {
     id: number;
     name: string;
@@ -64,12 +71,12 @@ export class AnalysisSessionResponseDto {
 }
 
 export class AnalysisSessionWithLatestResponseDto extends AnalysisSessionResponseDto {
-  latestFastqFile: FastqFileResponseDto | null;
+  latestFastqPairFile: FastqFilePairResponseDto | null;
   latestEtlResult: EtlResultResponseDto | null;
 }
 
 export class AnalysisSessionDetailResponseDto extends AnalysisSessionResponseDto {
-  fastqFiles: FastqFileResponseDto[];
+  fastqFilePairs: FastqFilePairResponseDto[];
   etlResults: EtlResultResponseDto[];
 }
 

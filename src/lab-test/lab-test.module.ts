@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { LabTestService } from './lab-test.service';
 import { LabTestController } from './lab-test.controller';
 import { FastqFile } from '../entities/fastq-file.entity';
+import { FastqFilePair } from '../entities/fastq-file-pair.entity';
 import { LabSession } from '../entities/lab-session.entity';
 import { User } from 'src/entities/user.entity';
 import { Patient } from 'src/entities/patient.entity';
@@ -13,7 +14,13 @@ import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([FastqFile, LabSession, User, Patient]),
+    TypeOrmModule.forFeature([
+      FastqFile,
+      FastqFilePair,
+      LabSession,
+      User,
+      Patient,
+    ]),
     NotificationModule,
   ],
   controllers: [LabTestController],

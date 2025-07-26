@@ -30,7 +30,13 @@ import { AuthZ } from '../auth/decorators/authz.decorator';
 import { User } from '../auth/decorators/user.decorator';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import { Role } from '../utils/constant';
-import { ApiOperation, ApiParam, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @Controller('validation')
 @UseGuards(AuthGuard, RolesGuard)
@@ -86,6 +92,10 @@ export class ValidationController {
   @ApiTags('Validation - ETL Results')
   @ApiOperation({ summary: 'Reject an ETL result' })
   @ApiParam({ name: 'etlResultId', type: Number })
+  @ApiBody({
+    type: RejectEtlResultDto,
+    examples: { 'Reject ETL Result': { value: { reason: 'Sample reason' } } },
+  })
   @Put('etl-result/:etlResultId/reject')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))

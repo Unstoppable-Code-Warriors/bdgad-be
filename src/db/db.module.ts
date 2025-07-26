@@ -5,6 +5,7 @@ import { Env } from '../utils/constant';
 import { Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Role } from 'src/entities/role.entity';
+import { SystemAdmin } from 'src/entities/system-admin.entity';
 
 @Module({
   imports: [

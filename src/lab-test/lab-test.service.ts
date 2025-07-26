@@ -13,6 +13,7 @@ import {
   LabSessionWithFastqResponseDto,
   LabSessionWithAllFastqResponseDto,
   FastqFileResponseDto,
+  FastqFilePairResponseDto,
 } from './dto/lab-session-response.dto';
 import {
   PaginatedResponseDto,
@@ -51,25 +52,34 @@ export class LabTestService {
   ) {}
 
   /**
-   * Helper method to map FastqFile entity to FastqFileResponseDto
+   * Map FastqFilePair entity to FastqFilePairResponseDto
    */
-  private mapFastqFileToDto(fastqFile: FastqFile): FastqFileResponseDto {
+  private mapFastqFilePairToDto(fastqFilePair: FastqFilePair): FastqFilePairResponseDto {
     return {
-      id: fastqFile.id,
-      filePath: fastqFile.filePath,
-      createdAt: fastqFile.createdAt,
-      status: fastqFile.status || 'unknown', // Handle null status
-      redoReason: fastqFile.redoReason || '', // Handle null redoReason
-      creator: {
-        id: fastqFile.creator.id,
-        name: fastqFile.creator.name,
-        email: fastqFile.creator.email,
+      id: fastqFilePair.id,
+      createdAt: fastqFilePair.createdAt,
+      status: fastqFilePair.status || 'unknown',
+      redoReason: fastqFilePair.redoReason || '',
+      fastqFileR1: {
+        id: fastqFilePair.fastqFileR1.id,
+        filePath: fastqFilePair.fastqFileR1.filePath,
+        createdAt: fastqFilePair.fastqFileR1.createdAt,
       },
-      rejector: fastqFile.rejector
+      fastqFileR2: {
+        id: fastqFilePair.fastqFileR2.id,
+        filePath: fastqFilePair.fastqFileR2.filePath,
+        createdAt: fastqFilePair.fastqFileR2.createdAt,
+      },
+      creator: {
+        id: fastqFilePair.creator.id,
+        name: fastqFilePair.creator.name,
+        email: fastqFilePair.creator.email,
+      },
+      rejector: fastqFilePair.rejector
         ? {
-            id: fastqFile.rejector.id,
-            name: fastqFile.rejector.name,
-            email: fastqFile.rejector.email,
+            id: fastqFilePair.rejector.id,
+            name: fastqFilePair.rejector.name,
+            email: fastqFilePair.rejector.email,
           }
         : undefined,
     };
@@ -227,21 +237,32 @@ export class LabTestService {
     // Execute query
     const [sessions, total] = await queryBuilder.getManyAndCount();
 
-    // For each session, get the latest FastQ file
+    // For each session, get the latest FastQ file pair
     const sessionsWithLatestFastq = await Promise.all(
       sessions.map(async (session) => {
-        const latestFastqFile = await this.fastqFileRepository.findOne({
+        const latestFastqFilePair = await this.fastqFilePairRepository.findOne({
           where: { sessionId: session.id },
           relations: {
             creator: true,
             rejector: true,
+            fastqFileR1: true,
+            fastqFileR2: true,
           },
           select: {
             id: true,
-            filePath: true,
             createdAt: true,
             status: true,
             redoReason: true,
+            fastqFileR1: {
+              id: true,
+              filePath: true,
+              createdAt: true,
+            },
+            fastqFileR2: {
+              id: true,
+              filePath: true,
+              createdAt: true,
+            },
             creator: {
               id: true,
               name: true,
@@ -260,8 +281,8 @@ export class LabTestService {
 
         return {
           ...session,
-          latestFastqFile: latestFastqFile
-            ? this.mapFastqFileToDto(latestFastqFile)
+          latestFastqFile: latestFastqFilePair
+            ? this.mapFastqFilePairToDto(latestFastqFilePair)
             : null,
         };
       }),
@@ -285,9 +306,11 @@ export class LabTestService {
         patient: true,
         doctor: true,
         analysis: true,
-        fastqFiles: {
+        fastqFilePairs: {
           creator: true,
           rejector: true,
+          fastqFileR1: true,
+          fastqFileR2: true,
         },
       },
       select: {
@@ -318,12 +341,21 @@ export class LabTestService {
           email: true,
           metadata: true,
         },
-        fastqFiles: {
+        fastqFilePairs: {
           id: true,
-          filePath: true,
           createdAt: true,
           status: true,
           redoReason: true,
+          fastqFileR1: {
+            id: true,
+            filePath: true,
+            createdAt: true,
+          },
+          fastqFileR2: {
+            id: true,
+            filePath: true,
+            createdAt: true,
+          },
           creator: {
             id: true,
             name: true,
@@ -342,9 +374,9 @@ export class LabTestService {
       throw new NotFoundException(`Session with id ${id} not found`);
     }
 
-    // Sort FastQ files by createdAt in descending order (newest first)
-    const sortedFastqFiles = session.fastqFiles
-      ? session.fastqFiles.sort((a, b) => {
+    // Sort FastQ file pairs by createdAt in descending order (newest first)
+    const sortedFastqFilePairs = session.fastqFilePairs
+      ? session.fastqFilePairs.sort((a, b) => {
           return (
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
@@ -353,37 +385,31 @@ export class LabTestService {
 
     return {
       ...session,
-      fastqFiles: sortedFastqFiles.map((file) => this.mapFastqFileToDto(file)),
+      fastqFiles: sortedFastqFilePairs.map((filePair) => this.mapFastqFilePairToDto(filePair)),
     };
   }
 
-  async uploadFastQ(
+  async uploadFastqPair(
     id: number,
-    file: Express.Multer.File,
+    files: Express.Multer.File[],
     user: AuthenticatedUser,
-  ): Promise<void> {
-    // Validate file
-    if (!file) {
-      throw new Error('No file provided');
+  ): Promise<{ message: string; fastqFilePairId: number }> {
+    // Validate files
+    if (!files || files.length !== 2) {
+      throw new BadRequestException('Exactly 2 FastQ files are required (R1 and R2)');
     }
 
-    // Validate file size (100MB limit)
-    const maxSize = 100 * 1024 * 1024; // 100MB
-    if (file.size > maxSize) {
-      throw new Error(
-        `File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of 100MB`,
-      );
-    }
-
-    // Validate file extension
+    // Validate file extensions for both files
     const allowedExtensions = ['.fastq', '.fq', '.fastq.gz', '.fq.gz'];
-    const hasValidExtension = allowedExtensions.some((ext) =>
-      file.originalname.toLowerCase().endsWith(ext),
-    );
-    if (!hasValidExtension) {
-      throw new Error(
-        `Invalid file type. Only FastQ files (.fastq, .fq, .fastq.gz, .fq.gz) are allowed`,
+    for (const file of files) {
+      const hasValidExtension = allowedExtensions.some((ext) =>
+        file.originalname.toLowerCase().endsWith(ext),
       );
+      if (!hasValidExtension) {
+        throw new BadRequestException(
+          `Invalid file type for ${file.originalname}. Only FastQ files (.fastq, .fq, .fastq.gz, .fq.gz) are allowed`,
+        );
+      }
     }
 
     const session = await this.labSessionRepository.findOne({
@@ -394,30 +420,49 @@ export class LabTestService {
       throw new NotFoundException(`Session with id ${id} not found`);
     }
 
-    // Generate unique filename for S3
-    const timestamp = Date.now();
-    const s3Key = `fastq/${id}/${timestamp}_${file.originalname}`;
-
     try {
-      // Upload file to S3 (Cloudflare R2)
-      const s3Url = await this.s3Service.uploadFile(
-        S3Bucket.FASTQ_FILE,
-        s3Key,
-        file.buffer,
-        file.mimetype,
-      );
+      const timestamp = Date.now();
+      
+      // Upload both files to S3 and create FastqFile records
+      const uploadPromises = files.map(async (file, index) => {
+        const fileType = index === 0 ? 'R1' : 'R2';
+        const s3Key = `fastq/${id}/${timestamp}_${fileType}_${file.originalname}`;
+        
+        // Upload file to S3 (Cloudflare R2)
+        const s3Url = await this.s3Service.uploadFile(
+          S3Bucket.FASTQ_FILE,
+          s3Key,
+          file.buffer,
+          file.mimetype,
+        );
 
-      // Create FastqFile record with S3 URL
-      const fastqFile = this.fastqFileRepository.create({
-        sessionId: id,
-        filePath: s3Url,
-        status: FastqFileStatus.UPLOADED,
-        createdBy: user.id,
+        // Create FastqFile record with S3 URL
+        const fastqFile = this.fastqFileRepository.create({
+          filePath: s3Url,
+        });
+
+        return await this.fastqFileRepository.save(fastqFile);
       });
 
-      await this.fastqFileRepository.save(fastqFile);
+      const [fastqFileR1, fastqFileR2] = await Promise.all(uploadPromises);
+
+      // Create FastqFilePair to link the two files
+      const fastqFilePair = this.fastqFilePairRepository.create({
+        sessionId: id,
+        fastqFileR1Id: fastqFileR1.id,
+        fastqFileR2Id: fastqFileR2.id,
+        createdBy: user.id,
+        status: FastqFileStatus.UPLOADED,
+      });
+
+      const savedPair = await this.fastqFilePairRepository.save(fastqFilePair);
+
+      return {
+        message: 'FastQ file pair uploaded successfully',
+        fastqFilePairId: savedPair.id,
+      };
     } catch (error) {
-      throw new Error(`Failed to upload file to S3: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to upload FastQ file pair: ${error.message}`);
     }
   }
 
@@ -460,109 +505,207 @@ export class LabTestService {
   }
 
   async deleteFastQ(
-    fastqFileId: number,
+    fastqFilePairId: number,
     user: AuthenticatedUser,
-  ): Promise<void> {
-    // Find the FastQ file record
-    const fastqFile = await this.fastqFileRepository.findOne({
-      where: { id: fastqFileId },
+  ): Promise<{ message: string }> {
+    // Find the FastQ file pair with related files
+    const fastqFilePair = await this.fastqFilePairRepository.findOne({
+      where: { id: fastqFilePairId },
+      relations: {
+        fastqFileR1: true,
+        fastqFileR2: true,
+      },
     });
 
-    if (!fastqFile) {
+    if (!fastqFilePair) {
       throw new NotFoundException(
-        `FastQ file with id ${fastqFileId} not found`,
-      );
-    }
-
-    // Check if the file status allows deletion (only UPLOADED status can be deleted)
-    if (fastqFile.status !== FastqFileStatus.UPLOADED) {
-      throw new BadRequestException(
-        `Cannot delete FastQ file. Only files with status 'uploaded' can be deleted. Current status: ${fastqFile.status}`,
+        `FastQ file pair with id ${fastqFilePairId} not found`,
       );
     }
 
     try {
-      // Delete file from S3 if it exists
-      if (fastqFile.filePath) {
-        const s3Key = this.s3Service.extractKeyFromUrl(
-          fastqFile.filePath,
+      // Delete both files from S3 if they exist
+      const deletePromises: Promise<void>[] = [];
+
+      if (fastqFilePair.fastqFileR1?.filePath) {
+        const s3KeyR1 = this.s3Service.extractKeyFromUrl(
+          fastqFilePair.fastqFileR1.filePath,
           S3Bucket.FASTQ_FILE,
         );
-        await this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3Key);
+        deletePromises.push(
+          this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3KeyR1)
+        );
       }
 
-      // Delete the database record
-      await this.fastqFileRepository.remove(fastqFile);
+      if (fastqFilePair.fastqFileR2?.filePath) {
+        const s3KeyR2 = this.s3Service.extractKeyFromUrl(
+          fastqFilePair.fastqFileR2.filePath,
+          S3Bucket.FASTQ_FILE,
+        );
+        deletePromises.push(
+          this.s3Service.deleteFile(S3Bucket.FASTQ_FILE, s3KeyR2)
+        );
+      }
+
+      // Wait for S3 deletions to complete
+      await Promise.all(deletePromises);
+
+      // Delete the FastQ file records from database
+      if (fastqFilePair.fastqFileR1) {
+        await this.fastqFileRepository.remove(fastqFilePair.fastqFileR1);
+      }
+      if (fastqFilePair.fastqFileR2) {
+        await this.fastqFileRepository.remove(fastqFilePair.fastqFileR2);
+      }
+
+      // Delete the FastQ file pair record
+      await this.fastqFilePairRepository.remove(fastqFilePair);
+
+      return {
+        message: 'FastQ file pair and associated files deleted successfully',
+      };
     } catch (error) {
-      throw new Error(`Failed to delete FastQ file: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Failed to delete FastQ file pair: ${error.message}`,
+      );
     }
   }
+
+  /**
+   * Create a FastqFilePair from two FastqFile entities
+   */
+  async createFastqFilePair(
+    sessionId: number,
+    fastqFileR1Id: number,
+    fastqFileR2Id: number,
+    user: AuthenticatedUser,
+  ): Promise<{ message: string; fastqFilePairId: number }> {
+    // Validate that both files exist
+    const [fastqFileR1, fastqFileR2] = await Promise.all([
+      this.fastqFileRepository.findOne({
+        where: { id: fastqFileR1Id },
+      }),
+      this.fastqFileRepository.findOne({
+        where: { id: fastqFileR2Id },
+      }),
+    ]);
+
+    if (!fastqFileR1) {
+      throw new NotFoundException(`FastQ file R1 with id ${fastqFileR1Id} not found`);
+    }
+
+    if (!fastqFileR2) {
+      throw new NotFoundException(`FastQ file R2 with id ${fastqFileR2Id} not found`);
+    }
+
+    // Check if either file is already part of a pair
+    const [existingPairR1, existingPairR2] = await Promise.all([
+      this.fastqFilePairRepository.findOne({
+        where: [
+          { fastqFileR1Id: fastqFileR1Id },
+          { fastqFileR2Id: fastqFileR1Id },
+        ],
+      }),
+      this.fastqFilePairRepository.findOne({
+        where: [
+          { fastqFileR1Id: fastqFileR2Id },
+          { fastqFileR2Id: fastqFileR2Id },
+        ],
+      }),
+    ]);
+
+    if (existingPairR1) {
+      throw new BadRequestException(`FastQ file R1 is already part of a file pair`);
+    }
+
+    if (existingPairR2) {
+      throw new BadRequestException(`FastQ file R2 is already part of a file pair`);
+    }
+
+    // Create the FastqFilePair
+    const fastqFilePair = this.fastqFilePairRepository.create({
+      sessionId,
+      fastqFileR1Id,
+      fastqFileR2Id,
+      createdBy: user.id,
+      status: FastqFileStatus.UPLOADED,
+    });
+
+    const savedPair = await this.fastqFilePairRepository.save(fastqFilePair);
+
+    return {
+      message: 'FastQ file pair created successfully',
+      fastqFilePairId: savedPair.id,
+    };
+  }
+
+  /**
+   * Send a FastqFilePair to analysis
+   */
   async sendToAnalysis(
-    fastqFileId: number,
+    fastqFilePairId: number,
     analysisId: number,
     user: AuthenticatedUser,
-  ) {
+  ): Promise<{ message: string }> {
+    // Find the FastqFilePair
+    const fastqFilePair = await this.fastqFilePairRepository.findOne({
+      where: { id: fastqFilePairId },
+      relations: { session: true },
+    });
+
+    if (!fastqFilePair) {
+      throw new NotFoundException(`FastQ file pair with id ${fastqFilePairId} not found`);
+    }
+
+    // Check if the pair status allows sending to analysis
+    if (fastqFilePair.status !== FastqFileStatus.UPLOADED) {
+      throw new BadRequestException(
+        `Cannot send FastQ file pair to analysis. Only pairs with status 'uploaded' can be sent. Current status: ${fastqFilePair.status}`,
+      );
+    }
+
+    const session = fastqFilePair.session;
+    if (!session) {
+      throw new NotFoundException(`Session not found for FastQ file pair`);
+    }
+
     let notificationReq: CreateNotificationReqDto = {
-      title: 'Chỉ định phân tích.',
-      message: '',
-      taskType: TypeTaskNotification.ANALYSIS_TASK,
+      title: `Phân công task phân tích`,
+      message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${session.labcode} và mã barcode ${session.barcode}`,
+      taskType: TypeTaskNotification.LAB_TASK,
       type: TypeNotification.ACTION,
       subType: SubTypeNotification.ASSIGN,
-      labcode: '',
-      barcode: '',
+      labcode: session.labcode,
+      barcode: session.barcode,
       senderId: user.id,
       receiverId: analysisId,
     };
-    // Find the FastQ file record
-    const fastqFile = await this.fastqFileRepository.findOne({
-      where: { id: fastqFileId },
-    });
 
-    if (!fastqFile) {
-      throw new NotFoundException(
-        `FastQ file with id ${fastqFileId} not found`,
-      );
-    }
-
-    // Check if the file status allows sending to analysis (only UPLOADED status can be sent)
-    if (fastqFile.status !== FastqFileStatus.UPLOADED) {
-      throw new BadRequestException(
-        `Cannot send FastQ file to analysis. Only files with status 'uploaded' can be sent to analysis. Current status: ${fastqFile.status}`,
-      );
-    }
-    const AnalysisSession = await this.labSessionRepository.findOne({
-      where: { id: fastqFile.sessionId },
-    });
-    if (!AnalysisSession) {
-      return errorLabSession.labSessionNotFound;
-    }
-
-    if (AnalysisSession?.analysisId) {
+    if (session.analysisId) {
       notificationReq.subType = SubTypeNotification.RESEND;
-      notificationReq.message = `File Fastq #${fastqFile.id} của lần khám với mã labcode ${AnalysisSession.labcode} và mã barcode ${AnalysisSession.barcode} đã được gửi mới`;
-      notificationReq.labcode = AnalysisSession.labcode;
-      notificationReq.barcode = AnalysisSession.barcode;
+      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${session.labcode} và mã barcode ${session.barcode} đã được gửi mới`;
     }
 
-    if (!AnalysisSession?.analysisId && !analysisId) {
-      return errorAnalysis.analysisIdRequired;
-    } else if (!AnalysisSession?.analysisId && analysisId) {
-      AnalysisSession.analysisId = analysisId;
-      const labSession = await this.labSessionRepository.save(AnalysisSession);
-      notificationReq.message = `Bạn đã được chỉ định phân tích lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`;
-      notificationReq.labcode = labSession.labcode;
-      notificationReq.barcode = labSession.barcode;
+    if (!session.analysisId && !analysisId) {
+      return { message: 'Analysis ID is required' };
+    } else if (!session.analysisId && analysisId) {
+      session.analysisId = analysisId;
+      await this.labSessionRepository.save(session);
     }
 
     try {
       // Update the status to WAIT_FOR_APPROVAL
-      fastqFile.status = FastqFileStatus.WAIT_FOR_APPROVAL;
-      await this.fastqFileRepository.save(fastqFile);
+      fastqFilePair.status = FastqFileStatus.WAIT_FOR_APPROVAL;
+      await this.fastqFilePairRepository.save(fastqFilePair);
       await this.notificationService.createNotification(notificationReq);
     } catch (error) {
       throw new InternalServerErrorException(
-        `Failed to send FastQ file to analysis: ${error.message}`,
+        `Failed to send FastQ file pair to analysis: ${error.message}`,
       );
     }
+
+    return {
+      message: 'FastQ file pair sent to analysis successfully',
+    };
   }
 }

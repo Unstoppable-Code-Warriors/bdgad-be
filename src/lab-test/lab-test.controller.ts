@@ -8,7 +8,7 @@ import {
   ParseIntPipe,
   Post,
   UseInterceptors,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   BadRequestException,
   Delete,
@@ -24,7 +24,7 @@ import {
   PaginatedResponseDto,
   PaginationQueryDto,
 } from '../common/dto/pagination.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthZ } from '../auth/decorators/authz.decorator';
@@ -108,28 +108,33 @@ export class LabTestController {
     return this.labTestService.findSessionById(id);
   }
 
-  // upload fastq file from form-data
+  // upload fastq file pair from form-data
   @ApiTags('Lab Test - Fastq files')
-  @ApiOperation({ summary: 'Upload FastQ file' })
-  @Post('session/:sessionId/fastq')
+  @ApiOperation({ summary: 'Upload FastQ file pair (R1 and R2)' })
+  @Post('session/:sessionId/fastq-pair')
   @AuthZ([Role.LAB_TESTING_TECHNICIAN])
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    description: 'Upload a FASTQ file',
+    description: 'Upload a pair of FASTQ files (R1 and R2)',
     required: true,
     schema: {
       type: 'object',
       properties: {
-        fastq: {
-          type: 'string',
-          format: 'binary',
+        fastqFiles: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          minItems: 2,
+          maxItems: 2,
         },
       },
-      required: ['fastq'],
+      required: ['fastqFiles'],
     },
   })
   @UseInterceptors(
-    FileInterceptor('fastq', {
+    FilesInterceptor('fastqFiles', 2, {
       fileFilter: (req, file, cb) => {
         // Accept FastQ file types
         const allowedMimeTypes = [
@@ -148,7 +153,7 @@ export class LabTestController {
           cb(null, true);
         } else {
           cb(
-            new Error(
+            new BadRequestException(
               'Only FastQ files (.fastq, .fq, .fastq.gz, .fq.gz) are allowed',
             ),
             false,
@@ -156,21 +161,23 @@ export class LabTestController {
         }
       },
       limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB limit for FastQ files
+        fileSize: 100 * 1024 * 1024, // 100MB limit per FastQ file
       },
     }),
   )
-  async uploadFastQ(
+  async uploadFastqPair(
     @Param('sessionId', ParseIntPipe) sessionId: number,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() files: Express.Multer.File[],
     @User() user: AuthenticatedUser,
   ) {
-    if (!file) {
-      return errorFastQ.fastQFileNotFound;
+    if (!files || files.length !== 2) {
+      throw new BadRequestException(
+        'Exactly 2 FastQ files are required (R1 and R2)',
+      );
     }
 
     try {
-      return this.labTestService.uploadFastQ(sessionId, file, user);
+      return this.labTestService.uploadFastqPair(sessionId, files, user);
     } catch (error) {
       if (error.message.includes('Only FastQ files')) {
         return errorFastQ.onlyFastQFiles;
@@ -178,6 +185,7 @@ export class LabTestController {
       if (error.message.includes('exceeds maximum allowed size')) {
         return errorFastQ.fileSizeExceeded;
       }
+      throw error;
     }
   }
 

@@ -61,7 +61,6 @@ export class ValidationService {
       .select([
         'labSession.id',
         'labSession.labcode',
-        'labSession.barcode',
         'labSession.requestDate',
         'labSession.createdAt',
         'labSession.metadata',
@@ -71,6 +70,7 @@ export class ValidationService {
         'patient.phone',
         'patient.address',
         'patient.citizenId',
+        'patient.barcode',
         'patient.createdAt',
         'doctor.id',
         'doctor.name',
@@ -97,7 +97,7 @@ export class ValidationService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
+        '(LOWER(labSession.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -107,7 +107,7 @@ export class ValidationService {
     //   const allowedSortFields = {
     //     id: 'labSession.id',
     //     labcode: 'labSession.labcode',
-    //     barcode: 'labSession.barcode',
+    //     barcode: 'patient.barcode',
     //     requestDate: 'labSession.requestDate',
     //     createdAt: 'labSession.createdAt',
     //     'patient.fullName': 'patient.fullName',
@@ -183,7 +183,7 @@ export class ValidationService {
         return {
           id: session.id,
           labcode: session.labcode,
-          barcode: session.barcode,
+          barcode: session.patient.barcode,
           requestDate: session.requestDate,
           createdAt: session.createdAt,
           metadata: session.metadata,
@@ -280,6 +280,7 @@ export class ValidationService {
 
     return {
       ...validation,
+      barcode: validation.patient.barcode,
       latestEtlResult,
     };
   }
@@ -323,7 +324,7 @@ export class ValidationService {
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },
       relations: {
-        session: true,
+        session: { patient: true },
       },
     });
 
@@ -346,12 +347,12 @@ export class ValidationService {
     });
     notificationReqs.push({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
-      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã bị từ chối`,
+      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.patient.barcode} đã bị từ chối`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.REJECT,
       labcode: etlResult.session.labcode,
-      barcode: etlResult.session.barcode,
+      barcode: etlResult.session.patient.barcode,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,
     });
@@ -369,12 +370,12 @@ export class ValidationService {
       });
       notificationReqs.push({
         title: `Trạng thái file Fastq pair #${latestFastqFilePair.id}.`,
-        message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${etlResult.session.barcode} đang chờ được duyệt`,
+        message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${etlResult.session.patient.barcode} đang chờ được duyệt`,
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.RETRY,
         labcode: etlResult.session.labcode,
-        barcode: etlResult.session.barcode,
+        barcode: etlResult.session.patient.barcode,
         senderId: latestFastqFilePair.session.analysisId!,
         receiverId: latestFastqFilePair.createdBy,
       });
@@ -394,7 +395,7 @@ export class ValidationService {
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },
       relations: {
-        session: true,
+        session: { patient: true },
       },
     });
 
@@ -415,12 +416,12 @@ export class ValidationService {
     };
     await this.notificationService.createNotification({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
-      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.barcode} đã được duyệt`,
+      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.patient.barcode} đã được duyệt`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.ACCEPT,
       labcode: etlResult.session.labcode,
-      barcode: etlResult.session.barcode,
+      barcode: etlResult.session.patient.barcode,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,
     });

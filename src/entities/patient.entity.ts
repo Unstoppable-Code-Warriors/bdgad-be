@@ -28,6 +28,9 @@ export class Patient {
   @Column({ name: 'citizen_id', unique: true })
   citizenId: string;
 
+  @Column({ unique: true })
+  barcode: string;
+
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',

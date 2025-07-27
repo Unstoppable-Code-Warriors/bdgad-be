@@ -113,7 +113,6 @@ export class LabTestService {
         .select([
           'labSession.id',
           'labSession.labcode',
-          'labSession.barcode',
           'labSession.requestDate',
           'labSession.createdAt',
           'labSession.metadata',
@@ -123,6 +122,7 @@ export class LabTestService {
           'patient.phone',
           'patient.address',
           'patient.citizenId',
+          'patient.barcode',
           'patient.createdAt',
           'analysis.id',
           'analysis.name',
@@ -139,7 +139,7 @@ export class LabTestService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
+        '(LOWER(labSession.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -176,7 +176,7 @@ export class LabTestService {
     //     // Lab Session fields
     //     id: 'labSession.id',
     //     labcode: 'labSession.labcode',
-    //     barcode: 'labSession.barcode',
+    //     barcode: 'patient.barcode',
     //     requestDate: 'labSession.requestDate',
     //     createdAt: 'labSession.createdAt',
 
@@ -286,6 +286,7 @@ export class LabTestService {
 
         return {
           ...session,
+          barcode: session.patient.barcode,
           latestFastqFilePair: latestFastqFilePair
             ? this.mapFastqFilePairToDto(latestFastqFilePair)
             : null,
@@ -321,7 +322,6 @@ export class LabTestService {
       select: {
         id: true,
         labcode: true,
-        barcode: true,
         requestDate: true,
         createdAt: true,
         metadata: true,
@@ -332,6 +332,7 @@ export class LabTestService {
           phone: true,
           address: true,
           citizenId: true,
+          barcode: true,
           createdAt: true,
         },
         doctor: {
@@ -390,6 +391,7 @@ export class LabTestService {
 
     return {
       ...session,
+      barcode: session.patient.barcode,
       fastqFilePairs: sortedFastqFilePairs.map((filePair) =>
         this.mapFastqFilePairToDto(filePair),
       ),
@@ -592,7 +594,12 @@ export class LabTestService {
     // Find the FastqFilePair
     const fastqFilePair = await this.fastqFilePairRepository.findOne({
       where: { id: fastqFilePairId },
-      relations: { session: true },
+      relations: {
+        session: {
+          patient: true, // Include patient to access barcode
+          analysis: true, // Include analysis to check if already assigned
+        },
+      },
     });
 
     if (!fastqFilePair) {
@@ -615,19 +622,19 @@ export class LabTestService {
 
     let notificationReq: CreateNotificationReqDto = {
       title: `Chỉ định task phân tích`,
-      message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${session.labcode} và mã barcode ${session.barcode}`,
+      message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${session.labcode} và mã barcode ${session.patient.barcode}`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.ACTION,
       subType: SubTypeNotification.ASSIGN,
       labcode: session.labcode,
-      barcode: session.barcode,
+      barcode: session.patient.barcode,
       senderId: user.id,
       receiverId: analysisId,
     };
 
     if (session.analysisId) {
       notificationReq.subType = SubTypeNotification.RESEND;
-      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${session.labcode} và mã barcode ${session.barcode} đã được gửi mới`;
+      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${session.labcode} và mã barcode ${session.patient.barcode} đã được gửi mới`;
     }
 
     if (!session.analysisId && !analysisId) {

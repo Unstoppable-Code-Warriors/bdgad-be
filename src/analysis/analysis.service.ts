@@ -112,6 +112,7 @@ export class AnalysisService {
         )
         .where('labSession.analysisId = :userId', { userId: user.id })
         .andWhere('labSession.typeLabSession = :type', { type: 'test' });
+        queryBuilder.orderBy('labSession.requestDate', 'DESC');
 
     // Apply search functionality (search by labcode and barcode)
     if (search && search.trim()) {

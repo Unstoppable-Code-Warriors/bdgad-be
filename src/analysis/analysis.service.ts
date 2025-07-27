@@ -77,7 +77,6 @@ export class AnalysisService {
         .select([
           'labSession.id',
           'labSession.labcode',
-          'labSession.barcode',
           'labSession.requestDate',
           'labSession.createdAt',
           'labSession.metadata',
@@ -87,6 +86,7 @@ export class AnalysisService {
           'patient.phone',
           'patient.address',
           'patient.citizenId',
+          'patient.barcode',
           'patient.createdAt',
           'doctor.id',
           'doctor.name',
@@ -117,7 +117,7 @@ export class AnalysisService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(labSession.labcode) LIKE :search OR LOWER(labSession.barcode) LIKE :search)',
+        '(LOWER(labSession.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -154,7 +154,7 @@ export class AnalysisService {
     //   const allowedSortFields = {
     //     id: 'labSession.id',
     //     labcode: 'labSession.labcode',
-    //     barcode: 'labSession.barcode',
+    //     barcode: 'patient.barcode',
     //     requestDate: 'labSession.requestDate',
     //     createdAt: 'labSession.createdAt',
     //     'patient.fullName': 'patient.fullName',
@@ -251,6 +251,7 @@ export class AnalysisService {
 
         return {
           ...session,
+          barcode: session.patient.barcode,
           latestFastqPairFile: latestFastqFilePair,
           latestEtlResult,
         };
@@ -305,7 +306,6 @@ export class AnalysisService {
       select: {
         id: true,
         labcode: true,
-        barcode: true,
         requestDate: true,
         createdAt: true,
         metadata: true,
@@ -316,6 +316,7 @@ export class AnalysisService {
           phone: true,
           address: true,
           citizenId: true,
+          barcode: true,
           createdAt: true,
         },
         doctor: {
@@ -407,6 +408,7 @@ export class AnalysisService {
 
     return {
       ...session,
+      barcode: session.patient.barcode,
       fastqFilePairs: session.fastqFilePairs, // Map fastqFilePairs to fastqFiles for backward compatibility
     };
   }
@@ -424,7 +426,12 @@ export class AnalysisService {
           FastqFileStatus.APPROVED,
         ]),
       },
-      relations: { session: true, creator: true },
+      relations: {
+        session: {
+          patient: true,
+        },
+        creator: true,
+      },
     });
 
     if (!fastqFilePair) {
@@ -439,12 +446,12 @@ export class AnalysisService {
     await this.fastqFilePairRepository.save(fastqFilePair);
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq pair #${fastqFilePair.id}.`,
-      message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair.session?.barcode} đã được duyệt`,
+      message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair.session?.patient?.barcode} đã được duyệt`,
       taskType: TypeTaskNotification.LAB_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.ACCEPT,
       labcode: fastqFilePair.session?.labcode,
-      barcode: fastqFilePair.session?.barcode,
+      barcode: fastqFilePair.session?.patient?.barcode,
       senderId: user.id,
       receiverId: fastqFilePair.createdBy,
     });
@@ -476,7 +483,7 @@ export class AnalysisService {
     this.runMockEtlPipeline(
       etlResult,
       fastqFilePair.session.labcode,
-      fastqFilePair.session.barcode,
+      fastqFilePair.session.patient.barcode,
       user.id,
     ).catch(async (error) => {
       // Mark as failed if pipeline fails
@@ -647,7 +654,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         id: fastqFilePairId,
         status: FastqFileStatus.WAIT_FOR_APPROVAL,
       },
-      relations: { session: true, creator: true },
+      relations: { session: { patient: true }, creator: true },
     });
 
     if (!fastqFilePair) {
@@ -666,12 +673,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     try {
       this.notificationService.createNotification({
         title: `Trạng thái file Fastq pair #${fastqFilePair.id}.`,
-        message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair?.session.barcode} đã bị từ chối`,
+        message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair?.session?.patient?.barcode} đã bị từ chối`,
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.REJECT,
         labcode: fastqFilePair?.session?.labcode,
-        barcode: fastqFilePair?.session?.barcode,
+        barcode: fastqFilePair?.session?.patient?.barcode,
         senderId: user.id,
         receiverId: fastqFilePair.createdBy,
       });
@@ -721,6 +728,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     }
     const labSession = await this.labSessionRepository.findOne({
       where: { id: etlResult.session.id },
+      relations: { patient: true },
     });
 
     if (!labSession) {
@@ -730,12 +738,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     if (labSession.validationId) {
       await this.notificationService.createNotification({
         title: `Chỉ định thẩm định.`,
-        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${labSession.barcode} đã được gửi mới`,
+        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${labSession.patient.barcode} đã được gửi mới`,
         taskType: TypeTaskNotification.VALIDATION_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.RESEND,
         labcode: labSession.labcode,
-        barcode: labSession.barcode,
+        barcode: labSession.patient.barcode,
         senderId: user.id,
         receiverId: validationId,
       });
@@ -746,12 +754,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       await this.labSessionRepository.save(labSession);
       await this.notificationService.createNotification({
         title: `Chỉ định thẩm định.`,
-        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`,
+        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.patient.barcode}`,
         taskType: TypeTaskNotification.VALIDATION_TASK,
         type: TypeNotification.ACTION,
         subType: SubTypeNotification.ASSIGN,
         labcode: labSession.labcode,
-        barcode: labSession.barcode,
+        barcode: labSession.patient.barcode,
         senderId: user.id,
         receiverId: validationId,
       });
@@ -817,7 +825,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         ]),
       },
       order: { createdAt: 'DESC' },
-      relations: { session: true, creator: true },
+      relations: {
+        session: {
+          patient: true,
+        },
+        creator: true,
+      },
     });
 
     if (
@@ -830,12 +843,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       await this.notificationService
         .createNotification({
           title: `Trạng thái file Fastq pair #${latestFastqFilePair.id}.`,
-          message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${latestFastqFilePair.session?.barcode} đã được duyệt`,
+          message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${latestFastqFilePair.session?.patient?.barcode} đã được duyệt`,
           taskType: TypeTaskNotification.LAB_TASK,
           type: TypeNotification.PROCESS,
           subType: SubTypeNotification.RETRY,
           labcode: latestFastqFilePair.session?.labcode,
-          barcode: latestFastqFilePair.session?.barcode,
+          barcode: latestFastqFilePair.session?.patient?.barcode,
           senderId: user.id,
           receiverId: latestFastqFilePair.createdBy,
         })
@@ -858,7 +871,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     this.runMockEtlPipeline(
       etlResult,
       etlResult.session.labcode,
-      etlResult.session.barcode,
+      etlResult.session.patient.barcode,
       user.id,
     ).catch(async (error) => {
       // Mark as failed if pipeline fails again

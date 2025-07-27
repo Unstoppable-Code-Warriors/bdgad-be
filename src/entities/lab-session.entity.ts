@@ -25,9 +25,6 @@ export class LabSession {
   @Column({ unique: true })
   labcode: string;
 
-  @Column()
-  barcode: string;
-
   @Column({ type: 'varchar', nullable: true })
   requestDate: Date;
 

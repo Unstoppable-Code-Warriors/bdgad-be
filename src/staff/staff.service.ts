@@ -482,10 +482,39 @@ export class StaffService {
     }
   }
 
+  private async generatePatientBarcode(): Promise<string> {
+    // Get current date in YYMMDD format
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
+    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Month with leading zero
+    const day = now.getDate().toString().padStart(2, '0'); // Day with leading zero
+    const datePrefix = `${year}${month}${day}`;
+
+    // Find the highest existing barcode for today
+    const existingPatients = await this.patientRepository
+      .createQueryBuilder('patient')
+      .where('patient.barcode LIKE :prefix', { prefix: `${datePrefix}%` })
+      .orderBy('patient.barcode', 'DESC')
+      .getMany();
+
+    let sequenceNumber = 1;
+    if (existingPatients.length > 0) {
+      // Extract sequence number from the highest barcode and increment
+      const highestBarcode = existingPatients[0].barcode;
+      const sequence = parseInt(highestBarcode.substring(6)) || 0;
+      sequenceNumber = sequence + 1;
+    }
+
+    return `${datePrefix}${sequenceNumber}`;
+  }
+
   async createPatient(createPatientDto: CreatePatientDto) {
     this.logger.log('Starting Patient create process');
     try {
       const { fullName, citizenId } = createPatientDto;
+
+      // Generate barcode with format YYMMDD + ascending order number
+      const barcode = await this.generatePatientBarcode();
 
       const patient = this.patientRepository.create({
         fullName: fullName.trim(),
@@ -493,6 +522,7 @@ export class StaffService {
         phone: '081234567890',
         address: 'Jl. Raya No. 123',
         citizenId: citizenId.trim(),
+        barcode: barcode,
         createdAt: new Date(),
       });
       await this.patientRepository.save(patient);
@@ -594,6 +624,7 @@ export class StaffService {
           dateOfBirth: patient.dateOfBirth,
           phone: patient.phone,
           address: patient.address,
+          barcode: patient.barcode,
           citizenId: patient.citizenId,
         },
       };
@@ -654,6 +685,7 @@ export class StaffService {
           address: true,
           citizenId: true,
           createdAt: true,
+          barcode: true,
           labSessions: {
             id: true,
           },
@@ -669,6 +701,7 @@ export class StaffService {
         dateOfBirth: patient.dateOfBirth,
         phone: patient.phone,
         address: patient.address,
+        barcode: patient.barcode,
         citizenId: patient.citizenId,
       };
       const labSessions = patient.labSessions.flatMap(
@@ -686,7 +719,6 @@ export class StaffService {
         select: {
           id: true,
           labcode: true,
-          barcode: true,
           typeLabSession: true,
           requestDate: true,
           createdAt: true,
@@ -724,6 +756,7 @@ export class StaffService {
       const labSession = await this.labSessionRepository.findOne({
         where: { id },
         relations: {
+          patient: true,
           doctor: true,
           labTesting: true,
           patientFiles: {
@@ -733,12 +766,21 @@ export class StaffService {
         select: {
           id: true,
           labcode: true,
-          barcode: true,
           typeLabSession: true,
           requestDate: true,
           createdAt: true,
           updatedAt: true,
           finishedAt: true,
+          patient: {
+            id: true,
+            fullName: true,
+            dateOfBirth: true,
+            phone: true,
+            address: true,
+            citizenId: true,
+            barcode: true,
+            createdAt: true,
+          },
           doctor: {
             id: true,
             name: true,
@@ -844,19 +886,17 @@ export class StaffService {
       if (!patient) {
         return errorPatient.patientNotFound;
       }
-      // Generate unique labcode and barcode if not provided
+      // Generate unique labcode if not provided
       const number = String(Math.floor(Math.random() * 999) + 1).padStart(
         3,
         '0',
       );
       const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
       const defaultLabcode = `O5${number}${letter}`;
-      const defaultBarcode = `${Math.floor(Math.random() * 1000000)}`;
 
       const labSession = this.labSessionRepository.create({
         patientId,
         labcode: defaultLabcode,
-        barcode: defaultBarcode,
         requestDate: new Date(),
         typeLabSession,
         metadata: {},
@@ -965,6 +1005,7 @@ export class StaffService {
       const { doctorId, labTestingId } = assignLabSessionDto;
       const labSession = await this.labSessionRepository.findOne({
         where: { id },
+        relations: { patient: true },
       });
       if (!labSession) {
         return errorLabSession.labSessionNotFound;
@@ -978,9 +1019,9 @@ export class StaffService {
       Object.assign(labSession, assignLabSessionDto);
       const updatedLabSession =
         await this.labSessionRepository.save(labSession);
-      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.barcode}`;
+      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.patient.barcode}`;
       notificationReq.labcode = labSession.labcode;
-      notificationReq.barcode = labSession.barcode;
+      notificationReq.barcode = labSession.patient.barcode;
       this.notificationService.createNotification(notificationReq);
       return {
         message: 'Lab session updated successfully',

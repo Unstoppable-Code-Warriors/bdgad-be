@@ -39,6 +39,7 @@ import { PatientFile } from 'src/entities/patient-file.entity';
 import { GeneralFile } from 'src/entities/general-file.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
+import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 import { CategoryGeneralFileService } from 'src/category-general-file/category-general-file.service';
@@ -906,7 +907,7 @@ export class StaffService {
 
       const labSession = this.labSessionRepository.create({
         patientId,
-        labcode: defaultLabcode,
+        labcode: [defaultLabcode],
         requestDate: new Date(),
         typeLabSession,
         metadata: {},
@@ -994,18 +995,25 @@ export class StaffService {
     }
   }
 
+  private formatLabcodeArray(labcodes: string[] | null | undefined): string {
+    if (!labcodes || labcodes.length === 0) {
+      return 'unknown';
+    }
+    return labcodes.join(', ');
+  }
+
   async assignDoctorAndLabTestingLabSession(
     id: number,
     assignLabSessionDto: AssignLabSessionDto,
     user: AuthenticatedUser,
   ) {
-    let notificationReq = {
+    let notificationReq: Partial<CreateNotificationReqDto> = {
       title: 'Chỉ định xét nghiệm.',
       message: '',
       taskType: TypeTaskNotification.LAB_TASK,
       type: TypeNotification.ACTION,
       subType: SubTypeNotification.ASSIGN,
-      labcode: '',
+      labcode: [],
       barcode: '',
       senderId: user.id,
       receiverId: assignLabSessionDto.labTestingId!,
@@ -1029,10 +1037,11 @@ export class StaffService {
       Object.assign(labSession, assignLabSessionDto);
       const updatedLabSession =
         await this.labSessionRepository.save(labSession);
-      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.patient.barcode}`;
-      notificationReq.labcode = labSession.labcode;
+      const formattedLabcodes = this.formatLabcodeArray(labSession.labcode);
+      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${labSession.patient.barcode}`;
+      notificationReq.labcode = labSession.labcode || [];
       notificationReq.barcode = labSession.patient.barcode;
-      this.notificationService.createNotification(notificationReq);
+      this.notificationService.createNotification(notificationReq as CreateNotificationReqDto);
       return {
         message: 'Lab session updated successfully',
         labSession: updatedLabSession,

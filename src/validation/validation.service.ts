@@ -41,6 +41,13 @@ export class ValidationService {
     private notificationService: NotificationService,
   ) {}
 
+  private formatLabcodeArray(labcodes: string[] | null | undefined): string {
+    if (!labcodes || labcodes.length === 0) {
+      return 'unknown';
+    }
+    return labcodes.join(', ');
+  }
+
   async findAllPatientsWithLatestEtlResults(
     query: PaginationQueryDto,
     user: AuthenticatedUser,
@@ -97,7 +104,7 @@ export class ValidationService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(labSession.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
+        '(EXISTS (SELECT 1 FROM unnest(labSession.labcode) AS lc WHERE LOWER(lc) LIKE :search) OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -351,7 +358,7 @@ export class ValidationService {
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.REJECT,
-      labcode: etlResult.session.labcode,
+      labcode: etlResult.session.labcode || [],
       barcode: etlResult.session.patient.barcode,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,
@@ -374,7 +381,7 @@ export class ValidationService {
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.RETRY,
-        labcode: etlResult.session.labcode,
+        labcode: etlResult.session.labcode || [],
         barcode: etlResult.session.patient.barcode,
         senderId: latestFastqFilePair.session.analysisId!,
         receiverId: latestFastqFilePair.createdBy,
@@ -420,7 +427,7 @@ export class ValidationService {
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.ACCEPT,
-      labcode: etlResult.session.labcode,
+      labcode: etlResult.session.labcode || [],
       barcode: etlResult.session.patient.barcode,
       senderId: user.id,
       receiverId: etlResult.session.analysisId!,

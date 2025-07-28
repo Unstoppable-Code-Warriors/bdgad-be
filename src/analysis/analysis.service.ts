@@ -52,6 +52,13 @@ export class AnalysisService {
     private userRepository: Repository<User>,
   ) {}
 
+  private formatLabcodeArray(labcodes: string[] | null | undefined): string {
+    if (!labcodes || labcodes.length === 0) {
+      return 'unknown';
+    }
+    return labcodes.join(', ');
+  }
+
   async findAllAnalysisSessions(
     query: PaginationQueryDto,
     user: AuthenticatedUser,
@@ -117,7 +124,7 @@ export class AnalysisService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(labSession.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
+        '(EXISTS (SELECT 1 FROM unnest(labSession.labcode) AS lc WHERE LOWER(lc) LIKE :search) OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -450,7 +457,7 @@ export class AnalysisService {
       taskType: TypeTaskNotification.LAB_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.ACCEPT,
-      labcode: fastqFilePair.session?.labcode,
+      labcode: fastqFilePair.session?.labcode || [],
       barcode: fastqFilePair.session?.patient?.barcode,
       senderId: user.id,
       receiverId: fastqFilePair.createdBy,
@@ -482,7 +489,7 @@ export class AnalysisService {
     // Start mock ETL pipeline (async)
     this.runMockEtlPipeline(
       etlResult,
-      fastqFilePair.session.labcode,
+      fastqFilePair.session.labcode || [],
       fastqFilePair.session.patient.barcode,
       user.id,
     ).catch(async (error) => {
@@ -498,7 +505,7 @@ export class AnalysisService {
 
   private async runMockEtlPipeline(
     etlResult: EtlResult,
-    labcode: string,
+    labcode: string[],
     barcode: string,
     userId: number,
   ): Promise<void> {
@@ -512,12 +519,14 @@ export class AnalysisService {
       // Mock processing delay (simulate ETL pipeline work)
       await new Promise((resolve) => setTimeout(resolve, 10000)); // 10 seconds
 
-      // Generate mock analysis result content
-      const analysisContent = this.generateMockAnalysisResult(labcode);
+      // Generate mock analysis result content using first labcode or 'unknown'
+      const primaryLabcode = labcode?.[0] || 'unknown';
+      const analysisContent = this.generateMockAnalysisResult(primaryLabcode);
 
-      // Create filename for the result
+      // Create filename for the result using formatted labcodes
+      const formattedLabcodes = this.formatLabcodeArray(labcode);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `analysis-result-${labcode}-${timestamp}.txt`;
+      const filename = `analysis-result-${formattedLabcodes.replace(/[, ]/g, '-')}-${timestamp}.txt`;
 
       // Upload to S3
       const uploadUrl = await this.s3Service.uploadFile(
@@ -677,7 +686,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.REJECT,
-        labcode: fastqFilePair?.session?.labcode,
+        labcode: fastqFilePair?.session?.labcode || [],
         barcode: fastqFilePair?.session?.patient?.barcode,
         senderId: user.id,
         receiverId: fastqFilePair.createdBy,
@@ -742,7 +751,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         taskType: TypeTaskNotification.VALIDATION_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.RESEND,
-        labcode: labSession.labcode,
+        labcode: labSession.labcode || [],
         barcode: labSession.patient.barcode,
         senderId: user.id,
         receiverId: validationId,
@@ -752,13 +761,14 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     if (!labSession.validationId && validationId) {
       labSession.validationId = validationId;
       await this.labSessionRepository.save(labSession);
+      const formattedLabcodes = this.formatLabcodeArray(labSession.labcode);
       await this.notificationService.createNotification({
         title: `Chỉ định thẩm định.`,
-        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${labSession.labcode} và mã barcode ${labSession.patient.barcode}`,
+        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${labSession.patient.barcode}`,
         taskType: TypeTaskNotification.VALIDATION_TASK,
         type: TypeNotification.ACTION,
         subType: SubTypeNotification.ASSIGN,
-        labcode: labSession.labcode,
+        labcode: labSession.labcode || [],
         barcode: labSession.patient.barcode,
         senderId: user.id,
         receiverId: validationId,
@@ -847,7 +857,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
           taskType: TypeTaskNotification.LAB_TASK,
           type: TypeNotification.PROCESS,
           subType: SubTypeNotification.RETRY,
-          labcode: latestFastqFilePair.session?.labcode,
+          labcode: latestFastqFilePair.session?.labcode || [],
           barcode: latestFastqFilePair.session?.patient?.barcode,
           senderId: user.id,
           receiverId: latestFastqFilePair.createdBy,
@@ -870,7 +880,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     // Start mock ETL pipeline (async) for retry
     this.runMockEtlPipeline(
       etlResult,
-      etlResult.session.labcode,
+      etlResult.session.labcode || [],
       etlResult.session.patient.barcode,
       user.id,
     ).catch(async (error) => {

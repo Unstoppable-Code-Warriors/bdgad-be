@@ -54,6 +54,13 @@ export class LabTestService {
     private userRepository: Repository<User>,
   ) {}
 
+  private formatLabcodeArray(labcodes: string[] | null | undefined): string {
+    if (!labcodes || labcodes.length === 0) {
+      return 'unknown';
+    }
+    return labcodes.join(', ');
+  }
+
   /**
    * Map FastqFilePair entity to FastqFilePairResponseDto
    */
@@ -140,7 +147,7 @@ export class LabTestService {
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(LOWER(labSession.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
+        '(EXISTS (SELECT 1 FROM unnest(labSession.labcode) AS lc WHERE LOWER(lc) LIKE :search) OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -621,13 +628,14 @@ export class LabTestService {
       throw new NotFoundException(`Session not found for FastQ file pair`);
     }
 
+    const formattedLabcodes = this.formatLabcodeArray(session.labcode);
     let notificationReq: CreateNotificationReqDto = {
       title: `Chỉ định task phân tích`,
-      message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${session.labcode} và mã barcode ${session.patient.barcode}`,
+      message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${formattedLabcodes} và mã barcode ${session.patient.barcode}`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.ACTION,
       subType: SubTypeNotification.ASSIGN,
-      labcode: session.labcode,
+      labcode: session.labcode || [],
       barcode: session.patient.barcode,
       senderId: user.id,
       receiverId: analysisId,
@@ -635,7 +643,7 @@ export class LabTestService {
 
     if (session.analysisId) {
       notificationReq.subType = SubTypeNotification.RESEND;
-      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${session.labcode} và mã barcode ${session.patient.barcode} đã được gửi mới`;
+      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${formattedLabcodes} và mã barcode ${session.patient.barcode} đã được gửi mới`;
     }
 
     if (!session.analysisId && !analysisId) {

@@ -42,7 +42,7 @@ export class FastqFilePairResponseDto {
 
 export class LabSessionResponseDto {
   id: number;
-  labcode: string;
+  labcode: string[];
   barcode: string;
   requestDate: Date;
   createdAt: Date;

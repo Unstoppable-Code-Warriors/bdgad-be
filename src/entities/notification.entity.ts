@@ -35,8 +35,8 @@ export class Notifications {
   @Column({ name: 'sender_id' })
   senderId: number;
 
-  @Column({ name: 'lab_code', nullable: true })
-  labcode: string;
+  @Column({ name: 'lab_code', type: 'text', array: true, nullable: true })
+  labcode: string[];
 
   @Column({ name: 'barcode', nullable: true })
   barcode: string;

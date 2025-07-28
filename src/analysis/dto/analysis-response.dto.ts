@@ -61,7 +61,7 @@ export class EtlResultResponseDto {
 
 export class AnalysisSessionResponseDto {
   id: number;
-  labcode: string;
+  labcode: string[];
   barcode: string;
   requestDate: Date;
   createdAt: Date;

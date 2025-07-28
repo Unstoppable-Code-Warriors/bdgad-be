@@ -22,7 +22,7 @@ export class LabSession {
   @Column({ name: 'patient_id' })
   patientId: number;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', nullable: true })
   labcode: string;
 
   @Column({ type: 'varchar', nullable: true })

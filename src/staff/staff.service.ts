@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -24,6 +25,7 @@ import {
 } from 'src/common/dto/pagination.dto';
 import {
   errorGeneralFile,
+  errorLabcode,
   errorLabSession,
   errorOCR,
   errorPatient,
@@ -40,7 +42,15 @@ import { NotificationService } from 'src/notification/notification.service';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 import { CategoryGeneralFileService } from 'src/category-general-file/category-general-file.service';
-
+import {
+  GenerateLabcodeRequestDto,
+  TestType,
+  NIPTPackageType,
+  HereditaryCancerPackageType,
+  GeneMutationPackageType,
+  SampleType,
+  GenerateLabcodeResponseDto,
+} from './dtos/generate-labcode.dto';
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
   salesInvoice: Express.Multer.File;
@@ -1049,5 +1059,157 @@ export class StaffService {
     );
 
     return presignedUrl;
+  }
+
+  // Generates a unique labcode based on test type, package type, and sample type
+  async generateLabcode(
+    request: GenerateLabcodeRequestDto,
+  ): Promise<GenerateLabcodeResponseDto> {
+    this.logger.log('Starting labcode generation');
+
+    try {
+      const { testType, packageType, sampleType } = request;
+
+      const testCode = this.getTestCode(testType, packageType, sampleType);
+
+      const randomLetter = String.fromCharCode(
+        65 + Math.floor(Math.random() * 26),
+      );
+
+      const randomNumber = String(Math.floor(Math.random() * 999) + 1).padStart(
+        3,
+        '0',
+      );
+
+      const labcode = `${testCode}${randomLetter}${randomNumber}`;
+
+      this.logger.log(`Generated labcode: ${labcode}`);
+
+      return {
+        labcode,
+        testCode,
+        randomLetter,
+        randomNumber,
+        message: 'Labcode generated successfully',
+      };
+    } catch (error) {
+      this.logger.error('Failed to generate labcode', error);
+      throw new InternalServerErrorException('Failed to generate labcode');
+    }
+  }
+
+  private getTestCode(
+    testType: TestType,
+    packageType: string,
+    sampleType?: string,
+  ): string {
+    switch (testType) {
+      case TestType.NON_INVASIVE_PRENATAL_TESTING:
+        return this.getNIPTTestCode(packageType);
+
+      case TestType.HEREDITARY_CANCER:
+        return this.getHereditaryCancerTestCode(packageType);
+
+      case TestType.GENE_MUTATION_TESTING:
+        if (!sampleType) {
+          throw new BadRequestException(
+            'Sample type is required for gene mutation testing',
+          );
+        }
+        return this.getGeneMutationTestCode(packageType, sampleType);
+
+      default:
+        throw errorLabcode(`Unknown test type: ${testType}`);
+    }
+  }
+
+  private getNIPTTestCode(packageType: string): string {
+    const niptMapping = {
+      [NIPTPackageType.NIPT_CNV]: 'NCNVA',
+      [NIPTPackageType.NIPT_24]: 'N24A',
+      [NIPTPackageType.NIPT_5]: 'N5A',
+      [NIPTPackageType.NIPT_4]: 'N4A',
+      [NIPTPackageType.NIPT_3]: 'N3A',
+    };
+
+    const testCode = niptMapping[packageType];
+    if (!testCode) {
+      throw new BadRequestException(
+        `Unknown NIPT package type: ${packageType}`,
+      );
+    }
+
+    return testCode;
+  }
+
+  private getHereditaryCancerTestCode(packageType: string): string {
+    const hereditaryMapping = {
+      [HereditaryCancerPackageType.BREAST_CANCER_BCARE]: 'G2',
+      [HereditaryCancerPackageType.FIFTEEN_HEREDITARY_CANCER_TYPES_MORE_CARE]:
+        'G15',
+      [HereditaryCancerPackageType.TWENTY_HEREDITARY_CANCER_TYPES_VIP_CARE]:
+        'G20',
+    };
+
+    const testCode = hereditaryMapping[packageType];
+    if (!testCode) {
+      throw new BadRequestException(
+        `Unknown hereditary cancer package type: ${packageType}`,
+      );
+    }
+
+    return testCode;
+  }
+
+  private getGeneMutationTestCode(
+    packageType: string,
+    sampleType: string,
+  ): string {
+    if (packageType === GeneMutationPackageType.ONCO81) {
+      return this.getOncoTestCode('8', sampleType);
+    }
+
+    if (packageType === GeneMutationPackageType.ONCO500) {
+      return this.getOncoTestCode('A', sampleType);
+    }
+
+    if (packageType === GeneMutationPackageType.LUNG_CANCER) {
+      return 'O5';
+    }
+
+    const otherCancerTypes = [
+      GeneMutationPackageType.OVARIAN_CANCER,
+      GeneMutationPackageType.COLORECTAL_CANCER,
+      GeneMutationPackageType.PROSTATE_CANCER,
+      GeneMutationPackageType.BREAST_CANCER,
+      GeneMutationPackageType.CERVICAL_CANCER,
+      GeneMutationPackageType.GASTRIC_CANCER,
+      GeneMutationPackageType.PANCREATIC_CANCER,
+      GeneMutationPackageType.THYROID_CANCER,
+      GeneMutationPackageType.GASTROINTESTINAL_STROMAL_TUMOR_GIST,
+    ];
+
+    if (otherCancerTypes.includes(packageType as GeneMutationPackageType)) {
+      return 'O5';
+    }
+
+    throw new BadRequestException(
+      `Unknown gene mutation package type: ${packageType}`,
+    );
+  }
+
+  private getOncoTestCode(oncoType: '8' | 'A', sampleType: string): string {
+    const sampleMapping = {
+      [SampleType.BLOOD_STL_CTDNA]: 'L',
+      [SampleType.PLEURAL_PERITONEAL_FLUID]: 'F',
+      [SampleType.BIOPSY_TISSUE_FFPE]: 'P',
+    };
+
+    const samplePrefix = sampleMapping[sampleType];
+    if (!samplePrefix) {
+      throw new BadRequestException(`Unknown sample type: ${sampleType}`);
+    }
+
+    return `${samplePrefix}${oncoType}`;
   }
 }

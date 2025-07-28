@@ -235,3 +235,11 @@ export const errorCategoryGeneralFile = {
     400,
   ),
 };
+
+export const errorLabcode = (errorMessage: string) => {
+  return new ErrorResponse(
+    'LABCODE_ERROR',
+    `Labcode error: ${errorMessage}`,
+    400,
+  );
+};

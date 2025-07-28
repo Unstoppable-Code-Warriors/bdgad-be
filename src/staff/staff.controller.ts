@@ -44,6 +44,7 @@ import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import * as path from 'path';
+import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -544,6 +545,11 @@ export class StaffController {
           description: 'Type of lab session',
           example: 'test',
         },
+        labcode: {
+          type: 'string',
+          description: 'Labcode',
+          example: '[O5123A, N5456B]',
+        },
         ocrResult: {
           type: 'string',
           description:
@@ -620,5 +626,46 @@ export class StaffController {
       throw new BadRequestException('At least one file is required');
     }
     return this.staffService.uploadPatientFiles(files.files, uploadData, user);
+  }
+
+  // Labcode generation api
+  @Post('labcode')
+  @ApiTags('Staff - Labcode')
+  @ApiOperation({
+    summary: 'Generate labcode for test',
+    description:
+      'Generate a unique labcode based on test type, package type, and sample type. Format: [TEST_CODE][RANDOM_LETTER][RANDOM_NUMBER] (e.g., N5AH941)',
+  })
+  @ApiBody({
+    type: GenerateLabcodeRequestDto,
+    examples: {
+      nipt_example: {
+        summary: 'NIPT Example',
+        value: {
+          testType: 'non_invasive_prenatal_testing',
+          packageType: 'NIPT 5',
+        },
+      },
+      hereditary_example: {
+        summary: 'Hereditary Cancer Example',
+        value: {
+          testType: 'hereditary_cancer',
+          packageType: 'breast_cancer_bcare',
+        },
+      },
+      gene_mutation_example: {
+        summary: 'Gene Mutation Example',
+        value: {
+          testType: 'gene_mutation_testing',
+          packageType: 'Onco81',
+          sampleType: 'biopsy_tissue_ffpe',
+        },
+      },
+    },
+  })
+  @AuthZ([Role.STAFF])
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async generateLabcode(@Body() request: GenerateLabcodeRequestDto) {
+    return this.staffService.generateLabcode(request);
   }
 }

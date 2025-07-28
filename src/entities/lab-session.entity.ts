@@ -22,11 +22,8 @@ export class LabSession {
   @Column({ name: 'patient_id' })
   patientId: number;
 
-  @Column({ unique: true })
-  labcode: string;
-
-  @Column()
-  barcode: string;
+  @Column({ type: 'text', array: true, nullable: true })
+  labcode: string[];
 
   @Column({ type: 'varchar', nullable: true })
   requestDate: Date;

@@ -36,7 +36,7 @@ export class EtlResultResponseDto {
 
 export class ValidationSessionResponseDto {
   id: number;
-  labcode: string;
+  labcode: string[];
   barcode: string;
   requestDate: Date;
   createdAt: Date;

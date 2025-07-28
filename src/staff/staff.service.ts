@@ -496,27 +496,51 @@ export class StaffService {
   private async generatePatientBarcode(): Promise<string> {
     // Get current date in YYMMDD format
     const now = new Date();
-    const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
-    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Month with leading zero
-    const day = now.getDate().toString().padStart(2, '0'); // Day with leading zero
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
     const datePrefix = `${year}${month}${day}`;
 
-    // Find the highest existing barcode for today
-    const existingPatients = await this.patientRepository
-      .createQueryBuilder('patient')
-      .where('patient.barcode LIKE :prefix', { prefix: `${datePrefix}%` })
-      .orderBy('patient.barcode', 'DESC')
-      .getMany();
+    let attempt = 1;
 
-    let sequenceNumber = 1;
-    if (existingPatients.length > 0) {
-      // Extract sequence number from the highest barcode and increment
-      const highestBarcode = existingPatients[0].barcode;
-      const sequence = parseInt(highestBarcode.substring(6)) || 0;
-      sequenceNumber = sequence + 1;
+    while (true) {
+      try {
+        // Count existing patients for today
+        const todayCount = await this.patientRepository
+          .createQueryBuilder('patient')
+          .where('patient.barcode LIKE :prefix', { prefix: `${datePrefix}%` })
+          .getCount();
+
+        // Generate barcode with next sequence number
+        const sequenceNumber = todayCount + attempt;
+        const barcode = `${datePrefix}${sequenceNumber}`;
+
+        // Check if this barcode already exists
+        const exists = await this.patientRepository
+          .createQueryBuilder('patient')
+          .where('patient.barcode = :barcode', { barcode })
+          .getOne();
+
+        if (!exists) {
+          this.logger.log(
+            `Generated unique barcode: ${barcode} on attempt ${attempt}`,
+          );
+          return barcode;
+        }
+
+        this.logger.warn(
+          `Barcode ${barcode} already exists, trying next sequence (attempt ${attempt})`,
+        );
+        attempt++;
+      } catch (error) {
+        this.logger.error(
+          `Error generating barcode on attempt ${attempt}:`,
+          error,
+        );
+        // Continue trying even on error
+        attempt++;
+      }
     }
-
-    return `${datePrefix}${sequenceNumber}`;
   }
 
   async createPatient(createPatientDto: CreatePatientDto) {
@@ -548,6 +572,7 @@ export class StaffService {
 
   async getAllPatients(query: PaginationQueryDto) {
     this.logger.log('Starting Patient get all process');
+    this.logger.log(`Query parameters: ${JSON.stringify(query)}`);
     try {
       const {
         page = 1,
@@ -558,7 +583,26 @@ export class StaffService {
         sortOrder = 'ASC',
       } = query;
 
-      const queryBuilder = this.patientRepository.createQueryBuilder('patient');
+      const queryBuilder = this.patientRepository
+        .createQueryBuilder('patient')
+        .leftJoinAndSelect('patient.labSessions', 'labSession')
+        .select([
+          'patient.id',
+          'patient.fullName',
+          'patient.dateOfBirth',
+          'patient.phone',
+          'patient.address',
+          'patient.citizenId',
+          'patient.barcode',
+          'patient.createdAt',
+          'labSession.id',
+          'labSession.labcode',
+          'labSession.typeLabSession',
+          'labSession.requestDate',
+          'labSession.createdAt',
+          'labSession.updatedAt',
+          'labSession.finishedAt',
+        ]);
 
       // Global search functionality - search by citizenId and fullName
       if (search) {
@@ -569,34 +613,163 @@ export class StaffService {
         );
       }
 
-      // Date range filtering
-      if (dateFrom) {
-        queryBuilder.andWhere('patient.createdAt >= :dateFrom', {
-          dateFrom: new Date(dateFrom),
+      // Note: Date filtering will be handled in JavaScript after processing the results
+      // This is more reliable than complex SQL subqueries
+
+      // For total count, we need to fetch all matching patients and apply the same filtering logic
+      let totalCount: number;
+      if (dateFrom || dateTo) {
+        // When date filtering is applied, we need to process all patients to get accurate count
+        const allPatientsForCount = await this.patientRepository
+          .createQueryBuilder('patient')
+          .leftJoinAndSelect('patient.labSessions', 'labSession')
+          .select(['patient.id', 'labSession.id', 'labSession.createdAt'])
+          .andWhere(
+            search
+              ? '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)'
+              : '1=1',
+            search ? { search: `%${search.trim().toLowerCase()}%` } : {},
+          )
+          .getMany();
+
+        // Apply the same filtering logic as below
+        const filteredForCount = allPatientsForCount.filter((patient) => {
+          const latestLabSession = patient.labSessions?.sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          )[0];
+
+          if (!latestLabSession) {
+            return false; // Exclude patients without lab sessions when date filtering
+          }
+
+          const latestSessionDate = new Date(latestLabSession.createdAt);
+
+          if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            if (latestSessionDate < fromDate) {
+              return false;
+            }
+          }
+
+          if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999);
+            if (latestSessionDate > toDate) {
+              return false;
+            }
+          }
+
+          return true;
         });
+
+        totalCount = filteredForCount.length;
+      } else {
+        // When no date filtering, we can use the simple count
+        const countQueryBuilder =
+          this.patientRepository.createQueryBuilder('patient');
+
+        if (search) {
+          const searchTerm = `%${search.trim().toLowerCase()}%`;
+          countQueryBuilder.andWhere(
+            '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
+            { search: searchTerm },
+          );
+        }
+
+        totalCount = await countQueryBuilder.getCount();
       }
 
-      if (dateTo) {
-        const endDate = new Date(dateTo);
-        endDate.setHours(23, 59, 59, 999); // Include the entire day
-        queryBuilder.andWhere('patient.createdAt <= :dateTo', {
-          dateTo: endDate,
-        });
-      }
-
-      queryBuilder.orderBy(`patient.fullName`, sortOrder);
-
-      const total = await queryBuilder.getCount();
       const offset = (page - 1) * limit;
       queryBuilder.skip(offset).take(limit);
 
-      const patients = await queryBuilder.getMany();
+      const patientsWithSessions = await queryBuilder.getMany();
+
+      // Process patients to include only the latest lab session
+      let processedPatients = patientsWithSessions.map((patient) => {
+        // Sort lab sessions by creation date and get the latest one
+        const latestLabSession = patient.labSessions?.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0];
+
+        return {
+          id: patient.id,
+          fullName: patient.fullName,
+          dateOfBirth: patient.dateOfBirth,
+          phone: patient.phone,
+          address: patient.address,
+          citizenId: patient.citizenId,
+          barcode: patient.barcode,
+          createdAt: patient.createdAt,
+          latestLabSession: latestLabSession || null,
+        };
+      });
+
+      // Apply date filtering based on latest lab session
+      if (dateFrom || dateTo) {
+        processedPatients = processedPatients.filter((patient) => {
+          if (!patient.latestLabSession) {
+            return false; // Exclude patients without lab sessions when date filtering
+          }
+
+          const latestSessionDate = new Date(
+            patient.latestLabSession.createdAt,
+          );
+
+          if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            if (latestSessionDate < fromDate) {
+              return false;
+            }
+          }
+
+          if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999); // Include the entire day
+            if (latestSessionDate > toDate) {
+              return false;
+            }
+          }
+
+          return true;
+        });
+      }
+
+      // Sort by latest lab session creation date
+      const sortedPatients = processedPatients.sort((a, b) => {
+        const aDate = a.latestLabSession?.createdAt
+          ? new Date(a.latestLabSession.createdAt).getTime()
+          : null;
+        const bDate = b.latestLabSession?.createdAt
+          ? new Date(b.latestLabSession.createdAt).getTime()
+          : null;
+
+        // Handle patients without lab sessions or with null createdAt
+        if (aDate === null && bDate === null) {
+          return 0; // Both have no valid dates, maintain order
+        }
+        if (aDate === null) {
+          return sortOrder === 'DESC' ? 1 : -1; // Put patients without valid dates at bottom for DESC, top for ASC
+        }
+        if (bDate === null) {
+          return sortOrder === 'DESC' ? -1 : 1; // Put patients without valid dates at bottom for DESC, top for ASC
+        }
+
+        // Both have valid lab session dates, sort by date
+        if (sortOrder === 'DESC') {
+          return bDate - aDate;
+        } else {
+          return aDate - bDate;
+        }
+      });
+
       return new PaginatedResponseDto(
-        patients,
+        sortedPatients,
         page,
         limit,
-        total,
-        'Patients retrieved successfully',
+        totalCount, // Use the properly calculated total count
+        'Patients with latest lab sessions retrieved successfully',
       );
     } catch (error) {
       this.logger.error('Failed to get all Patients', error);
@@ -921,6 +1094,7 @@ export class StaffService {
         patientId,
         labcode: sessionLabcodes,
         requestDate: new Date(),
+        createdAt: new Date(),
         typeLabSession,
         metadata: {},
       });

@@ -50,4 +50,34 @@ export class UploadPatientFilesDto {
   })
   @IsOptional()
   ocrResult?: any;
+
+  @ApiProperty({
+    description: 'Array of lab codes for the session (duplicates allowed)',
+    example: ['O5123A', 'N5456B', 'O5123A'],
+    required: false,
+    type: [String],
+  })
+  @Transform(({ value }) => {
+    // Handle form data input - could be string, array, or JSON string
+    if (typeof value === 'string') {
+      try {
+        // Try to parse as JSON array first
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [value];
+      } catch (error) {
+        // If not JSON, treat as comma-separated string or single value
+        return value.includes(',') ? value.split(',').map(s => s.trim()) : [value];
+      }
+    }
+    // If already an array, return as is
+    if (Array.isArray(value)) {
+      return value;
+    }
+    // Fallback to empty array
+    return [];
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  labcode?: string[];
 }

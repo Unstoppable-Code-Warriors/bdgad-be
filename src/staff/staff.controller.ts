@@ -545,6 +545,11 @@ export class StaffController {
           description: 'Type of lab session',
           example: 'test',
         },
+        labcode: {
+          type: 'string',
+          description: 'Labcode',
+          example: '[O5123A, N5456B]',
+        },
         ocrResult: {
           type: 'string',
           description:

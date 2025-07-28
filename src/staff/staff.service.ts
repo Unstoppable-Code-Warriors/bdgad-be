@@ -889,7 +889,7 @@ export class StaffService {
   ) {
     this.logger.log('Starting Patient Files upload process');
     try {
-      const { patientId, typeLabSession, ocrResult } = uploadData;
+      const { patientId, typeLabSession, ocrResult, labcode } = uploadData;
       // Verify patient exists
       const patient = await this.patientRepository.findOne({
         where: { id: patientId },
@@ -897,17 +897,29 @@ export class StaffService {
       if (!patient) {
         return errorPatient.patientNotFound;
       }
-      // Generate unique labcode if not provided
-      const number = String(Math.floor(Math.random() * 999) + 1).padStart(
-        3,
-        '0',
-      );
-      const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
-      const defaultLabcode = `O5${number}${letter}`;
+
+      // Use provided labcode array or generate default labcode
+      let sessionLabcodes: string[];
+      if (labcode && labcode.length > 0) {
+        sessionLabcodes = labcode;
+        this.logger.log(
+          `Using provided labcodes: ${JSON.stringify(sessionLabcodes)}`,
+        );
+      } else {
+        // Generate unique labcode if not provided
+        const number = String(Math.floor(Math.random() * 999) + 1).padStart(
+          3,
+          '0',
+        );
+        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26)); // A-Z
+        const defaultLabcode = `O5${number}${letter}`;
+        sessionLabcodes = [defaultLabcode];
+        this.logger.log(`Generated default labcode: ${defaultLabcode}`);
+      }
 
       const labSession = this.labSessionRepository.create({
         patientId,
-        labcode: [defaultLabcode],
+        labcode: sessionLabcodes,
         requestDate: new Date(),
         typeLabSession,
         metadata: {},
@@ -1041,7 +1053,9 @@ export class StaffService {
       notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${labSession.patient.barcode}`;
       notificationReq.labcode = labSession.labcode || [];
       notificationReq.barcode = labSession.patient.barcode;
-      this.notificationService.createNotification(notificationReq as CreateNotificationReqDto);
+      this.notificationService.createNotification(
+        notificationReq as CreateNotificationReqDto,
+      );
       return {
         message: 'Lab session updated successfully',
         labSession: updatedLabSession,

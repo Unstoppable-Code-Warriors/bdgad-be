@@ -802,7 +802,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         id: etlResultId,
         status: In([EtlResultStatus.FAILED, EtlResultStatus.REJECTED]),
       },
-      relations: { session: true },
+      relations: { session: { patient: true } },
     });
 
     if (!etlResult) {

@@ -551,6 +551,13 @@ export class StaffService {
       // Generate barcode with format YYMMDD + ascending order number
       const barcode = await this.generatePatientBarcode();
 
+      const existingPatient = await this.patientRepository.findOne({
+        where: { citizenId: citizenId.trim() },
+      });
+      if (existingPatient) {
+        return errorPatient.citizenIdExists;
+      }
+
       const patient = this.patientRepository.create({
         fullName: fullName.trim(),
         dateOfBirth: new Date('1995-07-05'),
@@ -790,8 +797,9 @@ export class StaffService {
         return errorPatient.patientNotFound;
       }
 
-      //validate duplicate citizenId
-      if (updatePatientDto.citizenId) {
+
+      //Check citizenid is exists
+      if (updatePatientDto.citizenId && updatePatientDto.citizenId !== patient.citizenId) {
         const existingPatient = await this.patientRepository.findOne({
           where: { citizenId: updatePatientDto.citizenId },
         });
@@ -923,6 +931,9 @@ export class StaffService {
             fileName: true,
             filePath: true,
           },
+        },
+        order: {
+          createdAt: 'ASC',
         },
       });
       return { labSessionData, patientData };

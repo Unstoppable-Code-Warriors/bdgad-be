@@ -807,8 +807,12 @@ export class StaffService {
           return errorPatient.citizenIdExists;
         }
       }
+      // Update patient
+      Object.assign(patient, updatePatientDto);
+      await this.patientRepository.save(patient);
 
       return {
+        message: 'Patient updated successfully',
         updatePatientDto: updatePatientDto,
         patient: {
           id: patient.id,
@@ -820,14 +824,6 @@ export class StaffService {
           citizenId: patient.citizenId,
         },
       };
-      // Object.assign(patient, updatePatientDto);
-
-      // const updatedPatient = await this.patientRepository.save(patient);
-
-      // return {
-      //   message: 'Patient updated successfully',
-      //   patient: updatedPatient,
-      // };
     } catch (error) {
       this.logger.error('Failed to update Patient', error);
       throw new InternalServerErrorException(error.message);

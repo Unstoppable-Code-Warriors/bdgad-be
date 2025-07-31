@@ -518,7 +518,7 @@ export class AnalysisService {
       await this.etlResultRepository.save(etlResult);
 
       // Mock processing delay (simulate ETL pipeline work)
-      await new Promise((resolve) => setTimeout(resolve, 10000)); // 10 seconds
+      await new Promise((resolve) => setTimeout(resolve, 2000)); 
 
       // Generate mock analysis result content using first labcode or 'unknown'
       const primaryLabcode = labcode?.[0] || 'unknown';
@@ -782,9 +782,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     // Update ETL result status to WAIT_FOR_APPROVAL
     etlResult.status = EtlResultStatus.WAIT_FOR_APPROVAL;
-    //vietnamese please
-    etlResult.comment = 'Gửi thẩm định để xem xét';
-    etlResult.commentBy = user.id;
+   
     await this.etlResultRepository.save(etlResult);
 
     return {
@@ -873,8 +871,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     // Reset the ETL result for retry
     etlResult.status = EtlResultStatus.PROCESSING;
     etlResult.resultPath = '';
-    etlResult.comment = `Retried by ${user.name} at ${new Date().toISOString()}`;
-    etlResult.commentBy = user.id;
+
     etlResult.etlCompletedAt = new Date();
     await this.etlResultRepository.save(etlResult);
 

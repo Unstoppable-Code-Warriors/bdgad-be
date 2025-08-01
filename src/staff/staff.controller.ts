@@ -33,6 +33,7 @@ import {
   ApiQuery,
   ApiOperation,
   ApiTags,
+  ApiParam,
 } from '@nestjs/swagger';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
@@ -511,6 +512,86 @@ export class StaffController {
     @Param('patientFileId') patientFileId: number,
   ) {
     return this.staffService.deletePatientFile(sessionId, patientFileId);
+  }
+
+  @ApiTags('Staff - Patient Files')
+  @Put('patient-files/sessions/:labSessionId')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({
+    summary: 'Add patient files to existing lab session',
+    description:
+      'Add multiple patient files with optional OCR results to an existing lab session',
+  })
+  @ApiParam({
+    name: 'labSessionId',
+    type: 'number',
+    description: 'Lab session ID',
+    example: 1,
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Patient files to add with form data',
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+      required: ['files'],
+    },
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'files', maxCount: 20 }], {
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+          'image/jpeg', // .jpg
+          'image/jpg', // .jpg
+          'image/png', // .png
+          'application/pdf', // .pdf
+          'text/plain', // .txt
+          'application/msword', // .doc
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+          'application/vnd.ms-excel', // .xls
+          'text/csv', // .csv
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new Error(
+              'Only images, PDF, text, csv, xls, xlsx, doc, docx files are allowed',
+            ),
+            false,
+          );
+        }
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+        files: 20, // Maximum 20 files
+      },
+      preservePath: true, // Preserve the original filename path
+    }),
+  )
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async updatePatientFiles(
+    @Param('labSessionId') labSessionId: number,
+    @UploadedFiles() files: { files?: Express.Multer.File[] },
+    @User() user: AuthenticatedUser,
+  ) {
+    if (!files.files || files.files.length === 0) {
+      throw new BadRequestException('At least one file is required');
+    }
+    return this.staffService.updatePatientFiles(
+      labSessionId,
+      files.files,
+      user,
+    );
   }
 
   @ApiTags('Staff - Patient Files')

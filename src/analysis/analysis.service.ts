@@ -230,12 +230,8 @@ export class AnalysisService {
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
-          doctor: labcode.labSession.assignment?.doctor || {
-            id: 0,
-            name: 'Unknown',
-            email: 'unknown@example.com',
-            metadata: {},
-          },
+          doctor: labcode.labSession.assignment?.doctor || null,
+          validation: labcode.labSession.assignment?.validation || null,
           latestFastqPairFile: latestFastqFilePair,
           latestEtlResult,
         };
@@ -399,12 +395,8 @@ export class AnalysisService {
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
-      doctor: session.assignment?.doctor || {
-        id: 0,
-        name: 'Unknown',
-        email: 'unknown@example.com',
-        metadata: {},
-      },
+      doctor: session.assignment?.doctor || null,
+      validation: session.assignment?.validation || null,
       fastqFilePairs: allFastqFilePairs, // Use the filtered FastQ pairs for this labcode
       etlResults: allEtlResults, // Use the ETL results for this labcode
     };

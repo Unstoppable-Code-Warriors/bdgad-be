@@ -247,12 +247,8 @@ export class LabTestService {
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
-          doctor: labcode.labSession.assignment?.doctor || {
-            id: 0,
-            name: 'Unknown',
-            email: 'unknown@example.com',
-            metadata: {},
-          },
+          doctor: labcode.labSession.assignment?.doctor || null,
+          analysis: labcode.labSession.assignment?.analysis || null,
           latestFastqFilePair: latestFastqFilePair
             ? this.mapFastqFilePairToDto(latestFastqFilePair)
             : null,
@@ -381,12 +377,8 @@ export class LabTestService {
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
-      doctor: session.assignment?.doctor || {
-        id: 0,
-        name: 'Unknown',
-        email: 'unknown@example.com',
-        metadata: {},
-      },
+      doctor: session.assignment?.doctor || null,
+      analysis: session.assignment?.analysis || null,
       fastqFilePairs: sortedFastqFilePairs.map((filePair) =>
         this.mapFastqFilePairToDto(filePair),
       ),

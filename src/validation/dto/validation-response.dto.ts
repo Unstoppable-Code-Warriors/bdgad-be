@@ -15,6 +15,13 @@ export class DoctorResponseDto {
   metadata: Record<string, any>;
 }
 
+export class AnalysisResponseDto {
+  id: number;
+  name: string;
+  email: string;
+  metadata: Record<string, any>;
+}
+
 export class EtlResultResponseDto {
   id: number;
   resultPath: string;
@@ -42,7 +49,8 @@ export class ValidationSessionResponseDto {
   createdAt: Date;
   metadata: Record<string, any>;
   patient: PatientResponseDto;
-  doctor: DoctorResponseDto;
+  doctor: DoctorResponseDto | null;
+  analysis?: AnalysisResponseDto | null;
 }
 
 export class ValidationSessionWithLatestEtlResponseDto extends ValidationSessionResponseDto {

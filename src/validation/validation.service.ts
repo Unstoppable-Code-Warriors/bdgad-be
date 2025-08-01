@@ -73,6 +73,7 @@ export class ValidationService {
       .leftJoinAndSelect('labSession.patient', 'patient')
       .leftJoinAndSelect('labSession.assignment', 'assignment')
       .leftJoinAndSelect('assignment.doctor', 'doctor')
+      .leftJoinAndSelect('assignment.analysis', 'analysis')
       .select([
         'labcode.id',
         'labcode.labcode',
@@ -100,6 +101,10 @@ export class ValidationService {
         'doctor.name',
         'doctor.email',
         'doctor.metadata',
+        'analysis.id',
+        'analysis.name',
+        'analysis.email',
+        'analysis.metadata',
       ])
       .where('assignment.validationId = :userId', { userId: user.id })
       .andWhere('labSession.typeLabSession = :type', { type: 'test' })
@@ -167,12 +172,8 @@ export class ValidationService {
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
-          doctor: labcode.labSession.assignment?.doctor || {
-            id: 0,
-            name: 'Unknown',
-            email: 'unknown@example.com',
-            metadata: {},
-          },
+          doctor: labcode.labSession.assignment?.doctor || null,
+          analysis: labcode.labSession.assignment?.analysis || null,
           latestEtlResult: latestEtlResult
             ? {
                 id: latestEtlResult.id,
@@ -215,6 +216,7 @@ export class ValidationService {
           patient: true,
           assignment: {
             doctor: true,
+            analysis: true,
           },
         },
         etlResults: {
@@ -251,12 +253,8 @@ export class ValidationService {
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
-      doctor: session.assignment?.doctor || {
-        id: 0,
-        name: 'Unknown',
-        email: 'unknown@example.com',
-        metadata: {},
-      },
+      doctor: session.assignment?.doctor || null,
+      analysis: session.assignment?.analysis || null,
       latestEtlResult: latestEtlResult
         ? {
             id: latestEtlResult.id,

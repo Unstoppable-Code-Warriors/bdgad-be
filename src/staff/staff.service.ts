@@ -1085,6 +1085,96 @@ export class StaffService {
       this.logger.log('Patient File delete process completed');
     }
   }
+  async updatePatientFiles(
+    labSessionId: number,
+    files: Express.Multer.File[],
+    user?: AuthenticatedUser,
+  ) {
+    this.logger.log('Starting Patient Files update process');
+    try {
+      // Verify lab session exists
+      const labSession = await this.labSessionRepository.findOne({
+        where: { id: labSessionId },
+        relations: {
+          patient: true,
+        },
+      });
+
+      if (!labSession) {
+        return errorLabSession.labSessionNotFound;
+      }
+
+      // Upload new files and create patient file records
+      const uploadedFiles: PatientFile[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const timestamp = Date.now();
+
+        // Properly decode UTF-8 filename
+        let originalFileName = Buffer.from(
+          file.originalname,
+          'binary',
+        ).toString('utf8');
+        let originalFileNameWithoutSpace = originalFileName.replace(
+          /\s+/g,
+          '-',
+        );
+        const originalFileNameWithoutDot = originalFileName
+          .split('.')
+          .slice(0, -1)
+          .join('.');
+
+        // Create a safe S3 key without special characters
+        const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
+        const s3Key = `session-${labSessionId}/${safeFileName}`;
+
+        // Upload to S3
+        const s3Url = await this.s3Service.uploadFile(
+          S3Bucket.PATIENT_FILES,
+          s3Key,
+          file.buffer,
+          file.mimetype,
+        );
+
+        // Create patient file record
+        const patientFile = this.patientFileRepository.create({
+          sessionId: labSessionId,
+          fileName: originalFileNameWithoutDot,
+          filePath: s3Url,
+          fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
+          fileSize: file.size,
+          ocrResult: {},
+          uploadedBy: user?.id || 0, // Use 0 as default if user is not provided
+          uploadedAt: new Date(),
+        });
+
+        const savedPatientFile =
+          await this.patientFileRepository.save(patientFile);
+        uploadedFiles.push(savedPatientFile);
+
+        this.logger.log(
+          `Uploaded file: ${file.originalname} to session ${labSessionId}`,
+        );
+      }
+
+      return {
+        message: 'Patient files updated successfully',
+        uploadedFilesCount: uploadedFiles.length,
+        uploadedFiles: uploadedFiles.map((file) => ({
+          id: file.id,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          fileSize: file.fileSize,
+          uploadedAt: file.uploadedAt,
+        })),
+      };
+    } catch (error) {
+      this.logger.error('Failed to update patient files', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Patient files update process completed');
+    }
+  }
 
   async uploadPatientFiles(
     files: Express.Multer.File[],

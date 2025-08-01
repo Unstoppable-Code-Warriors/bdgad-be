@@ -5,6 +5,8 @@ import { LabTestController } from './lab-test.controller';
 import { FastqFile } from '../entities/fastq-file.entity';
 import { FastqFilePair } from '../entities/fastq-file-pair.entity';
 import { LabSession } from '../entities/lab-session.entity';
+import { LabCodeLabSession } from '../entities/labcode-lab-session.entity';
+import { AssignLabSession } from '../entities/assign-lab-session.entity';
 import { User } from 'src/entities/user.entity';
 import { Patient } from 'src/entities/patient.entity';
 import { S3Service } from '../utils/s3.service';
@@ -18,6 +20,8 @@ import { NotificationModule } from 'src/notification/notification.module';
       FastqFile,
       FastqFilePair,
       LabSession,
+      LabCodeLabSession,
+      AssignLabSession,
       User,
       Patient,
     ]),

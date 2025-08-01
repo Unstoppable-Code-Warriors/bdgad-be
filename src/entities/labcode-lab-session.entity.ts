@@ -23,15 +23,6 @@ export class LabCodeLabSession {
   @Column({ name: 'labcode', type: 'varchar' })
   labcode: string;
 
-  @Column({
-    type: 'jsonb',
-    default: {},
-  })
-  metadata: Record<string, any>;
-
-  @Column({ name: 'request_date', type: 'timestamp', nullable: true })
-  requestDate: Date;
-
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -43,9 +34,13 @@ export class LabCodeLabSession {
   @JoinColumn({ name: 'lab_session_id' })
   labSession: LabSession;
 
-  @OneToMany(() => FastqFilePair, (fastqFilePair) => fastqFilePair.labcodeLabSession, {
-    cascade: true,
-  })
+  @OneToMany(
+    () => FastqFilePair,
+    (fastqFilePair) => fastqFilePair.labcodeLabSession,
+    {
+      cascade: true,
+    },
+  )
   fastqFilePairs: FastqFilePair[];
 
   @OneToMany(() => EtlResult, (etlResult) => etlResult.labcodeLabSession, {

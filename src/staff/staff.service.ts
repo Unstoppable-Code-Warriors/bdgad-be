@@ -37,6 +37,8 @@ import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { GeneralFile } from 'src/entities/general-file.entity';
+import { LabCodeLabSession } from 'src/entities/labcode-lab-session.entity';
+import { AssignLabSession } from 'src/entities/assign-lab-session.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
@@ -71,6 +73,10 @@ export class StaffService {
     private readonly patientRepository: Repository<Patient>,
     @InjectRepository(LabSession)
     private readonly labSessionRepository: Repository<LabSession>,
+    @InjectRepository(LabCodeLabSession)
+    private readonly labCodeLabSessionRepository: Repository<LabCodeLabSession>,
+    @InjectRepository(AssignLabSession)
+    private readonly assignLabSessionRepository: Repository<AssignLabSession>,
     @InjectRepository(PatientFile)
     private readonly patientFileRepository: Repository<PatientFile>,
     private readonly notificationService: NotificationService,
@@ -603,9 +609,7 @@ export class StaffService {
           'patient.barcode',
           'patient.createdAt',
           'labSession.id',
-          'labSession.labcode',
           'labSession.typeLabSession',
-          'labSession.requestDate',
           'labSession.createdAt',
           'labSession.updatedAt',
           'labSession.finishedAt',
@@ -797,9 +801,11 @@ export class StaffService {
         return errorPatient.patientNotFound;
       }
 
-
       //Check citizenid is exists
-      if (updatePatientDto.citizenId && updatePatientDto.citizenId !== patient.citizenId) {
+      if (
+        updatePatientDto.citizenId &&
+        updatePatientDto.citizenId !== patient.citizenId
+      ) {
         const existingPatient = await this.patientRepository.findOne({
           where: { citizenId: updatePatientDto.citizenId },
         });
@@ -900,27 +906,36 @@ export class StaffService {
           id: In(labSessions),
         },
         relations: {
-          doctor: true,
-          labTesting: true,
+          assignment: {
+            doctor: true,
+            labTesting: true,
+          },
           patientFiles: true,
+          labcodes: true,
         },
         select: {
           id: true,
-          labcode: true,
           typeLabSession: true,
-          requestDate: true,
           createdAt: true,
           updatedAt: true,
           finishedAt: true,
-          doctor: {
+          assignment: {
             id: true,
-            name: true,
-            email: true,
+            doctor: {
+              id: true,
+              name: true,
+              email: true,
+            },
+            labTesting: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
-          labTesting: {
+          labcodes: {
             id: true,
-            name: true,
-            email: true,
+            labcode: true,
+            createdAt: true,
           },
           patientFiles: {
             id: true,
@@ -948,17 +963,18 @@ export class StaffService {
         where: { id },
         relations: {
           patient: true,
-          doctor: true,
-          labTesting: true,
+          assignment: {
+            doctor: true,
+            labTesting: true,
+          },
           patientFiles: {
             uploader: true,
           },
+          labcodes: true,
         },
         select: {
           id: true,
-          labcode: true,
           typeLabSession: true,
-          requestDate: true,
           createdAt: true,
           updatedAt: true,
           finishedAt: true,
@@ -972,15 +988,23 @@ export class StaffService {
             barcode: true,
             createdAt: true,
           },
-          doctor: {
+          assignment: {
             id: true,
-            name: true,
-            email: true,
+            doctor: {
+              id: true,
+              name: true,
+              email: true,
+            },
+            labTesting: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
-          labTesting: {
+          labcodes: {
             id: true,
-            name: true,
-            email: true,
+            labcode: true,
+            createdAt: true,
           },
           patientFiles: {
             id: true,
@@ -1097,16 +1121,35 @@ export class StaffService {
         this.logger.log(`Generated default labcode: ${defaultLabcode}`);
       }
 
+      // Create the basic lab session without labcodes
       const labSession = this.labSessionRepository.create({
         patientId,
-        labcode: sessionLabcodes,
-        requestDate: new Date(),
         createdAt: new Date(),
         typeLabSession,
-        metadata: {},
       });
       await this.labSessionRepository.save(labSession);
       this.logger.log(`Created new lab session with ID: ${labSession.id}`);
+
+      // Create individual labcode entries
+      const labcodeEntities: LabCodeLabSession[] = [];
+      for (const labcode of sessionLabcodes) {
+        const labcodeEntity = this.labCodeLabSessionRepository.create({
+          labSessionId: labSession.id,
+          labcode: labcode,
+          createdAt: new Date(),
+        });
+        labcodeEntities.push(labcodeEntity);
+      }
+      await this.labCodeLabSessionRepository.save(labcodeEntities);
+      this.logger.log(`Created ${labcodeEntities.length} labcode entries`);
+
+      // Create assignment record (initially empty)
+      const assignment = this.assignLabSessionRepository.create({
+        labSessionId: labSession.id,
+        createdAt: new Date(),
+      });
+      await this.assignLabSessionRepository.save(assignment);
+      this.logger.log(`Created assignment record for session ${labSession.id}`);
 
       // Upload files and create patient file records
       for (let i = 0; i < files.length; i++) {
@@ -1216,7 +1259,11 @@ export class StaffService {
       const { doctorId, labTestingId } = assignLabSessionDto;
       const labSession = await this.labSessionRepository.findOne({
         where: { id },
-        relations: { patient: true },
+        relations: {
+          patient: true,
+          assignment: true,
+          labcodes: true,
+        },
       });
       if (!labSession) {
         return errorLabSession.labSessionNotFound;
@@ -1227,19 +1274,36 @@ export class StaffService {
       if (labSession.typeLabSession === TypeLabSession.TEST && !labTestingId) {
         return errorLabSession.labTestingIdRequired;
       }
-      Object.assign(labSession, assignLabSessionDto);
-      const updatedLabSession =
-        await this.labSessionRepository.save(labSession);
-      const formattedLabcodes = this.formatLabcodeArray(labSession.labcode);
+
+      // Update or create assignment
+      let assignment = labSession.assignment;
+      if (!assignment) {
+        assignment = this.assignLabSessionRepository.create({
+          labSessionId: labSession.id,
+          createdAt: new Date(),
+        });
+      }
+
+      assignment.doctorId = doctorId;
+      if (labTestingId) {
+        assignment.labTestingId = labTestingId;
+      }
+      assignment.updatedAt = new Date();
+
+      await this.assignLabSessionRepository.save(assignment);
+
+      // Get labcodes for notification
+      const labcodes = labSession.labcodes?.map((lc) => lc.labcode) || [];
+      const formattedLabcodes = this.formatLabcodeArray(labcodes);
       notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${labSession.patient.barcode}`;
-      notificationReq.labcode = labSession.labcode || [];
+      notificationReq.labcode = labcodes;
       notificationReq.barcode = labSession.patient.barcode;
       this.notificationService.createNotification(
         notificationReq as CreateNotificationReqDto,
       );
       return {
         message: 'Lab session updated successfully',
-        labSession: updatedLabSession,
+        labSession: labSession,
       };
     } catch (error) {
       this.logger.error('Failed to update lab session', error);

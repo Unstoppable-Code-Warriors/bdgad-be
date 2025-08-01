@@ -9,6 +9,8 @@ import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { User } from 'src/entities/user.entity';
+import { LabCodeLabSession } from '../entities/labcode-lab-session.entity';
+import { AssignLabSession } from '../entities/assign-lab-session.entity';
 import { NotificationModule } from 'src/notification/notification.module';
 import { CategoryGeneralFileModule } from 'src/category-general-file/category-general-file.module';
 
@@ -21,6 +23,8 @@ import { CategoryGeneralFileModule } from 'src/category-general-file/category-ge
       LabSession,
       PatientFile,
       User,
+      LabCodeLabSession,
+      AssignLabSession,
     ]),
     NotificationModule,
     CategoryGeneralFileModule,

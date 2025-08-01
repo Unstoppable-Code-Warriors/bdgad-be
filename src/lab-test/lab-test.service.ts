@@ -12,6 +12,8 @@ import {
   FastqFilePair,
   FastqFileStatus,
 } from '../entities/fastq-file-pair.entity';
+import { LabCodeLabSession } from '../entities/labcode-lab-session.entity';
+import { AssignLabSession } from '../entities/assign-lab-session.entity';
 import {
   LabSessionWithFastqResponseDto,
   LabSessionWithAllFastqResponseDto,
@@ -46,6 +48,10 @@ export class LabTestService {
     private readonly notificationService: NotificationService,
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
+    @InjectRepository(LabCodeLabSession)
+    private labCodeLabSessionRepository: Repository<LabCodeLabSession>,
+    @InjectRepository(AssignLabSession)
+    private assignLabSessionRepository: Repository<AssignLabSession>,
     @InjectRepository(FastqFile)
     private fastqFileRepository: Repository<FastqFile>,
     @InjectRepository(FastqFilePair)
@@ -109,20 +115,25 @@ export class LabTestService {
       dateTo,
     } = query;
 
-    // Create query builder for more complex queries
-    const queryBuilder: SelectQueryBuilder<LabSession> =
-      this.labSessionRepository
-        .createQueryBuilder('labSession')
+    // Create query builder to find labcodes where the user is assigned as lab testing
+    const queryBuilder: SelectQueryBuilder<LabCodeLabSession> =
+      this.labCodeLabSessionRepository
+        .createQueryBuilder('labcode')
+        .leftJoinAndSelect('labcode.labSession', 'labSession')
         .leftJoinAndSelect('labSession.patient', 'patient')
-        .leftJoinAndSelect('labSession.doctor', 'doctor')
-        .leftJoinAndSelect('labSession.analysis', 'analysis')
-        .leftJoin('labSession.fastqFilePairs', 'fastqFilePairs')
+        .leftJoinAndSelect('labSession.assignment', 'assignment')
+        .leftJoinAndSelect('assignment.doctor', 'doctor')
+        .leftJoinAndSelect('assignment.analysis', 'analysis')
         .select([
+          'labcode.id',
+          'labcode.labcode',
+          'labcode.createdAt',
           'labSession.id',
-          'labSession.labcode',
-          'labSession.requestDate',
+          'labSession.patientId',
           'labSession.createdAt',
-          'labSession.metadata',
+          'labSession.updatedAt',
+          'labSession.typeLabSession',
+          'labSession.finishedAt',
           'patient.id',
           'patient.fullName',
           'patient.dateOfBirth',
@@ -131,130 +142,65 @@ export class LabTestService {
           'patient.citizenId',
           'patient.barcode',
           'patient.createdAt',
-          'analysis.id',
-          'analysis.name',
-          'analysis.email',
+          'assignment.id',
+          'assignment.doctorId',
+          'assignment.labTestingId',
+          'assignment.analysisId',
+          'assignment.validationId',
           'doctor.id',
           'doctor.name',
           'doctor.email',
           'doctor.metadata',
+          'analysis.id',
+          'analysis.name',
+          'analysis.email',
         ])
-        .where('labSession.labTestingId = :userId', { userId: user.id })
+        .where('assignment.labTestingId = :userId', { userId: user.id })
         .andWhere('labSession.typeLabSession = :type', { type: 'test' });
-        queryBuilder.orderBy('labSession.requestDate', 'DESC');
+
+    queryBuilder.orderBy('labcode.createdAt', 'DESC');
 
     // Apply search functionality (search by labcode and barcode)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(EXISTS (SELECT 1 FROM unnest(labSession.labcode) AS lc WHERE LOWER(lc) LIKE :search) OR LOWER(patient.barcode) LIKE :search)',
+        '(LOWER(labcode.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
 
-    // Apply date range filtering on requestDate
+    // Apply date range filtering on labcode creation date
     if (dateFrom) {
-      queryBuilder.andWhere('labSession.requestDate >= :dateFrom', {
+      queryBuilder.andWhere('labcode.createdAt >= :dateFrom', {
         dateFrom: new Date(dateFrom),
       });
     }
 
     if (dateTo) {
-      queryBuilder.andWhere('labSession.requestDate <= :dateTo', {
+      queryBuilder.andWhere('labcode.createdAt <= :dateTo', {
         dateTo: new Date(dateTo),
       });
     }
 
-    // Apply filter functionality (filter by status from FastqFile)
+    // Apply filter functionality (filter by FastqFile status)
     if (filter && filter.status) {
-      // Create a subquery to filter by FastqFile status
-      const subQuery = this.fastqFileRepository
-        .createQueryBuilder('fastqFile')
-        .select('DISTINCT fastqFile.sessionId')
-        .where('fastqFile.status = :status', { status: filter.status });
-
-      queryBuilder.andWhere(`labSession.id IN (${subQuery.getQuery()})`, {
-        status: filter.status,
-      });
+      queryBuilder.andWhere(
+        'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :status)',
+        { status: filter.status },
+      );
     }
-
-    // Apply dynamic sorting for all columns
-    // if (sortBy && sortOrder) {
-    //   const allowedSortFields = {
-    //     // Lab Session fields
-    //     id: 'labSession.id',
-    //     labcode: 'labSession.labcode',
-    //     barcode: 'patient.barcode',
-    //     requestDate: 'labSession.requestDate',
-    //     createdAt: 'labSession.createdAt',
-
-    //     // Patient fields
-    //     'patient.id': 'patient.id',
-    //     'patient.fullName': 'patient.fullName',
-    //     'patient.personalId': 'patient.personalId',
-    //     'patient.dateOfBirth': 'patient.dateOfBirth',
-    //     'patient.phone': 'patient.phone',
-    //     'patient.address': 'patient.address',
-    //     'patient.citizenId': 'patient.citizenId',
-    //     'patient.createdAt': 'patient.createdAt',
-
-    //     // Doctor fields
-    //     'doctor.id': 'doctor.id',
-    //     'doctor.name': 'doctor.name',
-    //     'doctor.email': 'doctor.email',
-
-    //     // Shorthand for common fields
-    //     fullName: 'patient.fullName',
-    //     personalId: 'patient.personalId',
-    //     doctorName: 'doctor.name',
-    //     doctorEmail: 'doctor.email',
-    //   };
-
-    //   const sortField = allowedSortFields[sortBy];
-    //   if (sortField) {
-    //     queryBuilder.orderBy(sortField, sortOrder);
-    //   } else {
-    //     // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
-    //     queryBuilder
-    //       .addSelect('fastqFile.status', 'fastqStatus')
-    //       .orderBy(
-    //         `CASE
-    //          WHEN fastqFile.status IS NULL THEN 1
-    //          WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2
-    //          WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3
-    //          WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4
-    //          WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5
-    //          ELSE 6 END`,
-    //       )
-    //       .addOrderBy('labSession.createdAt', 'DESC');
-    //   }
-    // } else {
-    //   // Default sort by FastQ status priority (null, UPLOADED, REJECTED, WAIT_FOR_APPROVAL, APPROVED) then by creation date
-    //   queryBuilder
-    //     .addSelect('fastqFile.status', 'fastqStatus')
-    //     .orderBy(
-    //       `CASE
-    //        WHEN fastqFile.status IS NULL THEN 1
-    //        WHEN fastqFile.status = '${FastqFileStatus.UPLOADED}' THEN 2
-    //        WHEN fastqFile.status = '${FastqFileStatus.REJECTED}' THEN 3
-    //        WHEN fastqFile.status = '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 4
-    //        WHEN fastqFile.status = '${FastqFileStatus.APPROVED}' THEN 5
-    //        ELSE 6 END`,
-    //     )
-    //     .addOrderBy('labSession.createdAt', 'DESC');
-    // }
 
     // Apply pagination
     queryBuilder.skip((page - 1) * limit).take(limit);
 
     // Execute query
-    const [sessions, total] = await queryBuilder.getManyAndCount();
+    const [labcodes, total] = await queryBuilder.getManyAndCount();
 
-    // For each session, get the latest FastQ file pair
-    const sessionsWithLatestFastq = await Promise.all(
-      sessions.map(async (session) => {
+    // For each labcode, get the latest FastQ file pair
+    const labcodesWithLatestFastq = await Promise.all(
+      labcodes.map(async (labcode) => {
         const latestFastqFilePair = await this.fastqFilePairRepository.findOne({
-          where: { sessionId: session.id },
+          where: { labcodeLabSessionId: labcode.id },
           relations: {
             creator: true,
             rejector: true,
@@ -292,9 +238,21 @@ export class LabTestService {
           },
         });
 
+        // Transform to match expected DTO structure
         return {
-          ...session,
-          barcode: session.patient.barcode,
+          id: labcode.id,
+          labcode: [labcode.labcode], // Convert single labcode to array for backward compatibility
+          barcode: labcode.labSession.patient.barcode,
+          requestDate: labcode.createdAt, // Use labcode creation date as request date
+          createdAt: labcode.labSession.createdAt,
+          metadata: {}, // Empty object for backward compatibility
+          patient: labcode.labSession.patient,
+          doctor: labcode.labSession.assignment?.doctor || {
+            id: 0,
+            name: 'Unknown',
+            email: 'unknown@example.com',
+            metadata: {},
+          },
           latestFastqFilePair: latestFastqFilePair
             ? this.mapFastqFilePairToDto(latestFastqFilePair)
             : null,
@@ -303,7 +261,7 @@ export class LabTestService {
     );
 
     return new PaginatedResponseDto(
-      sessionsWithLatestFastq,
+      labcodesWithLatestFastq,
       page,
       limit,
       total,
@@ -313,13 +271,17 @@ export class LabTestService {
   async findSessionById(
     id: number,
   ): Promise<LabSessionWithAllFastqResponseDto> {
-    // Find the session with related data using a single query with joins
-    const session = await this.labSessionRepository.findOne({
+    // Find the specific labcode session by its ID
+    const labcodeSession = await this.labCodeLabSessionRepository.findOne({
       where: { id },
       relations: {
-        patient: true,
-        doctor: true,
-        analysis: true,
+        labSession: {
+          patient: true,
+          assignment: {
+            doctor: true,
+            analysis: true,
+          },
+        },
         fastqFilePairs: {
           creator: true,
           rejector: true,
@@ -330,30 +292,43 @@ export class LabTestService {
       select: {
         id: true,
         labcode: true,
-        requestDate: true,
         createdAt: true,
-        metadata: true,
-        patient: {
+        labSession: {
           id: true,
-          fullName: true,
-          dateOfBirth: true,
-          phone: true,
-          address: true,
-          citizenId: true,
-          barcode: true,
+          patientId: true,
           createdAt: true,
-        },
-        doctor: {
-          id: true,
-          name: true,
-          email: true,
-          metadata: true,
-        },
-        analysis: {
-          id: true,
-          name: true,
-          email: true,
-          metadata: true,
+          updatedAt: true,
+          typeLabSession: true,
+          finishedAt: true,
+          patient: {
+            id: true,
+            fullName: true,
+            dateOfBirth: true,
+            phone: true,
+            address: true,
+            citizenId: true,
+            barcode: true,
+            createdAt: true,
+          },
+          assignment: {
+            id: true,
+            doctorId: true,
+            labTestingId: true,
+            analysisId: true,
+            validationId: true,
+            doctor: {
+              id: true,
+              name: true,
+              email: true,
+              metadata: true,
+            },
+            analysis: {
+              id: true,
+              name: true,
+              email: true,
+              metadata: true,
+            },
+          },
         },
         fastqFilePairs: {
           id: true,
@@ -384,22 +359,34 @@ export class LabTestService {
       },
     });
 
-    if (!session) {
-      throw new NotFoundException(`Session with id ${id} not found`);
+    if (!labcodeSession) {
+      throw new NotFoundException(`Labcode session with id ${id} not found`);
     }
 
+    const session = labcodeSession.labSession;
+
+    // Get all FastQ file pairs for this specific labcode session
+    const allFastqFilePairs = labcodeSession.fastqFilePairs || [];
+
     // Sort FastQ file pairs by createdAt in descending order (newest first)
-    const sortedFastqFilePairs = session.fastqFilePairs
-      ? session.fastqFilePairs.sort((a, b) => {
-          return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-        })
-      : [];
+    const sortedFastqFilePairs = allFastqFilePairs.sort((a, b) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
     return {
-      ...session,
+      id: labcodeSession.id,
+      labcode: [labcodeSession.labcode], // Array containing this specific labcode
       barcode: session.patient.barcode,
+      requestDate: labcodeSession.createdAt, // Use this labcode creation date as request date
+      createdAt: session.createdAt,
+      metadata: {}, // Empty object for backward compatibility
+      patient: session.patient,
+      doctor: session.assignment?.doctor || {
+        id: 0,
+        name: 'Unknown',
+        email: 'unknown@example.com',
+        metadata: {},
+      },
       fastqFilePairs: sortedFastqFilePairs.map((filePair) =>
         this.mapFastqFilePairToDto(filePair),
       ),
@@ -431,12 +418,16 @@ export class LabTestService {
       }
     }
 
-    const session = await this.labSessionRepository.findOne({
+    // Find the labcode session (assuming id is a labcode ID)
+    const labcodeSession = await this.labCodeLabSessionRepository.findOne({
       where: { id },
+      relations: {
+        labSession: true,
+      },
     });
 
-    if (!session) {
-      throw new NotFoundException(`Session with id ${id} not found`);
+    if (!labcodeSession) {
+      throw new NotFoundException(`Labcode session with id ${id} not found`);
     }
 
     try {
@@ -444,7 +435,7 @@ export class LabTestService {
 
       // Upload both files to S3 and create FastqFile records
       const uploadPromises = files.map(async (file, index) => {
-        const s3Key = `fastq/${id}/${timestamp}_${file.originalname}`;
+        const s3Key = `fastq/${labcodeSession.id}/${timestamp}_${file.originalname}`;
 
         // Upload file to S3 (Cloudflare R2)
         const s3Url = await this.s3Service.uploadFile(
@@ -464,9 +455,9 @@ export class LabTestService {
 
       const [fastqFileR1, fastqFileR2] = await Promise.all(uploadPromises);
 
-      // Create FastqFilePair to link the two files
+      // Create FastqFilePair to link the two files with the labcode session
       const fastqFilePair = this.fastqFilePairRepository.create({
-        sessionId: id,
+        labcodeLabSessionId: labcodeSession.id, // Link to labcode session instead of lab session
         fastqFileR1Id: fastqFileR1.id,
         fastqFileR2Id: fastqFileR2.id,
         createdBy: user.id,
@@ -599,13 +590,15 @@ export class LabTestService {
     analysisId: number,
     user: AuthenticatedUser,
   ): Promise<{ message: string }> {
-    // Find the FastqFilePair
+    // Find the FastqFilePair with its labcode session
     const fastqFilePair = await this.fastqFilePairRepository.findOne({
       where: { id: fastqFilePairId },
       relations: {
-        session: {
-          patient: true, // Include patient to access barcode
-          analysis: true, // Include analysis to check if already assigned
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+            assignment: true,
+          },
         },
       },
     });
@@ -623,34 +616,44 @@ export class LabTestService {
       );
     }
 
-    const session = fastqFilePair.session;
+    const labcodeSession = fastqFilePair.labcodeLabSession;
+    if (!labcodeSession) {
+      throw new NotFoundException(
+        `Labcode session not found for FastQ file pair`,
+      );
+    }
+
+    const session = labcodeSession.labSession;
     if (!session) {
       throw new NotFoundException(`Session not found for FastQ file pair`);
     }
 
-    const formattedLabcodes = this.formatLabcodeArray(session.labcode);
+    const formattedLabcode = labcodeSession.labcode;
     let notificationReq: CreateNotificationReqDto = {
       title: `Chỉ định task phân tích`,
-      message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${formattedLabcodes} và mã barcode ${session.patient.barcode}`,
+      message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${formattedLabcode} và mã barcode ${session.patient.barcode}`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.ACTION,
       subType: SubTypeNotification.ASSIGN,
-      labcode: session.labcode || [],
+      labcode: [formattedLabcode],
       barcode: session.patient.barcode,
       senderId: user.id,
       receiverId: analysisId,
     };
 
-    if (session.analysisId) {
+    if (session.assignment?.analysisId) {
       notificationReq.subType = SubTypeNotification.RESEND;
-      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${formattedLabcodes} và mã barcode ${session.patient.barcode} đã được gửi mới`;
+      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${formattedLabcode} và mã barcode ${session.patient.barcode} đã được gửi mới`;
     }
 
-    if (!session.analysisId && !analysisId) {
+    if (!session.assignment?.analysisId && !analysisId) {
       return { message: 'Analysis ID is required' };
-    } else if (!session.analysisId && analysisId) {
-      session.analysisId = analysisId;
-      await this.labSessionRepository.save(session);
+    } else if (!session.assignment?.analysisId && analysisId) {
+      // Update the assignment to include the analysis user
+      await this.assignLabSessionRepository.update(
+        { labSessionId: session.id },
+        { analysisId: analysisId },
+      );
     }
 
     try {

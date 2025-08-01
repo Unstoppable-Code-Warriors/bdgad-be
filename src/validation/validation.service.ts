@@ -11,6 +11,8 @@ import {
   FastqFilePair,
   FastqFileStatus,
 } from '../entities/fastq-file-pair.entity';
+import { LabCodeLabSession } from '../entities/labcode-lab-session.entity';
+import { AssignLabSession } from '../entities/assign-lab-session.entity';
 import { AuthenticatedUser } from '../auth/types/user.types';
 import {
   PaginationQueryDto,
@@ -33,6 +35,10 @@ export class ValidationService {
   constructor(
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
+    @InjectRepository(LabCodeLabSession)
+    private labCodeLabSessionRepository: Repository<LabCodeLabSession>,
+    @InjectRepository(AssignLabSession)
+    private assignLabSessionRepository: Repository<AssignLabSession>,
     @InjectRepository(EtlResult)
     private etlResultRepository: Repository<EtlResult>,
     @InjectRepository(FastqFilePair)
@@ -60,17 +66,23 @@ export class ValidationService {
       sortOrder = 'DESC',
     } = query;
 
-    // Create query builder for lab sessions that have ETL results with specific statuses
-    const queryBuilder = this.labSessionRepository
-      .createQueryBuilder('labSession')
+    // Create query builder to find labcodes where the user is assigned as validation
+    const queryBuilder = this.labCodeLabSessionRepository
+      .createQueryBuilder('labcode')
+      .leftJoinAndSelect('labcode.labSession', 'labSession')
       .leftJoinAndSelect('labSession.patient', 'patient')
-      .leftJoinAndSelect('labSession.doctor', 'doctor')
+      .leftJoinAndSelect('labSession.assignment', 'assignment')
+      .leftJoinAndSelect('assignment.doctor', 'doctor')
       .select([
+        'labcode.id',
+        'labcode.labcode',
+        'labcode.createdAt',
         'labSession.id',
-        'labSession.labcode',
-        'labSession.requestDate',
+        'labSession.patientId',
         'labSession.createdAt',
-        'labSession.metadata',
+        'labSession.updatedAt',
+        'labSession.typeLabSession',
+        'labSession.finishedAt',
         'patient.id',
         'patient.fullName',
         'patient.dateOfBirth',
@@ -79,16 +91,21 @@ export class ValidationService {
         'patient.citizenId',
         'patient.barcode',
         'patient.createdAt',
+        'assignment.id',
+        'assignment.doctorId',
+        'assignment.labTestingId',
+        'assignment.analysisId',
+        'assignment.validationId',
         'doctor.id',
         'doctor.name',
         'doctor.email',
         'doctor.metadata',
       ])
-      // Include sessions that have ETL results with WAIT_FOR_APPROVAL, REJECTED, or APPROVED status
-      .innerJoin(
-        'labSession.etlResults',
-        'etlResult',
-        'etlResult.status IN (:...allowedStatuses)',
+      .where('assignment.validationId = :userId', { userId: user.id })
+      .andWhere('labSession.typeLabSession = :type', { type: 'test' })
+      // Include labcodes that have ETL results with specific statuses
+      .andWhere(
+        'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status IN (:...allowedStatuses))',
         {
           allowedStatuses: [
             EtlResultStatus.WAIT_FOR_APPROVAL,
@@ -96,77 +113,31 @@ export class ValidationService {
             EtlResultStatus.APPROVED,
           ],
         },
-      )
-      .where('labSession.validationId = :userId', { userId: user.id })
-      .andWhere('labSession.typeLabSession = :type', { type: 'test' });
+      );
+
+    queryBuilder.orderBy('labcode.createdAt', 'DESC');
 
     // Apply search functionality (search by labcode and barcode)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(EXISTS (SELECT 1 FROM unnest(labSession.labcode) AS lc WHERE LOWER(lc) LIKE :search) OR LOWER(patient.barcode) LIKE :search)',
+        '(LOWER(labcode.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
-
-    // Apply dynamic sorting
-    // if (sortBy && sortOrder) {
-    //   const allowedSortFields = {
-    //     id: 'labSession.id',
-    //     labcode: 'labSession.labcode',
-    //     barcode: 'patient.barcode',
-    //     requestDate: 'labSession.requestDate',
-    //     createdAt: 'labSession.createdAt',
-    //     'patient.fullName': 'patient.fullName',
-    //     'patient.personalId': 'patient.personalId',
-    //     'doctor.name': 'doctor.name',
-    //     fullName: 'patient.fullName',
-    //     personalId: 'patient.personalId',
-    //     doctorName: 'doctor.name',
-    //   };
-
-    //   const sortField = allowedSortFields[sortBy];
-    //   if (sortField) {
-    //     queryBuilder.orderBy(sortField, sortOrder);
-    //   } else {
-    //     // Default sort by ETL status priority then by creation date
-    //     queryBuilder
-    //       .addSelect('etlResult.status', 'etlStatus')
-    //       .orderBy(
-    //         `CASE etlResult.status
-    //          WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1
-    //          WHEN '${EtlResultStatus.REJECTED}' THEN 2
-    //          WHEN '${EtlResultStatus.APPROVED}' THEN 3
-    //          ELSE 4 END`,
-    //       )
-    //       .addOrderBy('labSession.createdAt', 'DESC');
-    //   }
-    // } else {
-    //   // Default sort by ETL status priority then by creation date
-    //   queryBuilder
-    //     .addSelect('etlResult.status', 'etlStatus')
-    //     .orderBy(
-    //       `CASE etlResult.status
-    //        WHEN '${EtlResultStatus.WAIT_FOR_APPROVAL}' THEN 1
-    //        WHEN '${EtlResultStatus.REJECTED}' THEN 2
-    //        WHEN '${EtlResultStatus.APPROVED}' THEN 3
-    //        ELSE 4 END`,
-    //     )
-    //     .addOrderBy('labSession.createdAt', 'DESC');
-    // }
 
     // Apply pagination
     queryBuilder.skip((page - 1) * limit).take(limit);
 
     // Execute query
-    const [sessions, total] = await queryBuilder.getManyAndCount();
+    const [labcodes, total] = await queryBuilder.getManyAndCount();
 
-    // For each session, get the latest ETL result
-    const sessionsWithLatest = await Promise.all(
-      sessions.map(async (session) => {
+    // For each labcode, get the latest ETL result
+    const labcodesWithLatest = await Promise.all(
+      labcodes.map(async (labcode) => {
         const latestEtlResult = await this.etlResultRepository.findOne({
           where: {
-            sessionId: session.id,
+            labcodeLabSessionId: labcode.id,
             status: In([
               EtlResultStatus.WAIT_FOR_APPROVAL,
               EtlResultStatus.REJECTED,
@@ -187,27 +158,20 @@ export class ValidationService {
           order: { id: 'DESC' },
         });
 
+        // Transform to match expected DTO structure
         return {
-          id: session.id,
-          labcode: session.labcode,
-          barcode: session.patient.barcode,
-          requestDate: session.requestDate,
-          createdAt: session.createdAt,
-          metadata: session.metadata,
-          patient: {
-            id: session.patient.id,
-            fullName: session.patient.fullName,
-            dateOfBirth: session.patient.dateOfBirth,
-            phone: session.patient.phone,
-            address: session.patient.address,
-            citizenId: session.patient.citizenId,
-            createdAt: session.patient.createdAt,
-          },
-          doctor: {
-            id: session.doctor.id,
-            name: session.doctor.name,
-            email: session.doctor.email,
-            metadata: session.doctor.metadata,
+          id: labcode.id,
+          labcode: [labcode.labcode], // Convert single labcode to array for backward compatibility
+          barcode: labcode.labSession.patient.barcode,
+          requestDate: labcode.createdAt, // Use labcode creation date as request date
+          createdAt: labcode.labSession.createdAt,
+          metadata: {}, // Empty object for backward compatibility
+          patient: labcode.labSession.patient,
+          doctor: labcode.labSession.assignment?.doctor || {
+            id: 0,
+            name: 'Unknown',
+            email: 'unknown@example.com',
+            metadata: {},
           },
           latestEtlResult: latestEtlResult
             ? {
@@ -237,58 +201,86 @@ export class ValidationService {
       }),
     );
 
-    return {
-      data: sessionsWithLatest,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-      success: true,
-      timestamp: new Date().toISOString(),
-    };
+    return new PaginatedResponseDto(labcodesWithLatest, page, limit, total);
   }
 
   async findOne(
     id: number,
   ): Promise<ValidationSessionWithLatestEtlResponseDto> {
-    const validation = await this.labSessionRepository.findOne({
+    // Find the specific labcode session by ID
+    const labcode = await this.labCodeLabSessionRepository.findOne({
       where: { id },
-      relations: { patient: true, doctor: true, etlResults: true },
+      relations: {
+        labSession: {
+          patient: true,
+          assignment: {
+            doctor: true,
+          },
+        },
+        etlResults: {
+          rejector: true,
+          commenter: true,
+        },
+      },
     });
 
-    if (!validation) {
+    if (!labcode) {
       throw new NotFoundException('Validation session not found');
     }
 
-    const latestEtlResult = await this.etlResultRepository.findOne({
-      where: {
-        sessionId: id,
-        status: In([
-          EtlResultStatus.WAIT_FOR_APPROVAL,
-          EtlResultStatus.REJECTED,
-          EtlResultStatus.APPROVED,
-        ]),
-      },
-      relations: { rejector: true, commenter: true },
-      select: {
-        id: true,
-        resultPath: true,
-        etlCompletedAt: true,
-        status: true,
-        redoReason: true,
-        comment: true,
-        rejector: { id: true, name: true, email: true },
-        commenter: { id: true, name: true, email: true },
-      },
-      order: { id: 'DESC' },
-    });
+    const session = labcode.labSession;
+
+    // Find the latest ETL result for this labcode
+    const validEtlResults = (labcode.etlResults || []).filter((result) =>
+      [
+        EtlResultStatus.WAIT_FOR_APPROVAL,
+        EtlResultStatus.REJECTED,
+        EtlResultStatus.APPROVED,
+      ].includes(result.status),
+    );
+
+    // Sort by ID descending to get the latest
+    validEtlResults.sort((a, b) => b.id - a.id);
+    const latestEtlResult = validEtlResults[0] || null;
 
     return {
-      ...validation,
-      barcode: validation.patient.barcode,
-      latestEtlResult,
+      id: labcode.id,
+      labcode: [labcode.labcode], // Single labcode as array for consistency
+      barcode: session.patient.barcode,
+      requestDate: labcode.createdAt, // Use labcode creation date as request date
+      createdAt: session.createdAt,
+      metadata: {}, // Empty object for backward compatibility
+      patient: session.patient,
+      doctor: session.assignment?.doctor || {
+        id: 0,
+        name: 'Unknown',
+        email: 'unknown@example.com',
+        metadata: {},
+      },
+      latestEtlResult: latestEtlResult
+        ? {
+            id: latestEtlResult.id,
+            resultPath: latestEtlResult.resultPath,
+            etlCompletedAt: latestEtlResult.etlCompletedAt,
+            status: latestEtlResult.status,
+            redoReason: latestEtlResult.redoReason,
+            comment: latestEtlResult.comment,
+            rejector: latestEtlResult.rejector
+              ? {
+                  id: latestEtlResult.rejector.id,
+                  name: latestEtlResult.rejector.name,
+                  email: latestEtlResult.rejector.email,
+                }
+              : undefined,
+            commenter: latestEtlResult.commenter
+              ? {
+                  id: latestEtlResult.commenter.id,
+                  name: latestEtlResult.commenter.name,
+                  email: latestEtlResult.commenter.email,
+                }
+              : undefined,
+          }
+        : null,
     };
   }
 
@@ -331,7 +323,12 @@ export class ValidationService {
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },
       relations: {
-        session: { patient: true },
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+            assignment: true,
+          },
+        },
       },
     });
 
@@ -346,29 +343,42 @@ export class ValidationService {
       );
     }
 
+    const labcodeSession = etlResult.labcodeLabSession;
+    const assignment = labcodeSession?.labSession?.assignment;
+    const barcode = labcodeSession?.labSession?.patient?.barcode;
+    const labcode = [labcodeSession?.labcode || 'unknown'];
+
     // Update ETL result status to REJECTED
     await this.etlResultRepository.update(etlResultId, {
       status: EtlResultStatus.REJECTED,
       redoReason: reason,
       rejectBy: user.id,
     });
+
     notificationReqs.push({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
-      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.patient.barcode} đã bị từ chối`,
+      message: `Kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} đã bị từ chối`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.REJECT,
-      labcode: etlResult.session.labcode || [],
-      barcode: etlResult.session.patient.barcode,
+      labcode: labcode,
+      barcode: barcode,
       senderId: user.id,
-      receiverId: etlResult.session.analysisId!,
+      receiverId: assignment?.analysisId!,
     });
 
     // Find and update the latest FastQ file pair status to WAIT_FOR_APPROVAL
     const latestFastqFilePair = await this.fastqFilePairRepository.findOne({
-      where: { sessionId: etlResult.sessionId },
+      where: { labcodeLabSessionId: etlResult.labcodeLabSessionId },
       order: { createdAt: 'DESC' },
-      relations: { session: true, creator: true },
+      relations: {
+        labcodeLabSession: {
+          labSession: {
+            assignment: true,
+          },
+        },
+        creator: true,
+      },
     });
 
     if (latestFastqFilePair) {
@@ -377,13 +387,15 @@ export class ValidationService {
       });
       notificationReqs.push({
         title: `Trạng thái file Fastq pair #${latestFastqFilePair.id}.`,
-        message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${etlResult.session.patient.barcode} đang chờ được duyệt`,
+        message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${barcode} đang chờ được duyệt`,
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.RETRY,
-        labcode: etlResult.session.labcode || [],
-        barcode: etlResult.session.patient.barcode,
-        senderId: latestFastqFilePair.session.analysisId!,
+        labcode: labcode,
+        barcode: barcode,
+        senderId:
+          latestFastqFilePair.labcodeLabSession?.labSession?.assignment
+            ?.analysisId!,
         receiverId: latestFastqFilePair.createdBy,
       });
     }
@@ -402,7 +414,12 @@ export class ValidationService {
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId },
       relations: {
-        session: { patient: true },
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+            assignment: true,
+          },
+        },
       },
     });
 
@@ -417,20 +434,26 @@ export class ValidationService {
       );
     }
 
+    const labcodeSession = etlResult.labcodeLabSession;
+    const assignment = labcodeSession?.labSession?.assignment;
+    const barcode = labcodeSession?.labSession?.patient?.barcode;
+    const labcode = [labcodeSession?.labcode || 'unknown'];
+
     // Update ETL result status to APPROVED
     const updateData: Partial<EtlResult> = {
       status: EtlResultStatus.APPROVED,
     };
+
     await this.notificationService.createNotification({
       title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
-      message: `Kết quả ETL #${etlResult.id}  của lần khám với Barcode ${etlResult.session.patient.barcode} đã được duyệt`,
+      message: `Kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} đã được duyệt`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.ACCEPT,
-      labcode: etlResult.session.labcode || [],
-      barcode: etlResult.session.patient.barcode,
+      labcode: labcode,
+      barcode: barcode,
       senderId: user.id,
-      receiverId: etlResult.session.analysisId!,
+      receiverId: assignment?.analysisId!,
     });
 
     if (comment) {
@@ -439,8 +462,9 @@ export class ValidationService {
     }
 
     await this.etlResultRepository.update(etlResultId, updateData);
+
     const labSession = await this.labSessionRepository.findOne({
-      where: { id: etlResult?.sessionId },
+      where: { id: labcodeSession?.labSessionId },
     });
 
     if (labSession) {

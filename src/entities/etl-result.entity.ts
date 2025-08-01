@@ -5,7 +5,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { LabSession } from './lab-session.entity';
+import { LabCodeLabSession } from './labcode-lab-session.entity';
 import { User } from './user.entity';
 
 export enum EtlResultStatus {
@@ -22,8 +22,8 @@ export class EtlResult {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'session_id' })
-  sessionId: number;
+  @Column({ name: 'labcode_lab_session_id' })
+  labcodeLabSessionId: number;
 
   @Column({ name: 'result_path' })
   resultPath: string;
@@ -54,9 +54,9 @@ export class EtlResult {
   @Column({ name: 'comment_by', nullable: true })
   commentBy: number;
 
-  @ManyToOne(() => LabSession, (labSession) => labSession.etlResults)
-  @JoinColumn({ name: 'session_id' })
-  session: LabSession;
+  @ManyToOne(() => LabCodeLabSession, (labcodeLabSession) => labcodeLabSession.etlResults)
+  @JoinColumn({ name: 'labcode_lab_session_id' })
+  labcodeLabSession: LabCodeLabSession;
 
   @ManyToOne(() => User, {
     cascade: true,

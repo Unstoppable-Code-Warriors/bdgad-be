@@ -8,7 +8,7 @@ import {
   ManyToOne,
 } from 'typeorm';
 import { FastqFile } from './fastq-file.entity';
-import { LabSession } from './lab-session.entity';
+import { LabCodeLabSession } from './labcode-lab-session.entity';
 import { User } from './user.entity';
 
 export enum FastqFileStatus {
@@ -22,8 +22,8 @@ export class FastqFilePair {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'session_id' })
-  sessionId: number;
+  @Column({ name: 'labcode_lab_session_id' })
+  labcodeLabSessionId: number;
 
   @OneToOne(() => FastqFile)
   @JoinColumn({ name: 'fastq_file_r1_id' })
@@ -52,9 +52,9 @@ export class FastqFilePair {
   @JoinColumn({ name: 'created_by' })
   creator: User;
 
-  @ManyToOne(() => LabSession, (labSession) => labSession.fastqFilePairs)
-  @JoinColumn({ name: 'session_id' })
-  session: LabSession;
+  @ManyToOne(() => LabCodeLabSession, (labcodeLabSession) => labcodeLabSession.fastqFilePairs)
+  @JoinColumn({ name: 'labcode_lab_session_id' })
+  labcodeLabSession: LabCodeLabSession;
 
   @Column({
     type: 'enum',

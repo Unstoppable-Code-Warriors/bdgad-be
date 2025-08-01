@@ -15,6 +15,13 @@ export class DoctorResponseDto {
   metadata: Record<string, any>;
 }
 
+export class ValidationResponseDto {
+  id: number;
+  name: string;
+  email: string;
+  metadata: Record<string, any>;
+}
+
 export class FastqFileResponseDto {
   id: number;
   filePath: string;
@@ -67,7 +74,8 @@ export class AnalysisSessionResponseDto {
   createdAt: Date;
   metadata: Record<string, any>;
   patient: PatientResponseDto;
-  doctor: DoctorResponseDto;
+  doctor: DoctorResponseDto | null;
+  validation?: ValidationResponseDto | null;
 }
 
 export class AnalysisSessionWithLatestResponseDto extends AnalysisSessionResponseDto {

@@ -60,13 +60,21 @@ export class UploadPatientFilesDto {
   @Transform(({ value }) => {
     // Handle form data input - could be string, array, or JSON string
     if (typeof value === 'string') {
+      // Remove leading/trailing brackets if present
+      let cleanValue = value.trim();
+      if (cleanValue.startsWith('[') && cleanValue.endsWith(']')) {
+        cleanValue = cleanValue.slice(1, -1);
+      }
+
       try {
         // Try to parse as JSON array first
         const parsed = JSON.parse(value);
         return Array.isArray(parsed) ? parsed : [value];
       } catch (error) {
         // If not JSON, treat as comma-separated string or single value
-        return value.includes(',') ? value.split(',').map(s => s.trim()) : [value];
+        return cleanValue.includes(',')
+          ? cleanValue.split(',').map((s) => s.trim())
+          : [cleanValue];
       }
     }
     // If already an array, return as is

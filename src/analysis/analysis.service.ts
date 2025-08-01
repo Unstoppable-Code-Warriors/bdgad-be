@@ -13,6 +13,8 @@ import {
   FastqFileStatus,
 } from '../entities/fastq-file-pair.entity';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
+import { LabCodeLabSession } from '../entities/labcode-lab-session.entity';
+import { AssignLabSession } from '../entities/assign-lab-session.entity';
 import {
   AnalysisSessionWithLatestResponseDto,
   AnalysisSessionDetailResponseDto,
@@ -44,6 +46,10 @@ export class AnalysisService {
     private readonly notificationService: NotificationService,
     @InjectRepository(LabSession)
     private labSessionRepository: Repository<LabSession>,
+    @InjectRepository(LabCodeLabSession)
+    private labCodeLabSessionRepository: Repository<LabCodeLabSession>,
+    @InjectRepository(AssignLabSession)
+    private assignLabSessionRepository: Repository<AssignLabSession>,
     @InjectRepository(FastqFilePair)
     private fastqFilePairRepository: Repository<FastqFilePair>,
     @InjectRepository(EtlResult)
@@ -74,19 +80,25 @@ export class AnalysisService {
       dateTo,
     } = query;
 
-    // Create query builder for lab sessions that have FastQ files with specific statuses
-    const queryBuilder: SelectQueryBuilder<LabSession> =
-      this.labSessionRepository
-        .createQueryBuilder('labSession')
+    // Create query builder to find labcodes where the user is assigned as analysis
+    const queryBuilder: SelectQueryBuilder<LabCodeLabSession> =
+      this.labCodeLabSessionRepository
+        .createQueryBuilder('labcode')
+        .leftJoinAndSelect('labcode.labSession', 'labSession')
         .leftJoinAndSelect('labSession.patient', 'patient')
-        .leftJoinAndSelect('labSession.doctor', 'doctor')
-        .leftJoinAndSelect('labSession.validation', 'validation')
+        .leftJoinAndSelect('labSession.assignment', 'assignment')
+        .leftJoinAndSelect('assignment.doctor', 'doctor')
+        .leftJoinAndSelect('assignment.validation', 'validation')
         .select([
+          'labcode.id',
+          'labcode.labcode',
+          'labcode.createdAt',
           'labSession.id',
-          'labSession.labcode',
-          'labSession.requestDate',
+          'labSession.patientId',
           'labSession.createdAt',
-          'labSession.metadata',
+          'labSession.updatedAt',
+          'labSession.typeLabSession',
+          'labSession.finishedAt',
           'patient.id',
           'patient.fullName',
           'patient.dateOfBirth',
@@ -95,6 +107,11 @@ export class AnalysisService {
           'patient.citizenId',
           'patient.barcode',
           'patient.createdAt',
+          'assignment.id',
+          'assignment.doctorId',
+          'assignment.labTestingId',
+          'assignment.analysisId',
+          'assignment.validationId',
           'doctor.id',
           'doctor.name',
           'doctor.email',
@@ -104,11 +121,11 @@ export class AnalysisService {
           'validation.email',
           'validation.metadata',
         ])
-        // Include sessions that have FastQ file pairs with WAIT_FOR_APPROVAL, REJECTED, or APPROVED status
-        .innerJoin(
-          'labSession.fastqFilePairs',
-          'fastqFilePair',
-          'fastqFilePair.status IN (:...allowedStatuses)',
+        .where('assignment.analysisId = :userId', { userId: user.id })
+        .andWhere('labSession.typeLabSession = :type', { type: 'test' })
+        // Include labcodes that have FastQ file pairs with specific statuses
+        .andWhere(
+          'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status IN (:...allowedStatuses))',
           {
             allowedStatuses: [
               FastqFileStatus.WAIT_FOR_APPROVAL,
@@ -116,106 +133,53 @@ export class AnalysisService {
               FastqFileStatus.APPROVED,
             ],
           },
-        )
-        .where('labSession.analysisId = :userId', { userId: user.id })
-        .andWhere('labSession.typeLabSession = :type', { type: 'test' });
-        queryBuilder.orderBy('labSession.requestDate', 'DESC');
+        );
+
+    queryBuilder.orderBy('labcode.createdAt', 'DESC');
 
     // Apply search functionality (search by labcode and barcode)
     if (search && search.trim()) {
       const searchTerm = `%${search.trim().toLowerCase()}%`;
       queryBuilder.andWhere(
-        '(EXISTS (SELECT 1 FROM unnest(labSession.labcode) AS lc WHERE LOWER(lc) LIKE :search) OR LOWER(patient.barcode) LIKE :search)',
+        '(LOWER(labcode.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
     }
 
-    // Apply date range filtering on requestDate
+    // Apply date range filtering on labcode creation date
     if (dateFrom) {
-      queryBuilder.andWhere('labSession.requestDate >= :dateFrom', {
+      queryBuilder.andWhere('labcode.createdAt >= :dateFrom', {
         dateFrom: new Date(dateFrom),
       });
     }
 
     if (dateTo) {
-      queryBuilder.andWhere('labSession.requestDate <= :dateTo', {
+      queryBuilder.andWhere('labcode.createdAt <= :dateTo', {
         dateTo: new Date(dateTo),
       });
     }
 
     // Apply filter functionality (filter by ETL status)
     if (filter && filter.etlStatus) {
-      const subQuery = this.etlResultRepository
-        .createQueryBuilder('etlResult')
-        .select('DISTINCT etlResult.sessionId')
-        .where('etlResult.status = :etlStatus', {
-          etlStatus: filter.etlStatus,
-        });
-
-      queryBuilder.andWhere(`labSession.id IN (${subQuery.getQuery()})`, {
-        etlStatus: filter.etlStatus,
-      });
+      queryBuilder.andWhere(
+        'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :etlStatus)',
+        { etlStatus: filter.etlStatus },
+      );
     }
-
-    // Apply dynamic sorting
-    // if (sortBy && sortOrder) {
-    //   const allowedSortFields = {
-    //     id: 'labSession.id',
-    //     labcode: 'labSession.labcode',
-    //     barcode: 'patient.barcode',
-    //     requestDate: 'labSession.requestDate',
-    //     createdAt: 'labSession.createdAt',
-    //     'patient.fullName': 'patient.fullName',
-    //     'patient.personalId': 'patient.personalId',
-    //     'doctor.name': 'doctor.name',
-    //     fullName: 'patient.fullName',
-    //     personalId: 'patient.personalId',
-    //     doctorName: 'doctor.name',
-    //   };
-
-    //   const sortField = allowedSortFields[sortBy];
-    //   if (sortField) {
-    //     queryBuilder.orderBy(sortField, sortOrder);
-    //   } else {
-    //     // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
-    //     queryBuilder
-    //       .addSelect('fastqFile.status', 'fastqStatus')
-    //       .orderBy(
-    //         `CASE fastqFile.status
-    //          WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1
-    //          WHEN '${FastqFileStatus.REJECTED}' THEN 2
-    //          WHEN '${FastqFileStatus.APPROVED}' THEN 3
-    //          ELSE 4 END`,
-    //       )
-    //       .addOrderBy('labSession.createdAt', 'DESC');
-    //   }
-    // } else {
-    //   // Default sort by FastQ status priority (WAIT_FOR_APPROVAL, REJECTED, APPROVED) then by creation date
-    //   queryBuilder
-    //     .addSelect('fastqFile.status', 'fastqStatus')
-    //     .orderBy(
-    //       `CASE fastqFile.status
-    //        WHEN '${FastqFileStatus.WAIT_FOR_APPROVAL}' THEN 1
-    //        WHEN '${FastqFileStatus.REJECTED}' THEN 2
-    //        WHEN '${FastqFileStatus.APPROVED}' THEN 3
-    //        ELSE 4 END`,
-    //     )
-    //     .addOrderBy('labSession.createdAt', 'DESC');
-    // }
 
     // Apply pagination
     queryBuilder.skip((page - 1) * limit).take(limit);
 
     // Execute query
-    const [sessions, total] = await queryBuilder.getManyAndCount();
+    const [labcodes, total] = await queryBuilder.getManyAndCount();
 
-    // For each session, get the latest FastQ file pair and ETL result
-    const sessionsWithLatest = await Promise.all(
-      sessions.map(async (session) => {
+    // For each labcode, get the latest FastQ file pair and ETL result
+    const labcodesWithLatest = await Promise.all(
+      labcodes.map(async (labcode) => {
         const [latestFastqFilePair, latestEtlResult] = await Promise.all([
           this.fastqFilePairRepository.findOne({
             where: {
-              sessionId: session.id,
+              labcodeLabSessionId: labcode.id,
               status: In([
                 FastqFileStatus.WAIT_FOR_APPROVAL,
                 FastqFileStatus.REJECTED,
@@ -241,7 +205,7 @@ export class AnalysisService {
             order: { createdAt: 'DESC' },
           }),
           this.etlResultRepository.findOne({
-            where: { sessionId: session.id },
+            where: { labcodeLabSessionId: labcode.id },
             relations: { rejector: true, commenter: true },
             select: {
               id: true,
@@ -257,49 +221,40 @@ export class AnalysisService {
           }),
         ]);
 
+        // Transform to match expected DTO structure
         return {
-          ...session,
-          barcode: session.patient.barcode,
+          id: labcode.id,
+          labcode: [labcode.labcode], // Convert single labcode to array for backward compatibility
+          barcode: labcode.labSession.patient.barcode,
+          requestDate: labcode.createdAt, // Use labcode creation date as request date
+          createdAt: labcode.labSession.createdAt,
+          metadata: {}, // Empty object for backward compatibility
+          patient: labcode.labSession.patient,
+          doctor: labcode.labSession.assignment?.doctor || null,
+          validation: labcode.labSession.assignment?.validation || null,
           latestFastqPairFile: latestFastqFilePair,
           latestEtlResult,
         };
       }),
     );
 
-    return new PaginatedResponseDto(sessionsWithLatest, page, limit, total);
+    return new PaginatedResponseDto(labcodesWithLatest, page, limit, total);
   }
 
   async findAnalysisSessionById(
     id: number,
   ): Promise<AnalysisSessionDetailResponseDto> {
-    // First check if the session has FastQ file pairs with allowed statuses
-    const sessionWithFastq = await this.labSessionRepository.findOne({
-      where: {
-        id,
-        fastqFilePairs: {
-          status: In([
-            FastqFileStatus.WAIT_FOR_APPROVAL,
-            FastqFileStatus.REJECTED,
-            FastqFileStatus.APPROVED,
-          ]),
-        },
-      },
-      relations: { fastqFilePairs: true },
-      select: { id: true, fastqFilePairs: { status: true } },
-    });
-
-    if (!sessionWithFastq) {
-      throw new NotFoundException(
-        `Analysis session with ID ${id} not found or no FastQ file pairs with valid status`,
-      );
-    }
-
-    const session = await this.labSessionRepository.findOne({
+    // Find the specific labcode session by its ID
+    const labcodeSession = await this.labCodeLabSessionRepository.findOne({
       where: { id },
       relations: {
-        patient: true,
-        doctor: true,
-        validation: true,
+        labSession: {
+          patient: true,
+          assignment: {
+            doctor: true,
+            validation: true,
+          },
+        },
         fastqFilePairs: {
           creator: true,
           rejector: true,
@@ -314,46 +269,49 @@ export class AnalysisService {
       select: {
         id: true,
         labcode: true,
-        requestDate: true,
         createdAt: true,
-        metadata: true,
-        patient: {
+        labSession: {
           id: true,
-          fullName: true,
-          dateOfBirth: true,
-          phone: true,
-          address: true,
-          citizenId: true,
-          barcode: true,
+          patientId: true,
           createdAt: true,
-        },
-        doctor: {
-          id: true,
-          name: true,
-          email: true,
-          metadata: true,
-        },
-        validation: {
-          id: true,
-          name: true,
-          email: true,
-          metadata: true,
+          updatedAt: true,
+          typeLabSession: true,
+          finishedAt: true,
+          patient: {
+            id: true,
+            fullName: true,
+            dateOfBirth: true,
+            phone: true,
+            address: true,
+            citizenId: true,
+            barcode: true,
+            createdAt: true,
+          },
+          assignment: {
+            id: true,
+            doctorId: true,
+            labTestingId: true,
+            analysisId: true,
+            validationId: true,
+            doctor: {
+              id: true,
+              name: true,
+              email: true,
+              metadata: true,
+            },
+            validation: {
+              id: true,
+              name: true,
+              email: true,
+              metadata: true,
+            },
+          },
         },
         fastqFilePairs: {
           id: true,
           createdAt: true,
           status: true,
           redoReason: true,
-          fastqFileR1: {
-            id: true,
-            filePath: true,
-            createdAt: true,
-          },
-          fastqFileR2: {
-            id: true,
-            filePath: true,
-            createdAt: true,
-          },
           creator: {
             id: true,
             name: true,
@@ -363,6 +321,16 @@ export class AnalysisService {
             id: true,
             name: true,
             email: true,
+          },
+          fastqFileR1: {
+            id: true,
+            filePath: true,
+            createdAt: true,
+          },
+          fastqFileR2: {
+            id: true,
+            filePath: true,
+            createdAt: true,
           },
         },
         etlResults: {
@@ -386,12 +354,14 @@ export class AnalysisService {
       },
     });
 
-    if (!session) {
+    if (!labcodeSession) {
       throw new NotFoundException(`Analysis session with ID ${id} not found`);
     }
 
-    // Filter FastQ file pairs to only include allowed statuses
-    session.fastqFilePairs = session.fastqFilePairs.filter(
+    const session = labcodeSession.labSession;
+
+    // Get all FastQ file pairs for this specific labcode session and filter by allowed statuses
+    const allFastqFilePairs = (labcodeSession.fastqFilePairs || []).filter(
       (filePair) =>
         filePair.status &&
         [
@@ -401,13 +371,16 @@ export class AnalysisService {
         ].includes(filePair.status),
     );
 
+    // Get all ETL results for this specific labcode session
+    const allEtlResults = labcodeSession.etlResults || [];
+
     // Sort FastQ file pairs by createdAt in descending order (newest first)
-    session.fastqFilePairs.sort((a, b) => {
+    allFastqFilePairs.sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    // Sort ETL results by createdAt in descending order (newest first)
-    session.etlResults.sort((a, b) => {
+    // Sort ETL results by etlCompletedAt in descending order (newest first)
+    allEtlResults.sort((a, b) => {
       return (
         new Date(b.etlCompletedAt).getTime() -
         new Date(a.etlCompletedAt).getTime()
@@ -415,9 +388,17 @@ export class AnalysisService {
     });
 
     return {
-      ...session,
+      id: labcodeSession.id,
+      labcode: [labcodeSession.labcode], // Array containing this specific labcode
       barcode: session.patient.barcode,
-      fastqFilePairs: session.fastqFilePairs, // Map fastqFilePairs to fastqFiles for backward compatibility
+      requestDate: labcodeSession.createdAt, // Use this labcode creation date as request date
+      createdAt: session.createdAt,
+      metadata: {}, // Empty object for backward compatibility
+      patient: session.patient,
+      doctor: session.assignment?.doctor || null,
+      validation: session.assignment?.validation || null,
+      fastqFilePairs: allFastqFilePairs, // Use the filtered FastQ pairs for this labcode
+      etlResults: allEtlResults, // Use the ETL results for this labcode
     };
   }
 
@@ -435,8 +416,10 @@ export class AnalysisService {
         ]),
       },
       relations: {
-        session: {
-          patient: true,
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+          },
         },
         creator: true,
       },
@@ -452,35 +435,40 @@ export class AnalysisService {
     fastqFilePair.status = FastqFileStatus.APPROVED;
     fastqFilePair.approveBy = user.id;
     await this.fastqFilePairRepository.save(fastqFilePair);
+
+    const labcodeSession = fastqFilePair.labcodeLabSession;
+    const barcode = labcodeSession?.labSession?.patient?.barcode;
+    const labcode = [labcodeSession?.labcode || 'unknown'];
+
     await this.notificationService.createNotification({
       title: `Trạng thái file Fastq pair #${fastqFilePair.id}.`,
-      message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair.session?.patient?.barcode} đã được duyệt`,
+      message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${barcode} đã được duyệt`,
       taskType: TypeTaskNotification.LAB_TASK,
       type: TypeNotification.PROCESS,
       subType: SubTypeNotification.ACCEPT,
-      labcode: fastqFilePair.session?.labcode || [],
-      barcode: fastqFilePair.session?.patient?.barcode,
+      labcode: labcode,
+      barcode: barcode,
       senderId: user.id,
       receiverId: fastqFilePair.createdBy,
     });
 
-    // Check if analysis is already in progress for this session
+    // Check if analysis is already in progress for this labcode
     const existingEtl = await this.etlResultRepository.findOne({
       where: {
-        sessionId: fastqFilePair.sessionId,
+        labcodeLabSessionId: fastqFilePair.labcodeLabSessionId,
         status: EtlResultStatus.PROCESSING,
       },
     });
 
     if (existingEtl) {
       throw new BadRequestException(
-        'Analysis is already in progress for this session',
+        'Analysis is already in progress for this labcode',
       );
     }
 
     // Create ETL result entry with pending status
     const etlResult = this.etlResultRepository.create({
-      sessionId: fastqFilePair.sessionId,
+      labcodeLabSessionId: fastqFilePair.labcodeLabSessionId,
       resultPath: '',
       etlCompletedAt: new Date(),
     });
@@ -488,17 +476,14 @@ export class AnalysisService {
     await this.etlResultRepository.save(etlResult);
 
     // Start mock ETL pipeline (async)
-    this.runMockEtlPipeline(
-      etlResult,
-      fastqFilePair.session.labcode || [],
-      fastqFilePair.session.patient.barcode,
-      user.id,
-    ).catch(async (error) => {
-      // Mark as failed if pipeline fails
-      etlResult.status = EtlResultStatus.FAILED;
-      etlResult.comment = `Processing failed: ${error.message}`;
-      await this.etlResultRepository.save(etlResult);
-    });
+    this.runMockEtlPipeline(etlResult, labcode, barcode, user.id).catch(
+      async (error) => {
+        // Mark as failed if pipeline fails
+        etlResult.status = EtlResultStatus.FAILED;
+        etlResult.comment = `Processing failed: ${error.message}`;
+        await this.etlResultRepository.save(etlResult);
+      },
+    );
     return {
       message: 'Analysis pipeline started successfully',
     };
@@ -518,7 +503,7 @@ export class AnalysisService {
       await this.etlResultRepository.save(etlResult);
 
       // Mock processing delay (simulate ETL pipeline work)
-      await new Promise((resolve) => setTimeout(resolve, 2000)); 
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Generate mock analysis result content using first labcode or 'unknown'
       const primaryLabcode = labcode?.[0] || 'unknown';
@@ -664,7 +649,14 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         id: fastqFilePairId,
         status: FastqFileStatus.WAIT_FOR_APPROVAL,
       },
-      relations: { session: { patient: true }, creator: true },
+      relations: {
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+          },
+        },
+        creator: true,
+      },
     });
 
     if (!fastqFilePair) {
@@ -680,15 +672,19 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     await this.fastqFilePairRepository.save(fastqFilePair);
 
+    const labcodeSession = fastqFilePair.labcodeLabSession;
+    const barcode = labcodeSession?.labSession?.patient?.barcode;
+    const labcode = [labcodeSession?.labcode || 'unknown'];
+
     try {
       this.notificationService.createNotification({
         title: `Trạng thái file Fastq pair #${fastqFilePair.id}.`,
-        message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${fastqFilePair?.session?.patient?.barcode} đã bị từ chối`,
+        message: `File Fastq pair #${fastqFilePair.id} của lần khám với Barcode ${barcode} đã bị từ chối`,
         taskType: TypeTaskNotification.LAB_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.REJECT,
-        labcode: fastqFilePair?.session?.labcode || [],
-        barcode: fastqFilePair?.session?.patient?.barcode,
+        labcode: labcode,
+        barcode: barcode,
         senderId: user.id,
         receiverId: fastqFilePair.createdBy,
       });
@@ -698,10 +694,10 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       );
     }
 
-    // If there are any pending or processing ETL results for this session, mark them as failed
+    // If there are any pending or processing ETL results for this labcode, mark them as failed
     const pendingEtlResults = await this.etlResultRepository.find({
       where: {
-        sessionId: fastqFilePair.sessionId,
+        labcodeLabSessionId: fastqFilePair.labcodeLabSessionId,
         status: EtlResultStatus.PROCESSING,
       },
     });
@@ -728,7 +724,14 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     // Find the ETL result that's completed
     const etlResult = await this.etlResultRepository.findOne({
       where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
-      relations: { session: true },
+      relations: {
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+            assignment: true,
+          },
+        },
+      },
     });
 
     if (!etlResult) {
@@ -736,53 +739,55 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         `Completed ETL result with ID ${etlResultId} not found`,
       );
     }
-    const labSession = await this.labSessionRepository.findOne({
-      where: { id: etlResult.session.id },
-      relations: { patient: true },
-    });
 
-    if (!labSession) {
+    const labSession = etlResult.labcodeLabSession?.labSession;
+    const assignment = labSession?.assignment;
+
+    if (!labSession || !assignment) {
       return errorLabSession.labSessionNotFound;
     }
 
-    if (labSession.validationId) {
+    const barcode = labSession.patient.barcode;
+    const labcode = [etlResult.labcodeLabSession?.labcode || 'unknown'];
+
+    if (assignment.validationId) {
       await this.notificationService.createNotification({
         title: `Chỉ định thẩm định.`,
-        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${labSession.patient.barcode} đã được gửi mới`,
+        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${barcode} đã được gửi mới`,
         taskType: TypeTaskNotification.VALIDATION_TASK,
         type: TypeNotification.PROCESS,
         subType: SubTypeNotification.RESEND,
-        labcode: labSession.labcode || [],
-        barcode: labSession.patient.barcode,
+        labcode: labcode,
+        barcode: barcode,
         senderId: user.id,
         receiverId: validationId,
       });
     }
 
-    if (!labSession.validationId && validationId) {
-      labSession.validationId = validationId;
-      await this.labSessionRepository.save(labSession);
-      const formattedLabcodes = this.formatLabcodeArray(labSession.labcode);
+    if (!assignment.validationId && validationId) {
+      assignment.validationId = validationId;
+      await this.assignLabSessionRepository.save(assignment);
+      const formattedLabcodes = this.formatLabcodeArray(labcode);
       await this.notificationService.createNotification({
         title: `Chỉ định thẩm định.`,
-        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${labSession.patient.barcode}`,
+        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${barcode}`,
         taskType: TypeTaskNotification.VALIDATION_TASK,
         type: TypeNotification.ACTION,
         subType: SubTypeNotification.ASSIGN,
-        labcode: labSession.labcode || [],
-        barcode: labSession.patient.barcode,
+        labcode: labcode,
+        barcode: barcode,
         senderId: user.id,
         receiverId: validationId,
       });
     }
 
-    if (!labSession.validationId && !validationId) {
+    if (!assignment.validationId && !validationId) {
       return errorValidation.validationIdRequired;
     }
 
     // Update ETL result status to WAIT_FOR_APPROVAL
     etlResult.status = EtlResultStatus.WAIT_FOR_APPROVAL;
-   
+
     await this.etlResultRepository.save(etlResult);
 
     return {
@@ -800,7 +805,13 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         id: etlResultId,
         status: In([EtlResultStatus.FAILED, EtlResultStatus.REJECTED]),
       },
-      relations: { session: { patient: true } },
+      relations: {
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+          },
+        },
+      },
     });
 
     if (!etlResult) {
@@ -809,24 +820,24 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       );
     }
 
-    // Check if there's already another ETL process running for this session
+    // Check if there's already another ETL process running for this labcode
     const existingProcessingEtl = await this.etlResultRepository.findOne({
       where: {
-        sessionId: etlResult.sessionId,
+        labcodeLabSessionId: etlResult.labcodeLabSessionId,
         status: EtlResultStatus.PROCESSING,
       },
     });
 
     if (existingProcessingEtl && existingProcessingEtl.id !== etlResultId) {
       throw new BadRequestException(
-        'Another ETL process is already running for this session',
+        'Another ETL process is already running for this labcode',
       );
     }
 
     // Find and update the latest FastQ file pair status to APPROVED
     const latestFastqFilePair = await this.fastqFilePairRepository.findOne({
       where: {
-        sessionId: etlResult.sessionId,
+        labcodeLabSessionId: etlResult.labcodeLabSessionId,
         status: In([
           FastqFileStatus.WAIT_FOR_APPROVAL,
           FastqFileStatus.REJECTED,
@@ -835,12 +846,17 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       },
       order: { createdAt: 'DESC' },
       relations: {
-        session: {
-          patient: true,
+        labcodeLabSession: {
+          labSession: {
+            patient: true,
+          },
         },
         creator: true,
       },
     });
+
+    const barcode = etlResult.labcodeLabSession?.labSession?.patient?.barcode;
+    const labcode = [etlResult.labcodeLabSession?.labcode || 'unknown'];
 
     if (
       latestFastqFilePair &&
@@ -852,12 +868,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       await this.notificationService
         .createNotification({
           title: `Trạng thái file Fastq pair #${latestFastqFilePair.id}.`,
-          message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${latestFastqFilePair.session?.patient?.barcode} đã được duyệt`,
+          message: `File Fastq pair #${latestFastqFilePair.id} của lần khám với Barcode ${barcode} đã được duyệt`,
           taskType: TypeTaskNotification.LAB_TASK,
           type: TypeNotification.PROCESS,
           subType: SubTypeNotification.RETRY,
-          labcode: latestFastqFilePair.session?.labcode || [],
-          barcode: latestFastqFilePair.session?.patient?.barcode,
+          labcode: labcode,
+          barcode: barcode,
           senderId: user.id,
           receiverId: latestFastqFilePair.createdBy,
         })
@@ -876,18 +892,15 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     await this.etlResultRepository.save(etlResult);
 
     // Start mock ETL pipeline (async) for retry
-    this.runMockEtlPipeline(
-      etlResult,
-      etlResult.session.labcode || [],
-      etlResult.session.patient.barcode,
-      user.id,
-    ).catch(async (error) => {
-      // Mark as failed if pipeline fails again
-      etlResult.status = EtlResultStatus.FAILED;
-      etlResult.comment = `Retry failed: ${error.message}`;
-      etlResult.commentBy = user.id;
-      await this.etlResultRepository.save(etlResult);
-    });
+    this.runMockEtlPipeline(etlResult, labcode, barcode, user.id).catch(
+      async (error) => {
+        // Mark as failed if pipeline fails again
+        etlResult.status = EtlResultStatus.FAILED;
+        etlResult.comment = `Retry failed: ${error.message}`;
+        etlResult.commentBy = user.id;
+        await this.etlResultRepository.save(etlResult);
+      },
+    );
 
     return {
       message: 'ETL process retry started successfully',

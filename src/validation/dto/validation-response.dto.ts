@@ -24,21 +24,27 @@ export class AnalysisResponseDto {
 
 export class EtlResultResponseDto {
   id: number;
+  fastqFilePairId?: number;
   resultPath: string;
   etlCompletedAt: Date;
   status: string | null;
-  redoReason: string | null;
-  comment: string;
+  reasonReject: string | null;
+  reasonApprove: string | null;
   rejector?: {
     id: number;
     name: string;
     email: string;
-  };
-  commenter?: {
+  } | null;
+  approver?: {
     id: number;
     name: string;
     email: string;
-  };
+  } | null;
+  fastqPair?: {
+    id: number;
+    status: string | null;
+    createdAt: Date;
+  } | null;
 }
 
 export class ValidationSessionResponseDto {
@@ -55,6 +61,10 @@ export class ValidationSessionResponseDto {
 
 export class ValidationSessionWithLatestEtlResponseDto extends ValidationSessionResponseDto {
   latestEtlResult: EtlResultResponseDto | null;
+}
+
+export class ValidationSessionDetailResponseDto extends ValidationSessionResponseDto {
+  etlResults: EtlResultResponseDto[];
 }
 
 export class EtlResultDownloadResponseDto {

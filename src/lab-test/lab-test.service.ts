@@ -602,9 +602,12 @@ export class LabTestService {
     }
 
     // Check if the pair status allows sending to analysis
-    if (fastqFilePair.status !== FastqFileStatus.UPLOADED) {
+    if (
+      fastqFilePair.status !== FastqFileStatus.UPLOADED &&
+      fastqFilePair.status !== FastqFileStatus.REJECTED
+    ) {
       throw new BadRequestException(
-        `Cannot send FastQ file pair to analysis. Only pairs with status 'uploaded' can be sent. Current status: ${fastqFilePair.status}`,
+        `Cannot send FastQ file pair to analysis. Only pairs with status 'uploaded' or 'rejected' can be sent. Current status: ${fastqFilePair.status}`,
       );
     }
 
@@ -632,11 +635,6 @@ export class LabTestService {
       senderId: user.id,
       receiverId: analysisId,
     };
-
-    if (session.assignment?.analysisId) {
-      notificationReq.subType = SubTypeNotification.RESEND;
-      notificationReq.message = `File Fastq pair #${fastqFilePair.id} của lần khám với mã labcode ${formattedLabcode} và mã barcode ${session.patient.barcode} đã được gửi mới`;
-    }
 
     if (!session.assignment?.analysisId && !analysisId) {
       return { message: 'Analysis ID is required' };

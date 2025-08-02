@@ -14,6 +14,7 @@ import {
 import { ValidationService } from './validation.service';
 import {
   ValidationSessionWithLatestEtlResponseDto,
+  ValidationSessionDetailResponseDto,
   EtlResultDownloadResponseDto,
 } from './dto/validation-response.dto';
 import {
@@ -65,7 +66,7 @@ export class ValidationController {
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<ValidationSessionWithLatestEtlResponseDto> {
+  ): Promise<ValidationSessionDetailResponseDto> {
     return this.validationService.findOne(id);
   }
 
@@ -124,7 +125,7 @@ export class ValidationController {
   ): Promise<{ message: string }> {
     return this.validationService.acceptEtlResult(
       etlResultId,
-      acceptDto.comment,
+      acceptDto.reasonApprove,
       user,
     );
   }

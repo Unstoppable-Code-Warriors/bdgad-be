@@ -9,5 +9,5 @@ export class RejectEtlResultDto {
 export class AcceptEtlResultDto {
   @IsOptional()
   @IsString()
-  comment?: string;
+  reasonApprove?: string;
 }

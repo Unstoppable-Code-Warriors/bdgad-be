@@ -213,16 +213,18 @@ export class AnalysisService {
           }),
           this.etlResultRepository.findOne({
             where: { labcodeLabSessionId: labcode.id },
-            relations: { rejector: true, commenter: true },
+            relations: { rejector: true, approver: true, fastqPair: true },
             select: {
               id: true,
+              fastqFilePairId: true,
               resultPath: true,
               etlCompletedAt: true,
               status: true,
-              redoReason: true,
-              comment: true,
+              reasonReject: true,
+              reasonApprove: true,
               rejector: { id: true, name: true, email: true },
-              commenter: { id: true, name: true, email: true },
+              approver: { id: true, name: true, email: true },
+              fastqPair: { id: true, status: true, createdAt: true },
             },
             order: { etlCompletedAt: 'DESC' },
           }),
@@ -270,7 +272,8 @@ export class AnalysisService {
         },
         etlResults: {
           rejector: true,
-          commenter: true,
+          approver: true,
+          fastqPair: true,
         },
       },
       select: {
@@ -342,20 +345,26 @@ export class AnalysisService {
         },
         etlResults: {
           id: true,
+          fastqFilePairId: true,
           resultPath: true,
           etlCompletedAt: true,
           status: true,
-          redoReason: true,
-          comment: true,
+          reasonReject: true,
+          reasonApprove: true,
           rejector: {
             id: true,
             name: true,
             email: true,
           },
-          commenter: {
+          approver: {
             id: true,
             name: true,
             email: true,
+          },
+          fastqPair: {
+            id: true,
+            status: true,
+            createdAt: true,
           },
         },
       },
@@ -476,6 +485,7 @@ export class AnalysisService {
     // Create ETL result entry with pending status
     const etlResult = this.etlResultRepository.create({
       labcodeLabSessionId: fastqFilePair.labcodeLabSessionId,
+      fastqFilePairId: fastqFilePair.id,
       resultPath: '',
       etlCompletedAt: new Date(),
     });
@@ -487,7 +497,7 @@ export class AnalysisService {
       async (error) => {
         // Mark as failed if pipeline fails
         etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Processing failed: ${error.message}`;
+        etlResult.reasonReject = `Processing failed: ${error.message}`;
         await this.etlResultRepository.save(etlResult);
       },
     );
@@ -554,7 +564,7 @@ export class AnalysisService {
     } catch (error) {
       // Handle pipeline failure
       etlResult.status = EtlResultStatus.FAILED;
-      etlResult.comment = `ETL Pipeline failed: ${error.message}`;
+      etlResult.reasonReject = `ETL Pipeline failed: ${error.message}`;
       await this.etlResultRepository.save(etlResult);
       notificaitonReqs.push({
         title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
@@ -712,7 +722,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     if (pendingEtlResults.length > 0) {
       for (const etlResult of pendingEtlResults) {
         etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Analysis cancelled due to FastQ file pair rejection: ${redoReason}`;
+        etlResult.reasonReject = `Analysis cancelled due to FastQ file pair rejection: ${redoReason}`;
         etlResult.rejectBy = user.id;
         await this.etlResultRepository.save(etlResult);
       }
@@ -728,9 +738,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     user: AuthenticatedUser,
     validationId: number,
   ) {
-    // Find the ETL result that's completed
+    // Find the ETL result that's completed or rejected
     const etlResult = await this.etlResultRepository.findOne({
-      where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
+      where: { 
+        id: etlResultId, 
+        status: In([EtlResultStatus.COMPLETED, EtlResultStatus.REJECTED])
+      },
       relations: {
         labcodeLabSession: {
           labSession: {
@@ -743,7 +756,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     if (!etlResult) {
       throw new NotFoundException(
-        `Completed ETL result with ID ${etlResultId} not found`,
+        `ETL result with ID ${etlResultId} not found or not in completed/rejected status`,
       );
     }
 
@@ -757,40 +770,24 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     const barcode = labSession.patient.barcode;
     const labcode = [etlResult.labcodeLabSession?.labcode || 'unknown'];
 
-    if (assignment.validationId) {
-      await this.notificationService.createNotification({
-        title: `Chỉ định thẩm định.`,
-        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${barcode} đã được gửi mới`,
-        taskType: TypeTaskNotification.VALIDATION_TASK,
-        type: TypeNotification.PROCESS,
-        subType: SubTypeNotification.RESEND,
-        labcode: labcode,
-        barcode: barcode,
-        senderId: user.id,
-        receiverId: validationId,
-      });
-    }
-
-    if (!assignment.validationId && validationId) {
-      assignment.validationId = validationId;
-      await this.assignLabSessionRepository.save(assignment);
-      const formattedLabcodes = this.formatLabcodeArray(labcode);
-      await this.notificationService.createNotification({
-        title: `Chỉ định thẩm định.`,
-        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${barcode}`,
-        taskType: TypeTaskNotification.VALIDATION_TASK,
-        type: TypeNotification.ACTION,
-        subType: SubTypeNotification.ASSIGN,
-        labcode: labcode,
-        barcode: barcode,
-        senderId: user.id,
-        receiverId: validationId,
-      });
-    }
-
     if (!assignment.validationId && !validationId) {
       return errorValidation.validationIdRequired;
     }
+
+    assignment.validationId = validationId;
+    await this.assignLabSessionRepository.save(assignment);
+    const formattedLabcodes = this.formatLabcodeArray(labcode);
+    await this.notificationService.createNotification({
+      title: `Chỉ định thẩm định.`,
+      message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${barcode}`,
+      taskType: TypeTaskNotification.VALIDATION_TASK,
+      type: TypeNotification.ACTION,
+      subType: SubTypeNotification.ASSIGN,
+      labcode: labcode,
+      barcode: barcode,
+      senderId: user.id,
+      receiverId: validationId,
+    });
 
     // Update ETL result status to WAIT_FOR_APPROVAL
     etlResult.status = EtlResultStatus.WAIT_FOR_APPROVAL;
@@ -818,6 +815,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
             patient: true,
           },
         },
+        fastqPair: true,
       },
     });
 
@@ -835,7 +833,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       },
     });
 
-    if (existingProcessingEtl && existingProcessingEtl.id !== etlResultId) {
+    if (existingProcessingEtl) {
       throw new BadRequestException(
         'Another ETL process is already running for this labcode',
       );
@@ -891,26 +889,30 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         });
     }
 
-    // Reset the ETL result for retry
-    etlResult.status = EtlResultStatus.PROCESSING;
-    etlResult.resultPath = '';
+    // Create a new ETL result for retry instead of updating the existing one
+    const newEtlResult = this.etlResultRepository.create({
+      labcodeLabSessionId: etlResult.labcodeLabSessionId,
+      fastqFilePairId: latestFastqFilePair?.id || etlResult.fastqFilePairId,
+      resultPath: '',
+      etlCompletedAt: new Date(),
+      status: EtlResultStatus.PROCESSING,
+    });
 
-    etlResult.etlCompletedAt = new Date();
-    await this.etlResultRepository.save(etlResult);
+    await this.etlResultRepository.save(newEtlResult);
 
     // Start mock ETL pipeline (async) for retry
-    this.runMockEtlPipeline(etlResult, labcode, barcode, user.id).catch(
+    this.runMockEtlPipeline(newEtlResult, labcode, barcode, user.id).catch(
       async (error) => {
         // Mark as failed if pipeline fails again
-        etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Retry failed: ${error.message}`;
-        etlResult.commentBy = user.id;
-        await this.etlResultRepository.save(etlResult);
+        newEtlResult.status = EtlResultStatus.FAILED;
+        newEtlResult.reasonReject = `Retry failed: ${error.message}`;
+        newEtlResult.rejectBy = user.id;
+        await this.etlResultRepository.save(newEtlResult);
       },
     );
 
     return {
-      message: 'ETL process retry started successfully',
+      message: 'ETL process retry started successfully with new ETL result',
     };
   }
 }

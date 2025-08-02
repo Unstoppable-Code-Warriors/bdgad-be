@@ -213,17 +213,17 @@ export class AnalysisService {
           }),
           this.etlResultRepository.findOne({
             where: { labcodeLabSessionId: labcode.id },
-            relations: { rejector: true, commenter: true, fastqPair: true },
+            relations: { rejector: true, approver: true, fastqPair: true },
             select: {
               id: true,
               fastqFilePairId: true,
               resultPath: true,
               etlCompletedAt: true,
               status: true,
-              redoReason: true,
-              comment: true,
+              reasonReject: true,
+              reasonApprove: true,
               rejector: { id: true, name: true, email: true },
-              commenter: { id: true, name: true, email: true },
+              approver: { id: true, name: true, email: true },
               fastqPair: { id: true, status: true, createdAt: true },
             },
             order: { etlCompletedAt: 'DESC' },
@@ -272,7 +272,7 @@ export class AnalysisService {
         },
         etlResults: {
           rejector: true,
-          commenter: true,
+          approver: true,
           fastqPair: true,
         },
       },
@@ -349,14 +349,14 @@ export class AnalysisService {
           resultPath: true,
           etlCompletedAt: true,
           status: true,
-          redoReason: true,
-          comment: true,
+          reasonReject: true,
+          reasonApprove: true,
           rejector: {
             id: true,
             name: true,
             email: true,
           },
-          commenter: {
+          approver: {
             id: true,
             name: true,
             email: true,
@@ -497,7 +497,7 @@ export class AnalysisService {
       async (error) => {
         // Mark as failed if pipeline fails
         etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Processing failed: ${error.message}`;
+        etlResult.reasonReject = `Processing failed: ${error.message}`;
         await this.etlResultRepository.save(etlResult);
       },
     );
@@ -564,7 +564,7 @@ export class AnalysisService {
     } catch (error) {
       // Handle pipeline failure
       etlResult.status = EtlResultStatus.FAILED;
-      etlResult.comment = `ETL Pipeline failed: ${error.message}`;
+      etlResult.reasonReject = `ETL Pipeline failed: ${error.message}`;
       await this.etlResultRepository.save(etlResult);
       notificaitonReqs.push({
         title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
@@ -722,7 +722,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     if (pendingEtlResults.length > 0) {
       for (const etlResult of pendingEtlResults) {
         etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Analysis cancelled due to FastQ file pair rejection: ${redoReason}`;
+        etlResult.reasonReject = `Analysis cancelled due to FastQ file pair rejection: ${redoReason}`;
         etlResult.rejectBy = user.id;
         await this.etlResultRepository.save(etlResult);
       }
@@ -918,8 +918,8 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       async (error) => {
         // Mark as failed if pipeline fails again
         newEtlResult.status = EtlResultStatus.FAILED;
-        newEtlResult.comment = `Retry failed: ${error.message}`;
-        newEtlResult.commentBy = user.id;
+        newEtlResult.reasonReject = `Retry failed: ${error.message}`;
+        newEtlResult.rejectBy = user.id;
         await this.etlResultRepository.save(newEtlResult);
       },
     );

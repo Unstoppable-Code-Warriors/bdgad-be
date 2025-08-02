@@ -149,17 +149,17 @@ export class ValidationService {
               EtlResultStatus.APPROVED,
             ]),
           },
-          relations: { rejector: true, commenter: true, fastqPair: true },
+          relations: { rejector: true, approver: true, fastqPair: true },
           select: {
             id: true,
             fastqFilePairId: true,
             resultPath: true,
             etlCompletedAt: true,
             status: true,
-            redoReason: true,
-            comment: true,
+            reasonReject: true,
+            reasonApprove: true,
             rejector: { id: true, name: true, email: true },
-            commenter: { id: true, name: true, email: true },
+            approver: { id: true, name: true, email: true },
             fastqPair: { id: true, status: true, createdAt: true },
           },
           order: { id: 'DESC' },
@@ -182,8 +182,8 @@ export class ValidationService {
                 resultPath: latestEtlResult.resultPath,
                 etlCompletedAt: latestEtlResult.etlCompletedAt,
                 status: latestEtlResult.status,
-                redoReason: latestEtlResult.redoReason,
-                comment: latestEtlResult.comment,
+                reasonReject: latestEtlResult.reasonReject,
+                reasonApprove: latestEtlResult.reasonApprove,
                 rejector: latestEtlResult.rejector
                   ? {
                       id: latestEtlResult.rejector.id,
@@ -191,11 +191,11 @@ export class ValidationService {
                       email: latestEtlResult.rejector.email,
                     }
                   : undefined,
-                commenter: latestEtlResult.commenter
+                approver: latestEtlResult.approver
                   ? {
-                      id: latestEtlResult.commenter.id,
-                      name: latestEtlResult.commenter.name,
-                      email: latestEtlResult.commenter.email,
+                      id: latestEtlResult.approver.id,
+                      name: latestEtlResult.approver.name,
+                      email: latestEtlResult.approver.email,
                     }
                   : undefined,
               }
@@ -223,7 +223,7 @@ export class ValidationService {
         },
         etlResults: {
           rejector: true,
-          commenter: true,
+          approver: true,
         },
       },
     });
@@ -263,8 +263,8 @@ export class ValidationService {
             resultPath: latestEtlResult.resultPath,
             etlCompletedAt: latestEtlResult.etlCompletedAt,
             status: latestEtlResult.status,
-            redoReason: latestEtlResult.redoReason,
-            comment: latestEtlResult.comment,
+            reasonReject: latestEtlResult.reasonReject,
+            reasonApprove: latestEtlResult.reasonApprove,
             rejector: latestEtlResult.rejector
               ? {
                   id: latestEtlResult.rejector.id,
@@ -272,11 +272,11 @@ export class ValidationService {
                   email: latestEtlResult.rejector.email,
                 }
               : undefined,
-            commenter: latestEtlResult.commenter
+            approver: latestEtlResult.approver
               ? {
-                  id: latestEtlResult.commenter.id,
-                  name: latestEtlResult.commenter.name,
-                  email: latestEtlResult.commenter.email,
+                  id: latestEtlResult.approver.id,
+                  name: latestEtlResult.approver.name,
+                  email: latestEtlResult.approver.email,
                 }
               : undefined,
           }
@@ -351,7 +351,7 @@ export class ValidationService {
     // Update ETL result status to REJECTED
     await this.etlResultRepository.update(etlResultId, {
       status: EtlResultStatus.REJECTED,
-      redoReason: reason,
+      reasonReject: reason,
       rejectBy: user.id,
     });
 
@@ -408,7 +408,7 @@ export class ValidationService {
 
   async acceptEtlResult(
     etlResultId: number,
-    comment: string | undefined,
+    reasonApprove: string | undefined,
     user: AuthenticatedUser,
   ): Promise<{ message: string }> {
     const etlResult = await this.etlResultRepository.findOne({
@@ -456,9 +456,9 @@ export class ValidationService {
       receiverId: assignment?.analysisId!,
     });
 
-    if (comment) {
-      updateData.comment = comment;
-      updateData.commentBy = user.id;
+    if (reasonApprove) {
+      updateData.reasonApprove = reasonApprove;
+      updateData.approveBy = user.id;
     }
 
     await this.etlResultRepository.update(etlResultId, updateData);

@@ -28,14 +28,14 @@ export class EtlResultResponseDto {
   resultPath: string;
   etlCompletedAt: Date;
   status: string | null;
-  redoReason: string | null;
-  comment: string;
+  reasonReject: string | null;
+  reasonApprove: string | null;
   rejector?: {
     id: number;
     name: string;
     email: string;
   };
-  commenter?: {
+  approver?: {
     id: number;
     name: string;
     email: string;

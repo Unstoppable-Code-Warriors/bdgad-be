@@ -46,17 +46,17 @@ export class EtlResult {
   })
   status: EtlResultStatus;
 
-  @Column({ name: 'redo_reason', nullable: true })
-  redoReason: string;
+  @Column({ name: 'reason_reject', nullable: true })
+  reasonReject: string;
 
   @Column({ name: 'reject_by', nullable: true })
   rejectBy: number;
 
-  @Column({ nullable: true })
-  comment: string;
+  @Column({ name: 'reason_approve', nullable: true })
+  reasonApprove: string;
 
-  @Column({ name: 'comment_by', nullable: true })
-  commentBy: number;
+  @Column({ name: 'approve_by', nullable: true })
+  approveBy: number;
 
   @ManyToOne(
     () => LabCodeLabSession,
@@ -83,6 +83,6 @@ export class EtlResult {
     cascade: true,
     nullable: true,
   })
-  @JoinColumn({ name: 'comment_by' })
-  commenter: User;
+  @JoinColumn({ name: 'approve_by' })
+  approver: User;
 }

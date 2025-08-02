@@ -124,7 +124,7 @@ export class ValidationController {
   ): Promise<{ message: string }> {
     return this.validationService.acceptEtlResult(
       etlResultId,
-      acceptDto.comment,
+      acceptDto.reasonApprove,
       user,
     );
   }

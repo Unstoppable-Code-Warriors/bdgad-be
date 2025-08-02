@@ -34,17 +34,17 @@ export class EtlResultResponseDto {
     id: number;
     name: string;
     email: string;
-  };
+  } | null;
   approver?: {
     id: number;
     name: string;
     email: string;
-  };
+  } | null;
   fastqPair?: {
     id: number;
     status: string | null;
     createdAt: Date;
-  };
+  } | null;
 }
 
 export class ValidationSessionResponseDto {
@@ -61,6 +61,10 @@ export class ValidationSessionResponseDto {
 
 export class ValidationSessionWithLatestEtlResponseDto extends ValidationSessionResponseDto {
   latestEtlResult: EtlResultResponseDto | null;
+}
+
+export class ValidationSessionDetailResponseDto extends ValidationSessionResponseDto {
+  etlResults: EtlResultResponseDto[];
 }
 
 export class EtlResultDownloadResponseDto {

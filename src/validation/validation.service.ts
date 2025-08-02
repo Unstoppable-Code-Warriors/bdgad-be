@@ -18,7 +18,10 @@ import {
   PaginationQueryDto,
   PaginatedResponseDto,
 } from '../common/dto/pagination.dto';
-import { ValidationSessionWithLatestEtlResponseDto } from './dto/validation-response.dto';
+import {
+  ValidationSessionWithLatestEtlResponseDto,
+  ValidationSessionDetailResponseDto,
+} from './dto/validation-response.dto';
 import { S3Service } from '../utils/s3.service';
 import {
   S3Bucket,
@@ -190,14 +193,14 @@ export class ValidationService {
                       name: latestEtlResult.rejector.name,
                       email: latestEtlResult.rejector.email,
                     }
-                  : undefined,
+                  : null,
                 approver: latestEtlResult.approver
                   ? {
                       id: latestEtlResult.approver.id,
                       name: latestEtlResult.approver.name,
                       email: latestEtlResult.approver.email,
                     }
-                  : undefined,
+                  : null,
               }
             : null,
         };
@@ -207,9 +210,7 @@ export class ValidationService {
     return new PaginatedResponseDto(labcodesWithLatest, page, limit, total);
   }
 
-  async findOne(
-    id: number,
-  ): Promise<ValidationSessionWithLatestEtlResponseDto> {
+  async findOne(id: number): Promise<ValidationSessionDetailResponseDto> {
     // Find the specific labcode session by ID
     const labcode = await this.labCodeLabSessionRepository.findOne({
       where: { id },
@@ -224,6 +225,7 @@ export class ValidationService {
         etlResults: {
           rejector: true,
           approver: true,
+          fastqPair: true,
         },
       },
     });
@@ -245,7 +247,6 @@ export class ValidationService {
 
     // Sort by ID descending to get the latest
     validEtlResults.sort((a, b) => b.id - a.id);
-    const latestEtlResult = validEtlResults[0] || null;
 
     return {
       id: labcode.id,
@@ -257,30 +258,36 @@ export class ValidationService {
       patient: session.patient,
       doctor: session.assignment?.doctor || null,
       analysis: session.assignment?.analysis || null,
-      latestEtlResult: latestEtlResult
-        ? {
-            id: latestEtlResult.id,
-            resultPath: latestEtlResult.resultPath,
-            etlCompletedAt: latestEtlResult.etlCompletedAt,
-            status: latestEtlResult.status,
-            reasonReject: latestEtlResult.reasonReject,
-            reasonApprove: latestEtlResult.reasonApprove,
-            rejector: latestEtlResult.rejector
-              ? {
-                  id: latestEtlResult.rejector.id,
-                  name: latestEtlResult.rejector.name,
-                  email: latestEtlResult.rejector.email,
-                }
-              : undefined,
-            approver: latestEtlResult.approver
-              ? {
-                  id: latestEtlResult.approver.id,
-                  name: latestEtlResult.approver.name,
-                  email: latestEtlResult.approver.email,
-                }
-              : undefined,
-          }
-        : null,
+      etlResults: validEtlResults.map((result) => ({
+        id: result.id,
+        fastqFilePairId: result.fastqFilePairId,
+        resultPath: result.resultPath,
+        etlCompletedAt: result.etlCompletedAt,
+        status: result.status,
+        reasonReject: result.reasonReject,
+        reasonApprove: result.reasonApprove,
+        rejector: result.rejector
+          ? {
+              id: result.rejector.id,
+              name: result.rejector.name,
+              email: result.rejector.email,
+            }
+          : null,
+        approver: result.approver
+          ? {
+              id: result.approver.id,
+              name: result.approver.name,
+              email: result.approver.email,
+            }
+          : null,
+        fastqPair: result.fastqPair
+          ? {
+              id: result.fastqPair.id,
+              status: result.fastqPair.status,
+              createdAt: result.fastqPair.createdAt,
+            }
+          : null,
+      })),
     };
   }
 

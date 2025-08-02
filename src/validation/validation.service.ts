@@ -149,9 +149,10 @@ export class ValidationService {
               EtlResultStatus.APPROVED,
             ]),
           },
-          relations: { rejector: true, commenter: true },
+          relations: { rejector: true, commenter: true, fastqPair: true },
           select: {
             id: true,
+            fastqFilePairId: true,
             resultPath: true,
             etlCompletedAt: true,
             status: true,
@@ -159,6 +160,7 @@ export class ValidationService {
             comment: true,
             rejector: { id: true, name: true, email: true },
             commenter: { id: true, name: true, email: true },
+            fastqPair: { id: true, status: true, createdAt: true },
           },
           order: { id: 'DESC' },
         });

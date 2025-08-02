@@ -213,9 +213,10 @@ export class AnalysisService {
           }),
           this.etlResultRepository.findOne({
             where: { labcodeLabSessionId: labcode.id },
-            relations: { rejector: true, commenter: true },
+            relations: { rejector: true, commenter: true, fastqPair: true },
             select: {
               id: true,
+              fastqFilePairId: true,
               resultPath: true,
               etlCompletedAt: true,
               status: true,
@@ -223,6 +224,7 @@ export class AnalysisService {
               comment: true,
               rejector: { id: true, name: true, email: true },
               commenter: { id: true, name: true, email: true },
+              fastqPair: { id: true, status: true, createdAt: true },
             },
             order: { etlCompletedAt: 'DESC' },
           }),
@@ -271,6 +273,7 @@ export class AnalysisService {
         etlResults: {
           rejector: true,
           commenter: true,
+          fastqPair: true,
         },
       },
       select: {
@@ -342,6 +345,7 @@ export class AnalysisService {
         },
         etlResults: {
           id: true,
+          fastqFilePairId: true,
           resultPath: true,
           etlCompletedAt: true,
           status: true,
@@ -356,6 +360,11 @@ export class AnalysisService {
             id: true,
             name: true,
             email: true,
+          },
+          fastqPair: {
+            id: true,
+            status: true,
+            createdAt: true,
           },
         },
       },
@@ -476,6 +485,7 @@ export class AnalysisService {
     // Create ETL result entry with pending status
     const etlResult = this.etlResultRepository.create({
       labcodeLabSessionId: fastqFilePair.labcodeLabSessionId,
+      fastqFilePairId: fastqFilePair.id,
       resultPath: '',
       etlCompletedAt: new Date(),
     });
@@ -818,6 +828,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
             patient: true,
           },
         },
+        fastqPair: true,
       },
     });
 
@@ -835,7 +846,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       },
     });
 
-    if (existingProcessingEtl && existingProcessingEtl.id !== etlResultId) {
+    if (existingProcessingEtl) {
       throw new BadRequestException(
         'Another ETL process is already running for this labcode',
       );
@@ -891,26 +902,30 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         });
     }
 
-    // Reset the ETL result for retry
-    etlResult.status = EtlResultStatus.PROCESSING;
-    etlResult.resultPath = '';
+    // Create a new ETL result for retry instead of updating the existing one
+    const newEtlResult = this.etlResultRepository.create({
+      labcodeLabSessionId: etlResult.labcodeLabSessionId,
+      fastqFilePairId: latestFastqFilePair?.id || etlResult.fastqFilePairId,
+      resultPath: '',
+      etlCompletedAt: new Date(),
+      status: EtlResultStatus.PROCESSING,
+    });
 
-    etlResult.etlCompletedAt = new Date();
-    await this.etlResultRepository.save(etlResult);
+    await this.etlResultRepository.save(newEtlResult);
 
     // Start mock ETL pipeline (async) for retry
-    this.runMockEtlPipeline(etlResult, labcode, barcode, user.id).catch(
+    this.runMockEtlPipeline(newEtlResult, labcode, barcode, user.id).catch(
       async (error) => {
         // Mark as failed if pipeline fails again
-        etlResult.status = EtlResultStatus.FAILED;
-        etlResult.comment = `Retry failed: ${error.message}`;
-        etlResult.commentBy = user.id;
-        await this.etlResultRepository.save(etlResult);
+        newEtlResult.status = EtlResultStatus.FAILED;
+        newEtlResult.comment = `Retry failed: ${error.message}`;
+        newEtlResult.commentBy = user.id;
+        await this.etlResultRepository.save(newEtlResult);
       },
     );
 
     return {
-      message: 'ETL process retry started successfully',
+      message: 'ETL process retry started successfully with new ETL result',
     };
   }
 }

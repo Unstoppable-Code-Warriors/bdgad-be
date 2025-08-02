@@ -24,6 +24,7 @@ export class AnalysisResponseDto {
 
 export class EtlResultResponseDto {
   id: number;
+  fastqFilePairId?: number;
   resultPath: string;
   etlCompletedAt: Date;
   status: string | null;
@@ -38,6 +39,11 @@ export class EtlResultResponseDto {
     id: number;
     name: string;
     email: string;
+  };
+  fastqPair?: {
+    id: number;
+    status: string | null;
+    createdAt: Date;
   };
 }
 

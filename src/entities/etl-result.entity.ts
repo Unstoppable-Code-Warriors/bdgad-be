@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { LabCodeLabSession } from './labcode-lab-session.entity';
+import { FastqFilePair } from './fastq-file-pair.entity';
 import { User } from './user.entity';
 
 export enum EtlResultStatus {
@@ -24,6 +25,9 @@ export class EtlResult {
 
   @Column({ name: 'labcode_lab_session_id' })
   labcodeLabSessionId: number;
+
+  @Column({ name: 'fastq_file_pair_id', nullable: true })
+  fastqFilePairId: number;
 
   @Column({ name: 'result_path' })
   resultPath: string;
@@ -54,9 +58,19 @@ export class EtlResult {
   @Column({ name: 'comment_by', nullable: true })
   commentBy: number;
 
-  @ManyToOne(() => LabCodeLabSession, (labcodeLabSession) => labcodeLabSession.etlResults)
+  @ManyToOne(
+    () => LabCodeLabSession,
+    (labcodeLabSession) => labcodeLabSession.etlResults,
+  )
   @JoinColumn({ name: 'labcode_lab_session_id' })
   labcodeLabSession: LabCodeLabSession;
+
+  @ManyToOne(() => FastqFilePair, {
+    cascade: true,
+    nullable: true,
+  })
+  @JoinColumn({ name: 'fastq_file_pair_id' })
+  fastqPair: FastqFilePair;
 
   @ManyToOne(() => User, {
     cascade: true,

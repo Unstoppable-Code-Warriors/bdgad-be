@@ -738,9 +738,12 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     user: AuthenticatedUser,
     validationId: number,
   ) {
-    // Find the ETL result that's completed
+    // Find the ETL result that's completed or rejected
     const etlResult = await this.etlResultRepository.findOne({
-      where: { id: etlResultId, status: EtlResultStatus.COMPLETED },
+      where: { 
+        id: etlResultId, 
+        status: In([EtlResultStatus.COMPLETED, EtlResultStatus.REJECTED])
+      },
       relations: {
         labcodeLabSession: {
           labSession: {
@@ -753,7 +756,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     if (!etlResult) {
       throw new NotFoundException(
-        `Completed ETL result with ID ${etlResultId} not found`,
+        `ETL result with ID ${etlResultId} not found or not in completed/rejected status`,
       );
     }
 
@@ -767,40 +770,24 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     const barcode = labSession.patient.barcode;
     const labcode = [etlResult.labcodeLabSession?.labcode || 'unknown'];
 
-    if (assignment.validationId) {
-      await this.notificationService.createNotification({
-        title: `Chỉ định thẩm định.`,
-        message: `File kết quả ETL #${etlResultId} của lần khám với mã barcode ${barcode} đã được gửi mới`,
-        taskType: TypeTaskNotification.VALIDATION_TASK,
-        type: TypeNotification.PROCESS,
-        subType: SubTypeNotification.RESEND,
-        labcode: labcode,
-        barcode: barcode,
-        senderId: user.id,
-        receiverId: validationId,
-      });
-    }
-
-    if (!assignment.validationId && validationId) {
-      assignment.validationId = validationId;
-      await this.assignLabSessionRepository.save(assignment);
-      const formattedLabcodes = this.formatLabcodeArray(labcode);
-      await this.notificationService.createNotification({
-        title: `Chỉ định thẩm định.`,
-        message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${barcode}`,
-        taskType: TypeTaskNotification.VALIDATION_TASK,
-        type: TypeNotification.ACTION,
-        subType: SubTypeNotification.ASSIGN,
-        labcode: labcode,
-        barcode: barcode,
-        senderId: user.id,
-        receiverId: validationId,
-      });
-    }
-
     if (!assignment.validationId && !validationId) {
       return errorValidation.validationIdRequired;
     }
+
+    assignment.validationId = validationId;
+    await this.assignLabSessionRepository.save(assignment);
+    const formattedLabcodes = this.formatLabcodeArray(labcode);
+    await this.notificationService.createNotification({
+      title: `Chỉ định thẩm định.`,
+      message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${barcode}`,
+      taskType: TypeTaskNotification.VALIDATION_TASK,
+      type: TypeNotification.ACTION,
+      subType: SubTypeNotification.ASSIGN,
+      labcode: labcode,
+      barcode: barcode,
+      senderId: user.id,
+      receiverId: validationId,
+    });
 
     // Update ETL result status to WAIT_FOR_APPROVAL
     etlResult.status = EtlResultStatus.WAIT_FOR_APPROVAL;

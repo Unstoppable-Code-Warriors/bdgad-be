@@ -15,7 +15,7 @@ export enum FastqFileStatus {
   UPLOADED = 'uploaded',
   WAIT_FOR_APPROVAL = 'wait_for_approval',
   APPROVED = 'approved',
-  REJECTED = 'rejected',
+  REJECTED = 'rejected', 
 }
 @Entity('fastq_file_pairs')
 export class FastqFilePair {

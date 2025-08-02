@@ -166,6 +166,13 @@ export class AnalysisService {
         { etlStatus: filter.etlStatus },
       );
     }
+    //Apply filter functionality (filter by FastQ file pair status)
+    if (filter && filter.fastqFilePairStatus) {
+      queryBuilder.andWhere(
+        'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :fastqFilePairStatus)',
+        { fastqFilePairStatus: filter.fastqFilePairStatus },
+      );
+    }
 
     // Apply pagination
     queryBuilder.skip((page - 1) * limit).take(limit);

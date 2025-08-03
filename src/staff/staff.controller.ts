@@ -818,44 +818,46 @@ export class StaffController {
       preservePath: true,
     }),
   )
-  @UsePipes(new ValidationPipe({ transform: true }))
+  @UsePipes(
+    new ValidationPipe({ transform: false, skipMissingProperties: true }),
+  )
   async uploadCategorizedPatientFiles(
     @UploadedFiles() files: { files?: Express.Multer.File[] },
-    @Body() uploadData: UploadCategorizedFilesDto,
+    @Body() uploadData: any, // Use any to bypass validation initially
     @User() user: AuthenticatedUser,
   ) {
     // Debug logging to see what we actually receive
     console.log('=== UPLOAD-V2 DEBUG ===');
-    console.log('Raw body keys:', Object.keys(uploadData));
+    console.log('Raw body keys:', Object.keys(uploadData || {}));
     console.log(
       'patientId type:',
-      typeof uploadData.patientId,
+      typeof uploadData?.patientId,
       'value:',
-      uploadData.patientId,
+      uploadData?.patientId,
     );
     console.log(
       'typeLabSession type:',
-      typeof uploadData.typeLabSession,
+      typeof uploadData?.typeLabSession,
       'value:',
-      uploadData.typeLabSession,
+      uploadData?.typeLabSession,
     );
     console.log(
       'fileCategories type:',
-      typeof uploadData.fileCategories,
+      typeof uploadData?.fileCategories,
       'value:',
-      uploadData.fileCategories,
+      uploadData?.fileCategories,
     );
     console.log(
       'ocrResults type:',
-      typeof uploadData.ocrResults,
+      typeof uploadData?.ocrResults,
       'value:',
-      uploadData.ocrResults,
+      uploadData?.ocrResults,
     );
     console.log(
       'labcode type:',
-      typeof uploadData.labcode,
+      typeof uploadData?.labcode,
       'value:',
-      uploadData.labcode,
+      uploadData?.labcode,
     );
     console.log('Files count:', files.files?.length || 0);
     console.log('=== END DEBUG ===');
@@ -864,63 +866,247 @@ export class StaffController {
       throw new BadRequestException('At least one file is required');
     }
 
+    // Create a plain object for manual parsing (avoid DTO validation during assignment)
+    const processedData: any = {
+      patientId: 0,
+      typeLabSession: 'test',
+      fileCategories: [],
+      ocrResults: [],
+      labcode: [],
+    };
+
     // Manual parsing for FormData issues - ensure data is correctly parsed
     try {
-      // Parse fileCategories if it's a string
-      const fileCategoriesValue = uploadData.fileCategories;
-      if (typeof fileCategoriesValue === 'string') {
-        try {
-          uploadData.fileCategories = JSON.parse(fileCategoriesValue);
-          console.log(
-            'Manually parsed fileCategories:',
-            uploadData.fileCategories,
+      // Convert patientId
+      if (uploadData.patientId) {
+        processedData.patientId = parseInt(String(uploadData.patientId), 10);
+        if (isNaN(processedData.patientId)) {
+          throw new BadRequestException('Invalid patientId - must be a number');
+        }
+      } else {
+        throw new BadRequestException('patientId is required');
+      }
+
+      // Convert typeLabSession
+      if (uploadData.typeLabSession) {
+        processedData.typeLabSession = String(uploadData.typeLabSession);
+        if (!['test', 'validation'].includes(processedData.typeLabSession)) {
+          throw new BadRequestException(
+            'Invalid typeLabSession - must be test or validation',
           );
-        } catch (e) {
-          console.error('Failed to parse fileCategories JSON:', e);
-          throw new BadRequestException('Invalid fileCategories JSON format');
+        }
+      } else {
+        throw new BadRequestException('typeLabSession is required');
+      }
+
+      // Parse fileCategories
+      if (uploadData.fileCategories) {
+        if (typeof uploadData.fileCategories === 'string') {
+          try {
+            processedData.fileCategories = JSON.parse(uploadData.fileCategories);
+            console.log(
+              'Manually parsed fileCategories:',
+              processedData.fileCategories,
+            );
+          } catch (e) {
+            console.error('Failed to parse fileCategories JSON:', e);
+            throw new BadRequestException('Invalid fileCategories JSON format');
+          }
+        } else if (Array.isArray(uploadData.fileCategories)) {
+          processedData.fileCategories = uploadData.fileCategories;
+        } else {
+          throw new BadRequestException(
+            'fileCategories must be a JSON string or array',
+          );
+        }
+      } else {
+        throw new BadRequestException('fileCategories is required');
+      }
+
+      // Parse ocrResults (optional)
+      if (uploadData.ocrResults) {
+        if (typeof uploadData.ocrResults === 'string') {
+          try {
+            processedData.ocrResults = JSON.parse(uploadData.ocrResults);
+            console.log(
+              'Manually parsed ocrResults:',
+              processedData.ocrResults,
+            );
+          } catch (e) {
+            console.error('Failed to parse ocrResults JSON:', e);
+            throw new BadRequestException('Invalid ocrResults JSON format');
+          }
+        } else if (Array.isArray(uploadData.ocrResults)) {
+          processedData.ocrResults = uploadData.ocrResults;
+        } else {
+          throw new BadRequestException(
+            'ocrResults must be a JSON string or array',
+          );
         }
       }
 
-      // Parse ocrResults if it's a string
-      const ocrResultsValue = uploadData.ocrResults;
-      if (typeof ocrResultsValue === 'string') {
-        try {
-          uploadData.ocrResults = JSON.parse(ocrResultsValue);
-          console.log('Manually parsed ocrResults:', uploadData.ocrResults);
-        } catch (e) {
-          console.error('Failed to parse ocrResults JSON:', e);
-          throw new BadRequestException('Invalid ocrResults JSON format');
+      // Parse labcode (optional)
+      if (uploadData.labcode) {
+        if (typeof uploadData.labcode === 'string') {
+          try {
+            processedData.labcode = JSON.parse(uploadData.labcode);
+            console.log('Manually parsed labcode:', processedData.labcode);
+          } catch (e) {
+            console.error('Failed to parse labcode JSON:', e);
+            // For labcode, we can fall back to treating it as a single item
+            processedData.labcode = [uploadData.labcode];
+          }
+        } else if (Array.isArray(uploadData.labcode)) {
+          processedData.labcode = uploadData.labcode;
         }
       }
 
-      // Parse labcode if it's a string
-      const labcodeValue = uploadData.labcode;
-      if (typeof labcodeValue === 'string') {
-        try {
-          uploadData.labcode = JSON.parse(labcodeValue);
-          console.log('Manually parsed labcode:', uploadData.labcode);
-        } catch (e) {
-          console.error('Failed to parse labcode JSON:', e);
-          // For labcode, we can fall back to treating it as a single item
-          uploadData.labcode = [labcodeValue];
-        }
-      }
+      console.log('=== PROCESSED DATA ===');
+      console.log('processedData.patientId:', processedData.patientId);
+      console.log(
+        'processedData.typeLabSession:',
+        processedData.typeLabSession,
+      );
+      console.log(
+        'processedData.fileCategories:',
+        processedData.fileCategories,
+      );
+      console.log('processedData.ocrResults:', processedData.ocrResults);
+      console.log('processedData.labcode:', processedData.labcode);
+      console.log('=== END PROCESSED DATA ===');
 
-      // Ensure patientId is a number
-      if (typeof uploadData.patientId === 'string') {
-        uploadData.patientId = parseInt(uploadData.patientId, 10);
-        console.log('Converted patientId to number:', uploadData.patientId);
-      }
+      // Manual validation of parsed data
+      this.validateProcessedData(processedData);
     } catch (error) {
       console.error('Error in manual parsing:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       throw new BadRequestException(`Data parsing error: ${error.message}`);
     }
 
     return this.staffService.uploadCategorizedPatientFiles(
       files.files,
-      uploadData,
+      processedData as UploadCategorizedFilesDto,
       user,
     );
+  }
+
+  private validateProcessedData(data: any) {
+    // Validate patientId
+    if (
+      typeof data.patientId !== 'number' ||
+      Number.isNaN(data.patientId) ||
+      data.patientId <= 0
+    ) {
+      throw new BadRequestException('patientId must be a positive number');
+    }
+
+    // Validate typeLabSession
+    if (
+      !data.typeLabSession ||
+      !['test', 'validation'].includes(String(data.typeLabSession))
+    ) {
+      throw new BadRequestException(
+        'typeLabSession must be "test" or "validation"',
+      );
+    }
+
+    // Validate fileCategories
+    if (
+      !Array.isArray(data.fileCategories) ||
+      data.fileCategories.length === 0
+    ) {
+      throw new BadRequestException('fileCategories must be a non-empty array');
+    }
+
+    const validCategories = [
+      'prenatal_screening',
+      'hereditary_cancer',
+      'gene_mutation',
+      'general',
+    ];
+
+    for (let i = 0; i < data.fileCategories.length; i++) {
+      const category = data.fileCategories[i];
+
+      if (!category || typeof category !== 'object') {
+        throw new BadRequestException(`fileCategories[${i}] must be an object`);
+      }
+
+      if (!category.category || typeof category.category !== 'string') {
+        throw new BadRequestException(`fileCategories[${i}].category must be a non-empty string`);
+      }
+
+      if (!validCategories.includes(String(category.category))) {
+        throw new BadRequestException(`fileCategories[${i}].category must be one of: ${validCategories.join(', ')}`);
+      }
+
+      if (!category.fileName || typeof category.fileName !== 'string') {
+        throw new BadRequestException(`fileCategories[${i}].fileName must be a non-empty string`);
+      }
+
+      if (category.priority !== undefined) {
+        const priority = Number(category.priority);
+        if (Number.isNaN(priority) || priority < 1 || priority > 10) {
+          throw new BadRequestException(`fileCategories[${i}].priority must be a number between 1 and 10`);
+        }
+        category.priority = priority; // Ensure it's a number
+      }
+    }
+
+    // Validate ocrResults (optional)
+    if (data.ocrResults && Array.isArray(data.ocrResults)) {
+      for (let i = 0; i < data.ocrResults.length; i++) {
+        const ocrResult = data.ocrResults[i];
+
+        if (!ocrResult || typeof ocrResult !== 'object') {
+          throw new BadRequestException(`ocrResults[${i}] must be an object`);
+        }
+
+        const fileIndex = Number(ocrResult.fileIndex);
+        if (Number.isNaN(fileIndex) || fileIndex < 0) {
+          throw new BadRequestException(
+            `ocrResults[${i}].fileIndex must be a non-negative integer`,
+          );
+        }
+        ocrResult.fileIndex = fileIndex; // Ensure it's a number
+
+        if (
+          !ocrResult.category ||
+          !validCategories.includes(String(ocrResult.category))
+        ) {
+          throw new BadRequestException(
+            `ocrResults[${i}].category must be one of: ${validCategories.join(', ')}`,
+          );
+        }
+
+        if (ocrResult.confidence !== undefined) {
+          const confidence = Number(ocrResult.confidence);
+          if (Number.isNaN(confidence) || confidence < 0 || confidence > 1) {
+            throw new BadRequestException(
+              `ocrResults[${i}].confidence must be a number between 0 and 1`,
+            );
+          }
+          ocrResult.confidence = confidence; // Ensure it's a number
+        }
+      }
+    }
+
+    // Validate labcode (optional)
+    if (data.labcode && !Array.isArray(data.labcode)) {
+      throw new BadRequestException('labcode must be an array');
+    }
+
+    if (data.labcode) {
+      for (let i = 0; i < data.labcode.length; i++) {
+        if (!data.labcode[i] || typeof data.labcode[i] !== 'string') {
+          throw new BadRequestException(
+            `labcode[${i}] must be a non-empty string`,
+          );
+        }
+      }
+    }
   }
 
   // Labcode generation api

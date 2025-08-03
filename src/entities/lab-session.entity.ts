@@ -12,7 +12,6 @@ import {
 import { Patient } from './patient.entity';
 import { PatientFile } from './patient-file.entity';
 import { LabCodeLabSession } from './labcode-lab-session.entity';
-import { AssignLabSession } from './assign-lab-session.entity';
 
 @Entity('lab_sessions')
 export class LabSession {
@@ -63,14 +62,4 @@ export class LabSession {
     },
   )
   labcodes: LabCodeLabSession[];
-
-  // One-to-one relationship with AssignLabSession
-  @OneToOne(
-    () => AssignLabSession,
-    (assignLabSession) => assignLabSession.labSession,
-    {
-      cascade: true,
-    },
-  )
-  assignment: AssignLabSession;
 }

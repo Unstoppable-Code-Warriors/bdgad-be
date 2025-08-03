@@ -9,7 +9,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { LabSession } from './lab-session.entity';
+import { LabCodeLabSession } from './labcode-lab-session.entity';
 import { User } from './user.entity';
 import { AssignmentHistory } from './assignment-history.entity';
 
@@ -18,12 +18,15 @@ export class AssignLabSession {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'lab_session_id' })
-  labSessionId: number;
+  @Column({ name: 'labcode_lab_session_id' })
+  labcodeLabSessionId: number;
 
-  @OneToOne(() => LabSession, (labSession) => labSession.assignment)
-  @JoinColumn({ name: 'lab_session_id' })
-  labSession: LabSession;
+  @OneToOne(
+    () => LabCodeLabSession,
+    (labcodeLabSession) => labcodeLabSession.assignment,
+  )
+  @JoinColumn({ name: 'labcode_lab_session_id' })
+  labcodeLabSession: LabCodeLabSession;
 
   @Column({ name: 'doctor_id', nullable: true })
   doctorId: number | null;

@@ -909,12 +909,13 @@ export class StaffService {
           id: In(labSessions),
         },
         relations: {
-          assignment: {
-            doctor: true,
-            labTesting: true,
-          },
           patientFiles: true,
-          labcodes: true,
+          labcodes: {
+            assignment: {
+              doctor: true,
+              labTesting: true,
+            },
+          },
         },
         select: {
           id: true,
@@ -922,23 +923,22 @@ export class StaffService {
           createdAt: true,
           updatedAt: true,
           finishedAt: true,
-          assignment: {
-            id: true,
-            doctor: {
-              id: true,
-              name: true,
-              email: true,
-            },
-            labTesting: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
           labcodes: {
             id: true,
             labcode: true,
-            createdAt: true,
+            assignment: {
+              id: true,
+              doctor: {
+                id: true,
+                name: true,
+                email: true,
+              },
+              labTesting: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
           patientFiles: {
             id: true,
@@ -966,14 +966,15 @@ export class StaffService {
         where: { id },
         relations: {
           patient: true,
-          assignment: {
-            doctor: true,
-            labTesting: true,
-          },
           patientFiles: {
             uploader: true,
           },
-          labcodes: true,
+          labcodes: {
+            assignment: {
+              doctor: true,
+              labTesting: true,
+            },
+          },
         },
         select: {
           id: true,
@@ -991,23 +992,22 @@ export class StaffService {
             barcode: true,
             createdAt: true,
           },
-          assignment: {
-            id: true,
-            doctor: {
-              id: true,
-              name: true,
-              email: true,
-            },
-            labTesting: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
           labcodes: {
             id: true,
             labcode: true,
-            createdAt: true,
+            assignment: {
+              id: true,
+              doctor: {
+                id: true,
+                name: true,
+                email: true,
+              },
+              labTesting: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
           patientFiles: {
             id: true,
@@ -1236,13 +1236,17 @@ export class StaffService {
       await this.labCodeLabSessionRepository.save(labcodeEntities);
       this.logger.log(`Created ${labcodeEntities.length} labcode entries`);
 
-      // Create assignment record (initially empty)
-      const assignment = this.assignLabSessionRepository.create({
-        labSessionId: labSession.id,
-        createdAt: new Date(),
-      });
-      await this.assignLabSessionRepository.save(assignment);
-      this.logger.log(`Created assignment record for session ${labSession.id}`);
+      // Create assignment records for each labcode (initially empty)
+      const assignments: AssignLabSession[] = [];
+      for (const labcodeEntity of labcodeEntities) {
+        const assignment = this.assignLabSessionRepository.create({
+          labcodeLabSessionId: labcodeEntity.id,
+          createdAt: new Date(),
+        });
+        assignments.push(assignment);
+      }
+      await this.assignLabSessionRepository.save(assignments);
+      this.logger.log(`Created ${assignments.length} assignment records`);
 
       // Upload files and create patient file records
       for (let i = 0; i < files.length; i++) {
@@ -1395,13 +1399,17 @@ export class StaffService {
       await this.labCodeLabSessionRepository.save(labcodeEntities);
       this.logger.log(`Created ${labcodeEntities.length} labcode entries`);
 
-      // Create assignment record
-      const assignment = this.assignLabSessionRepository.create({
-        labSessionId: labSession.id,
-        createdAt: new Date(),
-      });
-      await this.assignLabSessionRepository.save(assignment);
-      this.logger.log(`Created assignment record for session ${labSession.id}`);
+      // Create assignment records for each labcode (initially empty)
+      const assignments: AssignLabSession[] = [];
+      for (const labcodeEntity of labcodeEntities) {
+        const assignment = this.assignLabSessionRepository.create({
+          labcodeLabSessionId: labcodeEntity.id,
+          createdAt: new Date(),
+        });
+        assignments.push(assignment);
+      }
+      await this.assignLabSessionRepository.save(assignments);
+      this.logger.log(`Created ${assignments.length} assignment records`);
 
       // Get processing order based on priority
       const processingOrder =
@@ -1551,8 +1559,9 @@ export class StaffService {
         where: { id },
         relations: {
           patient: true,
-          assignment: true,
-          labcodes: true,
+          labcodes: {
+            assignment: true,
+          },
         },
       });
       if (!labSession) {
@@ -1565,25 +1574,28 @@ export class StaffService {
         return errorLabSession.labTestingIdRequired;
       }
 
-      // Update or create assignment
-      let assignment = labSession.assignment;
-      if (!assignment) {
-        assignment = this.assignLabSessionRepository.create({
-          labSessionId: labSession.id,
-          createdAt: new Date(),
-        });
-      }
+      // Update or create assignments for each labcode
+      const labcodeEntities = labSession.labcodes || [];
+      for (const labcode of labcodeEntities) {
+        let assignment = labcode.assignment;
+        if (!assignment) {
+          assignment = this.assignLabSessionRepository.create({
+            labcodeLabSessionId: labcode.id,
+            createdAt: new Date(),
+          });
+        }
 
-      assignment.doctorId = doctorId;
-      if (labTestingId) {
-        assignment.labTestingId = labTestingId;
-      }
-      assignment.updatedAt = new Date();
+        assignment.doctorId = doctorId;
+        if (labTestingId) {
+          assignment.labTestingId = labTestingId;
+        }
+        assignment.updatedAt = new Date();
 
-      await this.assignLabSessionRepository.save(assignment);
+        await this.assignLabSessionRepository.save(assignment);
+      }
 
       // Get labcodes for notification
-      const labcodes = labSession.labcodes?.map((lc) => lc.labcode) || [];
+      const labcodes = labcodeEntities?.map((lc) => lc.labcode) || [];
       const formattedLabcodes = this.formatLabcodeArray(labcodes);
       notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${labSession.patient.barcode}`;
       notificationReq.labcode = labcodes;

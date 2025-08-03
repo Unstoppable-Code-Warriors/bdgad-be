@@ -74,7 +74,7 @@ export class ValidationService {
       .createQueryBuilder('labcode')
       .leftJoinAndSelect('labcode.labSession', 'labSession')
       .leftJoinAndSelect('labSession.patient', 'patient')
-      .leftJoinAndSelect('labSession.assignment', 'assignment')
+      .leftJoinAndSelect('labcode.assignment', 'assignment')
       .leftJoinAndSelect('assignment.doctor', 'doctor')
       .leftJoinAndSelect('assignment.analysis', 'analysis')
       .select([
@@ -177,8 +177,8 @@ export class ValidationService {
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
-          doctor: labcode.labSession.assignment?.doctor || null,
-          analysis: labcode.labSession.assignment?.analysis || null,
+          doctor: labcode.assignment?.doctor || null,
+          analysis: labcode.assignment?.analysis || null,
           latestEtlResult: latestEtlResult
             ? {
                 id: latestEtlResult.id,
@@ -217,10 +217,10 @@ export class ValidationService {
       relations: {
         labSession: {
           patient: true,
-          assignment: {
-            doctor: true,
-            analysis: true,
-          },
+        },
+        assignment: {
+          doctor: true,
+          analysis: true,
         },
         etlResults: {
           rejector: true,
@@ -256,8 +256,8 @@ export class ValidationService {
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
-      doctor: session.assignment?.doctor || null,
-      analysis: session.assignment?.analysis || null,
+      doctor: labcode.assignment?.doctor || null,
+      analysis: labcode.assignment?.analysis || null,
       etlResults: validEtlResults.map((result) => ({
         id: result.id,
         fastqFilePairId: result.fastqFilePairId,
@@ -333,8 +333,8 @@ export class ValidationService {
         labcodeLabSession: {
           labSession: {
             patient: true,
-            assignment: true,
           },
+          assignment: true,
         },
       },
     });
@@ -351,7 +351,7 @@ export class ValidationService {
     }
 
     const labcodeSession = etlResult.labcodeLabSession;
-    const assignment = labcodeSession?.labSession?.assignment;
+    const assignment = labcodeSession?.assignment;
     const barcode = labcodeSession?.labSession?.patient?.barcode;
     const labcode = [labcodeSession?.labcode || 'unknown'];
 
@@ -380,9 +380,7 @@ export class ValidationService {
       order: { createdAt: 'DESC' },
       relations: {
         labcodeLabSession: {
-          labSession: {
-            assignment: true,
-          },
+          assignment: true,
         },
         creator: true,
       },
@@ -401,8 +399,7 @@ export class ValidationService {
         labcode: labcode,
         barcode: barcode,
         senderId:
-          latestFastqFilePair.labcodeLabSession?.labSession?.assignment
-            ?.analysisId!,
+          latestFastqFilePair.labcodeLabSession?.assignment?.analysisId!,
         receiverId: latestFastqFilePair.createdBy,
       });
     }
@@ -424,8 +421,8 @@ export class ValidationService {
         labcodeLabSession: {
           labSession: {
             patient: true,
-            assignment: true,
           },
+          assignment: true,
         },
       },
     });
@@ -442,7 +439,7 @@ export class ValidationService {
     }
 
     const labcodeSession = etlResult.labcodeLabSession;
-    const assignment = labcodeSession?.labSession?.assignment;
+    const assignment = labcodeSession?.assignment;
     const barcode = labcodeSession?.labSession?.patient?.barcode;
     const labcode = [labcodeSession?.labcode || 'unknown'];
 

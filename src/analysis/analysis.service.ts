@@ -86,7 +86,7 @@ export class AnalysisService {
         .createQueryBuilder('labcode')
         .leftJoinAndSelect('labcode.labSession', 'labSession')
         .leftJoinAndSelect('labSession.patient', 'patient')
-        .leftJoinAndSelect('labSession.assignment', 'assignment')
+        .leftJoinAndSelect('labcode.assignment', 'assignment')
         .leftJoinAndSelect('assignment.doctor', 'doctor')
         .leftJoinAndSelect('assignment.validation', 'validation')
         .select([
@@ -239,8 +239,8 @@ export class AnalysisService {
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
-          doctor: labcode.labSession.assignment?.doctor || null,
-          validation: labcode.labSession.assignment?.validation || null,
+          doctor: labcode.assignment?.doctor || null,
+          validation: labcode.assignment?.validation || null,
           latestFastqPairFile: latestFastqFilePair,
           latestEtlResult,
         };
@@ -259,10 +259,10 @@ export class AnalysisService {
       relations: {
         labSession: {
           patient: true,
-          assignment: {
-            doctor: true,
-            validation: true,
-          },
+        },
+        assignment: {
+          doctor: true,
+          validation: true,
         },
         fastqFilePairs: {
           creator: true,
@@ -297,24 +297,24 @@ export class AnalysisService {
             barcode: true,
             createdAt: true,
           },
-          assignment: {
+        },
+        assignment: {
+          id: true,
+          doctorId: true,
+          labTestingId: true,
+          analysisId: true,
+          validationId: true,
+          doctor: {
             id: true,
-            doctorId: true,
-            labTestingId: true,
-            analysisId: true,
-            validationId: true,
-            doctor: {
-              id: true,
-              name: true,
-              email: true,
-              metadata: true,
-            },
-            validation: {
-              id: true,
-              name: true,
-              email: true,
-              metadata: true,
-            },
+            name: true,
+            email: true,
+            metadata: true,
+          },
+          validation: {
+            id: true,
+            name: true,
+            email: true,
+            metadata: true,
           },
         },
         fastqFilePairs: {
@@ -411,8 +411,8 @@ export class AnalysisService {
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
-      doctor: session.assignment?.doctor || null,
-      validation: session.assignment?.validation || null,
+      doctor: labcodeSession.assignment?.doctor || null,
+      validation: labcodeSession.assignment?.validation || null,
       fastqFilePairs: allFastqFilePairs, // Use the filtered FastQ pairs for this labcode
       etlResults: allEtlResults, // Use the ETL results for this labcode
     };
@@ -748,8 +748,8 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         labcodeLabSession: {
           labSession: {
             patient: true,
-            assignment: true,
           },
+          assignment: true,
         },
       },
     });
@@ -761,7 +761,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     }
 
     const labSession = etlResult.labcodeLabSession?.labSession;
-    const assignment = labSession?.assignment;
+    const assignment = etlResult.labcodeLabSession?.assignment;
 
     if (!labSession || !assignment) {
       return errorLabSession.labSessionNotFound;

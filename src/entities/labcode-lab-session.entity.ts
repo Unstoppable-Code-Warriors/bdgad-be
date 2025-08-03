@@ -5,12 +5,14 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { LabSession } from './lab-session.entity';
 import { FastqFilePair } from './fastq-file-pair.entity';
 import { EtlResult } from './etl-result.entity';
+import { AssignLabSession } from './assign-lab-session.entity';
 
 @Entity('labcode_lab_sessions')
 export class LabCodeLabSession {
@@ -47,4 +49,14 @@ export class LabCodeLabSession {
     cascade: true,
   })
   etlResults: EtlResult[];
+
+  // One-to-one relationship with AssignLabSession
+  @OneToOne(
+    () => AssignLabSession,
+    (assignLabSession) => assignLabSession.labcodeLabSession,
+    {
+      cascade: true,
+    },
+  )
+  assignment: AssignLabSession;
 }

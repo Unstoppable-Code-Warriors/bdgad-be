@@ -44,6 +44,30 @@ export class PatientFile {
   })
   uploadedAt: Date;
 
+  // Enhanced fields for categorized uploads
+  @Column({
+    name: 'file_category',
+    nullable: true,
+    default: 'general',
+  })
+  fileCategory?: string;
+
+  @Column({
+    name: 'processing_priority',
+    nullable: true,
+    default: 5,
+  })
+  processingPriority?: number;
+
+  @Column({
+    name: 'ocr_confidence',
+    type: 'decimal',
+    precision: 3,
+    scale: 2,
+    nullable: true,
+  })
+  ocrConfidence?: number;
+
   @ManyToOne(() => LabSession, (labSession) => labSession.patientFiles)
   @JoinColumn({ name: 'session_id' })
   session: LabSession;

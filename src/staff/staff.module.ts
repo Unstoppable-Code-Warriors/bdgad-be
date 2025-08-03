@@ -13,6 +13,7 @@ import { LabCodeLabSession } from '../entities/labcode-lab-session.entity';
 import { AssignLabSession } from '../entities/assign-lab-session.entity';
 import { NotificationModule } from 'src/notification/notification.module';
 import { CategoryGeneralFileModule } from 'src/category-general-file/category-general-file.module';
+import { FileValidationService } from './services/file-validation.service';
 
 @Module({
   imports: [
@@ -30,6 +31,6 @@ import { CategoryGeneralFileModule } from 'src/category-general-file/category-ge
     CategoryGeneralFileModule,
   ],
   controllers: [StaffController],
-  providers: [StaffService, S3Service],
+  providers: [StaffService, S3Service, FileValidationService],
 })
 export class StaffModule {}

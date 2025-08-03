@@ -37,6 +37,14 @@ export enum TypeLabSession {
   VALIDATION = 'validation',
 }
 
+// File categories for specialized OCR processing
+export enum FileCategory {
+  PRENATAL_SCREENING = 'prenatal_screening',
+  HEREDITARY_CANCER = 'hereditary_cancer',
+  GENE_MUTATION = 'gene_mutation',
+  GENERAL = 'general',
+}
+
 export enum TypeTaskNotification {
   SYSTEM = 'system',
   LAB_TASK = 'lab_task',

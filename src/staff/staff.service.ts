@@ -33,6 +33,7 @@ import {
 } from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
+import { UploadCategorizedFilesDto } from './dtos/upload-categorized-files.dto';
 import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
@@ -45,6 +46,7 @@ import { CreateNotificationReqDto } from 'src/notification/dto/create-notificati
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
 import { CategoryGeneralFileService } from 'src/category-general-file/category-general-file.service';
+import { FileValidationService } from './services/file-validation.service';
 import {
   GenerateLabcodeRequestDto,
   TestType,
@@ -81,6 +83,7 @@ export class StaffService {
     private readonly patientFileRepository: Repository<PatientFile>,
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
+    private readonly fileValidationService: FileValidationService,
   ) {}
 
   async test(file: Express.Multer.File) {
@@ -665,7 +668,7 @@ export class StaffService {
 
           if (dateTo) {
             const toDate = new Date(dateTo);
-            toDate.setHours(23, 59, 59, 999);
+            toDate.setHours(23, 59, 59, 999); // Include the entire day
             if (latestSessionDate > toDate) {
               return false;
             }
@@ -1318,6 +1321,203 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     } finally {
       this.logger.log('Patient files upload process completed');
+    }
+  }
+
+  /**
+   * Upload categorized patient files with enhanced metadata and validation
+   */
+  /**
+   * Upload categorized patient files with enhanced metadata and validation
+   */
+  async uploadCategorizedPatientFiles(
+    files: Express.Multer.File[],
+    uploadData: UploadCategorizedFilesDto,
+    user: AuthenticatedUser,
+  ) {
+    this.logger.log('Starting Categorized Patient Files upload process');
+
+    try {
+      // Validate the entire upload request
+      this.fileValidationService.validateCategorizedUpload(files, uploadData);
+
+      const { patientId, typeLabSession, fileCategories, ocrResults, labcode } =
+        uploadData;
+
+      // Verify patient exists
+      const patient = await this.patientRepository.findOne({
+        where: { id: patientId },
+      });
+      if (!patient) {
+        return errorPatient.patientNotFound;
+      }
+
+      // Generate or use provided labcodes
+      let sessionLabcodes: string[];
+      if (labcode && labcode.length > 0) {
+        sessionLabcodes = labcode;
+        this.logger.log(
+          `Using provided labcodes: ${JSON.stringify(sessionLabcodes)}`,
+        );
+      } else {
+        // Generate default labcode
+        const number = String(Math.floor(Math.random() * 999) + 1).padStart(
+          3,
+          '0',
+        );
+        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        const defaultLabcode = `O5${number}${letter}`;
+        sessionLabcodes = [defaultLabcode];
+        this.logger.log(`Generated default labcode: ${defaultLabcode}`);
+      }
+
+      // Create lab session
+      const labSession = this.labSessionRepository.create({
+        patientId,
+        createdAt: new Date(),
+        typeLabSession,
+      });
+      await this.labSessionRepository.save(labSession);
+      this.logger.log(
+        `Created new categorized lab session with ID: ${labSession.id}`,
+      );
+
+      // Create labcode entries
+      const labcodeEntities: LabCodeLabSession[] = [];
+      for (const labcodeItem of sessionLabcodes) {
+        const labcodeEntity = this.labCodeLabSessionRepository.create({
+          labSessionId: labSession.id,
+          labcode: labcodeItem,
+          createdAt: new Date(),
+        });
+        labcodeEntities.push(labcodeEntity);
+      }
+      await this.labCodeLabSessionRepository.save(labcodeEntities);
+      this.logger.log(`Created ${labcodeEntities.length} labcode entries`);
+
+      // Create assignment record
+      const assignment = this.assignLabSessionRepository.create({
+        labSessionId: labSession.id,
+        createdAt: new Date(),
+      });
+      await this.assignLabSessionRepository.save(assignment);
+      this.logger.log(`Created assignment record for session ${labSession.id}`);
+
+      // Get processing order based on priority
+      const processingOrder =
+        this.fileValidationService.getProcessingOrder(fileCategories);
+
+      // Upload files in priority order
+      const uploadedFiles: Array<{
+        id: number;
+        fileName: string;
+        category: string;
+        priority: number;
+        fileSize: number;
+        s3Url: string;
+      }> = [];
+      for (const fileIndex of processingOrder) {
+        const file = files[fileIndex];
+        const category = fileCategories[fileIndex];
+
+        const timestamp = Date.now();
+        const originalFileName = Buffer.from(
+          file.originalname,
+          'binary',
+        ).toString('utf8');
+        const originalFileNameWithoutSpace = originalFileName.replace(
+          /\s+/g,
+          '-',
+        );
+        const originalFileNameWithoutDot = originalFileName
+          .split('.')
+          .slice(0, -1)
+          .join('.');
+
+        // Create enhanced S3 key with category
+        const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
+        const s3Key = `session-${labSession.id}/${category.category}/${safeFileName}`;
+
+        // Upload to S3
+        const s3Url = await this.s3Service.uploadFile(
+          S3Bucket.PATIENT_FILES,
+          s3Key,
+          file.buffer,
+          file.mimetype,
+        );
+
+        // Find corresponding OCR result
+        const correspondingOCR = ocrResults?.find(
+          (ocr) =>
+            ocr.fileIndex === fileIndex && ocr.category === category.category,
+        );
+
+        // Create patient file record with enhanced metadata
+        const patientFile = this.patientFileRepository.create({
+          sessionId: labSession.id,
+          fileName: originalFileNameWithoutDot,
+          filePath: s3Url,
+          fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
+          fileSize: file.size,
+          ocrResult: correspondingOCR?.ocrData || {},
+          uploadedBy: user.id,
+          uploadedAt: new Date(),
+          // Enhanced metadata
+          fileCategory: category.category,
+          processingPriority: category.priority || 5,
+          ocrConfidence: correspondingOCR?.confidence,
+        });
+
+        const savedFile = await this.patientFileRepository.save(patientFile);
+        uploadedFiles.push({
+          id: savedFile.id,
+          fileName: file.originalname,
+          category: category.category,
+          priority: category.priority || 5,
+          fileSize: file.size,
+          s3Url,
+        });
+
+        this.logger.log(
+          `Uploaded categorized file: ${file.originalname} (${category.category}) to session ${labSession.id}`,
+        );
+      }
+
+      // Send notification
+      await this.notificationService.createNotification({
+        title: 'Categorized Files Uploaded',
+        message: `Uploaded ${uploadedFiles.length} categorized files for patient ID ${patientId}`,
+        type: TypeNotification.INFO,
+        subType: SubTypeNotification.ACCEPT,
+        taskType: TypeTaskNotification.LAB_TASK,
+        senderId: user.id,
+        receiverId: user.id, // For now, send to same user
+        labcode: sessionLabcodes,
+      } as CreateNotificationReqDto);
+
+      // Validation summary
+      const validationSummary =
+        this.fileValidationService.validateMinimumRequirements(fileCategories);
+
+      this.logger.log(`Upload completed. ${validationSummary.summary}`);
+
+      return {
+        success: true,
+        message: 'Categorized patient files uploaded successfully',
+        data: {
+          sessionId: labSession.id,
+          uploadedFilesCount: files.length,
+          processingOrder,
+          validationSummary,
+          uploadedFiles,
+          sessionLabcodes,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to upload categorized patient files', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Categorized patient files upload process completed');
     }
   }
 

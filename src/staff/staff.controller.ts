@@ -824,9 +824,98 @@ export class StaffController {
     @Body() uploadData: UploadCategorizedFilesDto,
     @User() user: AuthenticatedUser,
   ) {
+    // Debug logging to see what we actually receive
+    console.log('=== UPLOAD-V2 DEBUG ===');
+    console.log('Raw body keys:', Object.keys(uploadData));
+    console.log(
+      'patientId type:',
+      typeof uploadData.patientId,
+      'value:',
+      uploadData.patientId,
+    );
+    console.log(
+      'typeLabSession type:',
+      typeof uploadData.typeLabSession,
+      'value:',
+      uploadData.typeLabSession,
+    );
+    console.log(
+      'fileCategories type:',
+      typeof uploadData.fileCategories,
+      'value:',
+      uploadData.fileCategories,
+    );
+    console.log(
+      'ocrResults type:',
+      typeof uploadData.ocrResults,
+      'value:',
+      uploadData.ocrResults,
+    );
+    console.log(
+      'labcode type:',
+      typeof uploadData.labcode,
+      'value:',
+      uploadData.labcode,
+    );
+    console.log('Files count:', files.files?.length || 0);
+    console.log('=== END DEBUG ===');
+
     if (!files.files || files.files.length === 0) {
       throw new BadRequestException('At least one file is required');
     }
+
+    // Manual parsing for FormData issues - ensure data is correctly parsed
+    try {
+      // Parse fileCategories if it's a string
+      const fileCategoriesValue = uploadData.fileCategories;
+      if (typeof fileCategoriesValue === 'string') {
+        try {
+          uploadData.fileCategories = JSON.parse(fileCategoriesValue);
+          console.log(
+            'Manually parsed fileCategories:',
+            uploadData.fileCategories,
+          );
+        } catch (e) {
+          console.error('Failed to parse fileCategories JSON:', e);
+          throw new BadRequestException('Invalid fileCategories JSON format');
+        }
+      }
+
+      // Parse ocrResults if it's a string
+      const ocrResultsValue = uploadData.ocrResults;
+      if (typeof ocrResultsValue === 'string') {
+        try {
+          uploadData.ocrResults = JSON.parse(ocrResultsValue);
+          console.log('Manually parsed ocrResults:', uploadData.ocrResults);
+        } catch (e) {
+          console.error('Failed to parse ocrResults JSON:', e);
+          throw new BadRequestException('Invalid ocrResults JSON format');
+        }
+      }
+
+      // Parse labcode if it's a string
+      const labcodeValue = uploadData.labcode;
+      if (typeof labcodeValue === 'string') {
+        try {
+          uploadData.labcode = JSON.parse(labcodeValue);
+          console.log('Manually parsed labcode:', uploadData.labcode);
+        } catch (e) {
+          console.error('Failed to parse labcode JSON:', e);
+          // For labcode, we can fall back to treating it as a single item
+          uploadData.labcode = [labcodeValue];
+        }
+      }
+
+      // Ensure patientId is a number
+      if (typeof uploadData.patientId === 'string') {
+        uploadData.patientId = parseInt(uploadData.patientId, 10);
+        console.log('Converted patientId to number:', uploadData.patientId);
+      }
+    } catch (error) {
+      console.error('Error in manual parsing:', error);
+      throw new BadRequestException(`Data parsing error: ${error.message}`);
+    }
+
     return this.staffService.uploadCategorizedPatientFiles(
       files.files,
       uploadData,

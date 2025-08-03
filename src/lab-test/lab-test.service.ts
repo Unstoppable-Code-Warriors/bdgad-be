@@ -624,7 +624,7 @@ export class LabTestService {
     }
 
     const formattedLabcode = labcodeSession.labcode;
-    let notificationReq: CreateNotificationReqDto = {
+    const notificationReq: CreateNotificationReqDto = {
       title: `Chỉ định task phân tích`,
       message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${formattedLabcode} và mã barcode ${session.patient.barcode}`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,

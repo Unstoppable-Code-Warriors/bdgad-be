@@ -91,10 +91,10 @@ export class StaffService {
     const timestamp = Date.now();
 
     // Properly decode UTF-8 filename
-    let originalFileName = Buffer.from(file.originalname, 'binary').toString(
+    const originalFileName = Buffer.from(file.originalname, 'binary').toString(
       'utf8',
     );
-    let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
+    const originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
 
     // Create a safe S3 key
     const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
@@ -140,10 +140,10 @@ export class StaffService {
     const timestamp = Date.now();
 
     // Properly decode UTF-8 filename
-    let originalFileName = Buffer.from(file.originalname, 'binary').toString(
+    const originalFileName = Buffer.from(file.originalname, 'binary').toString(
       'utf8',
     );
-    let originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
+    const originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
 
     // Create a safe S3 key
     const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
@@ -221,11 +221,11 @@ export class StaffService {
         const timestamp = Date.now();
 
         // Properly decode UTF-8 filename
-        let originalFileName = Buffer.from(
+        const originalFileName = Buffer.from(
           file.originalname,
           'binary',
         ).toString('utf8');
-        let originalFileNameWithoutSpace = originalFileName.replace(
+        const originalFileNameWithoutSpace = originalFileName.replace(
           /\s+/g,
           '-',
         );
@@ -1114,11 +1114,11 @@ export class StaffService {
         const timestamp = Date.now();
 
         // Properly decode UTF-8 filename
-        let originalFileName = Buffer.from(
+        const originalFileName = Buffer.from(
           file.originalname,
           'binary',
         ).toString('utf8');
-        let originalFileNameWithoutSpace = originalFileName.replace(
+        const originalFileNameWithoutSpace = originalFileName.replace(
           /\s+/g,
           '-',
         );
@@ -1250,11 +1250,11 @@ export class StaffService {
         const timestamp = Date.now();
 
         // Properly decode UTF-8 filename
-        let originalFileName = Buffer.from(
+        const originalFileName = Buffer.from(
           file.originalname,
           'binary',
         ).toString('utf8');
-        let originalFileNameWithoutSpace = originalFileName.replace(
+        const originalFileNameWithoutSpace = originalFileName.replace(
           /\s+/g,
           '-',
         );
@@ -1533,7 +1533,7 @@ export class StaffService {
     assignLabSessionDto: AssignLabSessionDto,
     user: AuthenticatedUser,
   ) {
-    let notificationReq: Partial<CreateNotificationReqDto> = {
+    const notificationReq: Partial<CreateNotificationReqDto> = {
       title: 'Chỉ định xét nghiệm.',
       message: '',
       taskType: TypeTaskNotification.LAB_TASK,

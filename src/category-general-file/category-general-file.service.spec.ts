@@ -9,7 +9,9 @@ describe('CategoryGeneralFileService', () => {
       providers: [CategoryGeneralFileService],
     }).compile();
 
-    service = module.get<CategoryGeneralFileService>(CategoryGeneralFileService);
+    service = module.get<CategoryGeneralFileService>(
+      CategoryGeneralFileService,
+    );
   });
 
   it('should be defined', () => {

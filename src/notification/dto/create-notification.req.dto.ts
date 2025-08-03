@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsOptional, IsString, IsArray } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsArray,
+} from 'class-validator';
 import {
   SubTypeNotification,
   TypeNotification,
@@ -30,7 +36,11 @@ export class CreateNotificationReqDto {
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
-  @ApiProperty({ example: ['LAB001', 'LAB002'], required: false, type: [String] })
+  @ApiProperty({
+    example: ['LAB001', 'LAB002'],
+    required: false,
+    type: [String],
+  })
   labcode?: string[];
 
   @IsString()

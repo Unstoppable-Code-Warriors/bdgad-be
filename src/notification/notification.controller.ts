@@ -21,7 +21,11 @@ import {
 } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { QueryNotificaiton } from './dto/query-notification.req.dto';
-import { TypeNotification, TypeTaskNotification, SubTypeNotification } from 'src/utils/constant';
+import {
+  TypeNotification,
+  TypeTaskNotification,
+  SubTypeNotification,
+} from 'src/utils/constant';
 import { AuthGuard } from 'src/auth';
 import { CreateNotificationReqDto } from './dto/create-notification.req.dto';
 import { Transform } from 'class-transformer';

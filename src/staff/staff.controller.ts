@@ -43,7 +43,6 @@ import { GeneralFilesQueryDto } from './dtos/general-files-query.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
-import { PatientFile } from 'src/entities/patient-file.entity';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
 

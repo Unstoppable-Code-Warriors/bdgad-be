@@ -9,7 +9,9 @@ describe('CategoryGeneralFileController', () => {
       controllers: [CategoryGeneralFileController],
     }).compile();
 
-    controller = module.get<CategoryGeneralFileController>(CategoryGeneralFileController);
+    controller = module.get<CategoryGeneralFileController>(
+      CategoryGeneralFileController,
+    );
   });
 
   it('should be defined', () => {

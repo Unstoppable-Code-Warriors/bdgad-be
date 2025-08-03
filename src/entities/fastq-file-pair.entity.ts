@@ -15,7 +15,7 @@ export enum FastqFileStatus {
   UPLOADED = 'uploaded',
   WAIT_FOR_APPROVAL = 'wait_for_approval',
   APPROVED = 'approved',
-  REJECTED = 'rejected', 
+  REJECTED = 'rejected',
 }
 @Entity('fastq_file_pairs')
 export class FastqFilePair {
@@ -52,7 +52,10 @@ export class FastqFilePair {
   @JoinColumn({ name: 'created_by' })
   creator: User;
 
-  @ManyToOne(() => LabCodeLabSession, (labcodeLabSession) => labcodeLabSession.fastqFilePairs)
+  @ManyToOne(
+    () => LabCodeLabSession,
+    (labcodeLabSession) => labcodeLabSession.fastqFilePairs,
+  )
   @JoinColumn({ name: 'labcode_lab_session_id' })
   labcodeLabSession: LabCodeLabSession;
 

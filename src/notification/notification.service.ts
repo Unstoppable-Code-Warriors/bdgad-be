@@ -322,7 +322,9 @@ export class NotificationService {
       }
 
       if (labcode) {
-        queryBuilder.andWhere(':labcode = ANY(notification.labcode)', { labcode });
+        queryBuilder.andWhere(':labcode = ANY(notification.labcode)', {
+          labcode,
+        });
       }
 
       if (barcode) {

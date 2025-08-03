@@ -21,10 +21,10 @@ export class AssignmentHistory {
   @JoinColumn({ name: 'assign_lab_session_id' })
   assignLabSession: AssignLabSession;
 
-  @Column({ 
+  @Column({
     name: 'role_type',
     type: 'enum',
-    enum: ['doctor', 'lab_testing', 'analysis', 'validation']
+    enum: ['doctor', 'lab_testing', 'analysis', 'validation'],
   })
   roleType: 'doctor' | 'lab_testing' | 'analysis' | 'validation';
 

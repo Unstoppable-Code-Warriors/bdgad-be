@@ -740,9 +740,9 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
   ) {
     // Find the ETL result that's completed or rejected
     const etlResult = await this.etlResultRepository.findOne({
-      where: { 
-        id: etlResultId, 
-        status: In([EtlResultStatus.COMPLETED, EtlResultStatus.REJECTED])
+      where: {
+        id: etlResultId,
+        status: In([EtlResultStatus.COMPLETED, EtlResultStatus.REJECTED]),
       },
       relations: {
         labcodeLabSession: {

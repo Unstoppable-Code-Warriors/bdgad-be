@@ -121,7 +121,7 @@ export class LabTestService {
         .createQueryBuilder('labcode')
         .leftJoinAndSelect('labcode.labSession', 'labSession')
         .leftJoinAndSelect('labSession.patient', 'patient')
-        .leftJoinAndSelect('labSession.assignment', 'assignment')
+        .leftJoinAndSelect('labcode.assignment', 'assignment')
         .leftJoinAndSelect('assignment.doctor', 'doctor')
         .leftJoinAndSelect('assignment.analysis', 'analysis')
         .select([
@@ -247,8 +247,8 @@ export class LabTestService {
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
-          doctor: labcode.labSession.assignment?.doctor || null,
-          analysis: labcode.labSession.assignment?.analysis || null,
+          doctor: labcode.assignment?.doctor || null,
+          analysis: labcode.assignment?.analysis || null,
           latestFastqFilePair: latestFastqFilePair
             ? this.mapFastqFilePairToDto(latestFastqFilePair)
             : null,
@@ -273,10 +273,10 @@ export class LabTestService {
       relations: {
         labSession: {
           patient: true,
-          assignment: {
-            doctor: true,
-            analysis: true,
-          },
+        },
+        assignment: {
+          doctor: true,
+          analysis: true,
         },
         fastqFilePairs: {
           creator: true,
@@ -306,24 +306,24 @@ export class LabTestService {
             barcode: true,
             createdAt: true,
           },
-          assignment: {
+        },
+        assignment: {
+          id: true,
+          doctorId: true,
+          labTestingId: true,
+          analysisId: true,
+          validationId: true,
+          doctor: {
             id: true,
-            doctorId: true,
-            labTestingId: true,
-            analysisId: true,
-            validationId: true,
-            doctor: {
-              id: true,
-              name: true,
-              email: true,
-              metadata: true,
-            },
-            analysis: {
-              id: true,
-              name: true,
-              email: true,
-              metadata: true,
-            },
+            name: true,
+            email: true,
+            metadata: true,
+          },
+          analysis: {
+            id: true,
+            name: true,
+            email: true,
+            metadata: true,
           },
         },
         fastqFilePairs: {
@@ -377,8 +377,8 @@ export class LabTestService {
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
-      doctor: session.assignment?.doctor || null,
-      analysis: session.assignment?.analysis || null,
+      doctor: labcodeSession.assignment?.doctor || null,
+      analysis: labcodeSession.assignment?.analysis || null,
       fastqFilePairs: sortedFastqFilePairs.map((filePair) =>
         this.mapFastqFilePairToDto(filePair),
       ),
@@ -589,8 +589,8 @@ export class LabTestService {
         labcodeLabSession: {
           labSession: {
             patient: true,
-            assignment: true,
           },
+          assignment: true,
         },
       },
     });
@@ -636,12 +636,14 @@ export class LabTestService {
       receiverId: analysisId,
     };
 
-    if (!session.assignment?.analysisId && !analysisId) {
+    const labcodeAssignment = fastqFilePair.labcodeLabSession?.assignment;
+
+    if (!labcodeAssignment?.analysisId && !analysisId) {
       return { message: 'Analysis ID is required' };
-    } else if (!session.assignment?.analysisId && analysisId) {
+    } else if (!labcodeAssignment?.analysisId && analysisId) {
       // Update the assignment to include the analysis user
       await this.assignLabSessionRepository.update(
-        { labSessionId: session.id },
+        { labcodeLabSessionId: fastqFilePair.labcodeLabSession?.id },
         { analysisId: analysisId },
       );
     }

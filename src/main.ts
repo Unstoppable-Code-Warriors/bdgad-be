@@ -3,7 +3,9 @@ import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
-import { SwaggerModule, DocumentBuilder, ApiTags } from '@nestjs/swagger';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
@@ -13,7 +15,17 @@ async function bootstrap() {
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use(express.raw({ limit: '100mb' }));
 
-  app.enableCors({ origin: '*' });
+  // Enable CORS for both HTTP and WebSocket
+  app.enableCors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+
+  // Configure WebSocket adapter
+  app.useWebSocketAdapter(new IoAdapter(app));
+
   app.setGlobalPrefix('api/v1');
   const config = new DocumentBuilder()
     .setTitle('BDGAD BE API')
@@ -35,4 +47,4 @@ async function bootstrap() {
   );
   await app.listen(configService.get('PORT') ?? 3000);
 }
-bootstrap();
+void bootstrap();

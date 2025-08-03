@@ -28,6 +28,13 @@ export class NotificationService {
 
   private logger = new Logger(NotificationService.name);
 
+  // Lazy injection to avoid circular dependency
+  private notificationGateway: any = null;
+
+  setGateway(gateway: any): void {
+    this.notificationGateway = gateway;
+  }
+
   /**
    * Validate taskType parameter
    */
@@ -115,7 +122,7 @@ export class NotificationService {
         return errorUserAuthen.userNotFound;
       }
 
-      const newNotification = await this.notificationRepository.create({
+      const newNotification = this.notificationRepository.create({
         title,
         message,
         taskType,
@@ -129,8 +136,56 @@ export class NotificationService {
         createdAt: new Date(),
       });
 
-      await this.notificationRepository.save(newNotification);
-      return newNotification;
+      const savedNotification =
+        await this.notificationRepository.save(newNotification);
+
+      // Emit WebSocket event for real-time notification
+      if (this.notificationGateway) {
+        try {
+          // Get full notification with relations for WebSocket
+          const fullNotification = await this.notificationRepository
+            .createQueryBuilder('notification')
+            .leftJoinAndSelect('notification.sender', 'sender')
+            .leftJoinAndSelect('notification.receiver', 'receiver')
+            .where('notification.id = :id', { id: savedNotification.id })
+            .select([
+              'notification.id',
+              'notification.title',
+              'notification.message',
+              'notification.taskType',
+              'notification.type',
+              'notification.subType',
+              'notification.labcode',
+              'notification.barcode',
+              'sender.id',
+              'sender.name',
+              'sender.email',
+              'receiver.id',
+              'receiver.name',
+              'receiver.email',
+              'notification.isRead',
+              'notification.createdAt',
+            ])
+            .getOne();
+
+          if (fullNotification) {
+            this.notificationGateway.emitNotificationToUser(
+              receiverId,
+              fullNotification,
+            );
+            this.logger.log(
+              `WebSocket notification sent to user ${receiverId}`,
+            );
+          }
+        } catch (wsError) {
+          this.logger.warn(
+            `Failed to emit WebSocket notification: ${wsError.message}`,
+          );
+          // Don't fail the notification creation if WebSocket fails
+        }
+      }
+
+      return savedNotification;
     } catch (error) {
       this.logger.error('Failed to create notification', error);
       throw new InternalServerErrorException('Failed to create notification');
@@ -352,6 +407,7 @@ export class NotificationService {
     try {
       const notification = await this.notificationRepository.findOne({
         where: { id: notificationId },
+        relations: ['sender', 'receiver'],
       });
 
       if (!notification) {
@@ -360,8 +416,28 @@ export class NotificationService {
       }
 
       notification.isRead = true;
-      await this.notificationRepository.save(notification);
-      return notification;
+      const updatedNotification =
+        await this.notificationRepository.save(notification);
+
+      // Emit WebSocket event for real-time notification update
+      if (this.notificationGateway && notification.receiverId) {
+        try {
+          this.notificationGateway.emitNotificationUpdateToUser(
+            notification.receiverId,
+            updatedNotification,
+          );
+          this.logger.log(
+            `WebSocket notification update sent to user ${notification.receiverId}`,
+          );
+        } catch (wsError: any) {
+          this.logger.warn(
+            `Failed to emit WebSocket notification update: ${wsError.message}`,
+          );
+          // Don't fail the update if WebSocket fails
+        }
+      }
+
+      return updatedNotification;
     } catch (error) {
       this.logger.error('Failed to update notification read status', error);
       throw new InternalServerErrorException(

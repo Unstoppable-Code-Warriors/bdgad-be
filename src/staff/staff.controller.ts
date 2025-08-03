@@ -903,7 +903,9 @@ export class StaffController {
       if (uploadData.fileCategories) {
         if (typeof uploadData.fileCategories === 'string') {
           try {
-            processedData.fileCategories = JSON.parse(uploadData.fileCategories);
+            processedData.fileCategories = JSON.parse(
+              uploadData.fileCategories,
+            );
             console.log(
               'Manually parsed fileCategories:',
               processedData.fileCategories,
@@ -1035,21 +1037,29 @@ export class StaffController {
       }
 
       if (!category.category || typeof category.category !== 'string') {
-        throw new BadRequestException(`fileCategories[${i}].category must be a non-empty string`);
+        throw new BadRequestException(
+          `fileCategories[${i}].category must be a non-empty string`,
+        );
       }
 
       if (!validCategories.includes(String(category.category))) {
-        throw new BadRequestException(`fileCategories[${i}].category must be one of: ${validCategories.join(', ')}`);
+        throw new BadRequestException(
+          `fileCategories[${i}].category must be one of: ${validCategories.join(', ')}`,
+        );
       }
 
       if (!category.fileName || typeof category.fileName !== 'string') {
-        throw new BadRequestException(`fileCategories[${i}].fileName must be a non-empty string`);
+        throw new BadRequestException(
+          `fileCategories[${i}].fileName must be a non-empty string`,
+        );
       }
 
       if (category.priority !== undefined) {
         const priority = Number(category.priority);
         if (Number.isNaN(priority) || priority < 1 || priority > 10) {
-          throw new BadRequestException(`fileCategories[${i}].priority must be a number between 1 and 10`);
+          throw new BadRequestException(
+            `fileCategories[${i}].priority must be a number between 1 and 10`,
+          );
         }
         category.priority = priority; // Ensure it's a number
       }

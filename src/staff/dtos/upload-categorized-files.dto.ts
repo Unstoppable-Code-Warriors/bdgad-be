@@ -84,6 +84,20 @@ export class OCRResultDto {
   ocrData?: any;
 
   @ApiProperty({
+    description: 'Edited OCR data used for labcode generation',
+    example: {
+      cancer_panel: 'onco81',
+      biopsy_tissue_ffpe: true,
+      blood_stl_ctdna: false,
+      pleural_peritoneal_fluid: false,
+      nipt_package: 'nipt_5',
+      cancer_screening_package: 'bcare',
+    },
+  })
+  @IsOptional()
+  editedData?: any;
+
+  @ApiProperty({
     description: 'OCR confidence score (0-1)',
     example: 0.95,
     required: false,
@@ -159,6 +173,9 @@ export class UploadCategorizedFilesDto {
           date_of_birth: '1990-01-01',
           cancer_screening_package: 'bcare',
         },
+        editedData: {
+          cancer_screening_package: 'bcare',
+        },
       },
     ],
     required: false,
@@ -178,37 +195,4 @@ export class UploadCategorizedFilesDto {
     return Array.isArray(value) ? value : [];
   })
   ocrResults?: OCRResultDto[];
-
-  @ApiProperty({
-    description:
-      'Array of lab codes for the session (optional, will be generated if not provided)',
-    example: ['O5123A', 'N5456B'],
-    required: false,
-    type: [String],
-  })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  @Transform(({ value }) => {
-    if (typeof value === 'string') {
-      let cleanValue = value.trim();
-      if (cleanValue.startsWith('[') && cleanValue.endsWith(']')) {
-        cleanValue = cleanValue.slice(1, -1);
-      }
-
-      try {
-        const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed : [value];
-      } catch {
-        return cleanValue.includes(',')
-          ? cleanValue.split(',').map((s) => s.trim())
-          : [cleanValue];
-      }
-    }
-    if (Array.isArray(value)) {
-      return value;
-    }
-    return [];
-  })
-  labcode?: string[];
 }

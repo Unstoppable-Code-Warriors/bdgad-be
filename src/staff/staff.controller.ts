@@ -43,7 +43,7 @@ import { UploadGeneralFilesDto } from './dtos/upload-general-files.dto';
 import { GeneralFilesQueryDto } from './dtos/general-files-query.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
-import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
+import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
 
@@ -460,29 +460,34 @@ export class StaffController {
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Assign a lab session to a doctor or lab testing' })
   @ApiBody({
-    type: AssignLabSessionDto,
+    type: AssignLabcodeDto,
     examples: {
-      testType: {
+      'example 1': {
+        summary: 'Assign lab session to a doctor and lab testing',
         value: {
           doctorId: 1,
-          labTestingId: 6,
-        },
-      },
-      validationType: {
-        value: {
-          doctorId: 1,
+          assignment: [
+            {
+              labcode: 'O5123A',
+              labTestingId: 1,
+            },
+            {
+              labcode: 'N5456B',
+              labTestingId: 2,
+            },
+          ],
         },
       },
     },
   })
   async assignLabSession(
     @Param('sessionId') sessionId: number,
-    @Body() assignLabSessionDto: AssignLabSessionDto,
+    @Body() assignLabcodeDto: AssignLabcodeDto,
     @User() user: AuthenticatedUser,
   ) {
     return this.staffService.assignDoctorAndLabTestingLabSession(
       sessionId,
-      assignLabSessionDto,
+      assignLabcodeDto,
       user,
     );
   }

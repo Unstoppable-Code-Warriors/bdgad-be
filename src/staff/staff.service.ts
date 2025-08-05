@@ -44,7 +44,7 @@ import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
-import { AssignLabSessionDto } from './dtos/assign-lab-session.dto.req';
+import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
 import { CategoryGeneralFileService } from 'src/category-general-file/category-general-file.service';
 import { FileValidationService } from './services/file-validation.service';
 import {
@@ -1634,23 +1634,14 @@ export class StaffService {
 
   async assignDoctorAndLabTestingLabSession(
     id: number,
-    assignLabSessionDto: AssignLabSessionDto,
+    assignLabcodeDto: AssignLabcodeDto,
     user: AuthenticatedUser,
   ) {
-    const notificationReq: Partial<CreateNotificationReqDto> = {
-      title: 'Chỉ định xét nghiệm.',
-      message: '',
-      taskType: TypeTaskNotification.LAB_TASK,
-      type: TypeNotification.ACTION,
-      subType: SubTypeNotification.ASSIGN,
-      labcode: [],
-      barcode: '',
-      senderId: user.id,
-      receiverId: assignLabSessionDto.labTestingId!,
-    };
     try {
-      this.logger.log('Starting Lab Session update process');
-      const { doctorId, labTestingId } = assignLabSessionDto;
+      this.logger.log('Starting Lab Session assignment process');
+      const { assignment, doctorId } = assignLabcodeDto;
+
+      // Get lab session with labcodes and patient
       const labSession = await this.labSessionRepository.findOne({
         where: { id },
         relations: {
@@ -1660,54 +1651,138 @@ export class StaffService {
           },
         },
       });
+
       if (!labSession) {
         return errorLabSession.labSessionNotFound;
       }
-      if (!doctorId) {
-        return errorLabSession.doctorIdRequired;
-      }
-      if (labSession.typeLabSession === TypeLabSession.TEST && !labTestingId) {
-        return errorLabSession.labTestingIdRequired;
-      }
 
-      // Update or create assignments for each labcode
       const labcodeEntities = labSession.labcodes || [];
-      for (const labcode of labcodeEntities) {
-        let assignment = labcode.assignment;
-        if (!assignment) {
-          assignment = this.assignLabSessionRepository.create({
-            labcodeLabSessionId: labcode.id,
-            createdAt: new Date(),
+      const assignmentResults: Array<{
+        labcode: string;
+        success: boolean;
+        labTestingId?: number;
+        error?: string;
+      }> = [];
+
+      // Process each assignment in the array
+      for (const assignmentItem of assignment) {
+        const { labcode, labTestingId } = assignmentItem;
+
+        // Find the corresponding labcode entity
+        const labcodeEntity = labcodeEntities.find(
+          (lc) => lc.labcode === labcode,
+        );
+
+        if (!labcodeEntity) {
+          assignmentResults.push({
+            labcode,
+            success: false,
+            error: `Labcode ${labcode} not found in session ${id}`,
+          });
+          this.logger.warn(`Labcode ${labcode} not found in session ${id}`);
+          continue;
+        }
+
+        // Validate doctorId is provided
+        if (!doctorId) {
+          assignmentResults.push({
+            labcode,
+            success: false,
+            error: 'Doctor ID is required',
+          });
+          continue;
+        }
+
+        // Validate labTestingId is provided
+        if (!labTestingId) {
+          assignmentResults.push({
+            labcode,
+            success: false,
+            error: 'Lab testing ID is required',
+          });
+          continue;
+        }
+
+        try {
+          // Update or create assignment for this specific labcode
+          let assignmentRecord = labcodeEntity.assignment;
+
+          if (!assignmentRecord) {
+            // Create new assignment
+            assignmentRecord = this.assignLabSessionRepository.create({
+              labcodeLabSessionId: labcodeEntity.id,
+              createdAt: new Date(),
+            });
+          }
+
+          // Update the assignment
+          assignmentRecord.doctorId = doctorId;
+          assignmentRecord.labTestingId = labTestingId;
+          assignmentRecord.updatedAt = new Date();
+
+          await this.assignLabSessionRepository.save(assignmentRecord);
+
+          assignmentResults.push({
+            labcode,
+            success: true,
+            labTestingId,
+          });
+
+          // Send individual notification for each labcode assignment
+          const notificationReq: CreateNotificationReqDto = {
+            title: 'Chỉ định xét nghiệm.',
+            message: `Bạn đã được chỉ định lần khám với mã labcode ${labcode} và mã barcode ${labSession.patient.barcode}`,
+            taskType: TypeTaskNotification.LAB_TASK,
+            type: TypeNotification.ACTION,
+            subType: SubTypeNotification.ASSIGN,
+            labcode: [labcode],
+            barcode: labSession.patient.barcode,
+            senderId: user.id,
+            receiverId: labTestingId,
+          };
+
+          await this.notificationService.createNotification(notificationReq);
+
+          this.logger.log(
+            `Successfully assigned labcode ${labcode} to lab testing ID ${labTestingId}`,
+          );
+        } catch (error) {
+          this.logger.error(`Failed to assign labcode ${labcode}:`, error);
+          assignmentResults.push({
+            labcode,
+            success: false,
+            error: error.message,
           });
         }
-
-        assignment.doctorId = doctorId;
-        if (labTestingId) {
-          assignment.labTestingId = labTestingId;
-        }
-        assignment.updatedAt = new Date();
-
-        await this.assignLabSessionRepository.save(assignment);
       }
 
-      // Get labcodes for notification
-      const labcodes = labcodeEntities?.map((lc) => lc.labcode) || [];
-      const formattedLabcodes = this.formatLabcodeArray(labcodes);
-      notificationReq.message = `Bạn đã được chỉ định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${labSession.patient.barcode}`;
-      notificationReq.labcode = labcodes;
-      notificationReq.barcode = labSession.patient.barcode;
-      this.notificationService.createNotification(
-        notificationReq as CreateNotificationReqDto,
+      // Calculate summary
+      const successCount = assignmentResults.filter((r) => r.success).length;
+      const failureCount = assignmentResults.length - successCount;
+
+      this.logger.log(
+        `Assignment completed: ${successCount} successful, ${failureCount} failed`,
       );
+
       return {
-        message: 'Lab session updated successfully',
-        labSession: labSession,
+        success: failureCount === 0,
+        message:
+          failureCount === 0
+            ? `Successfully assigned ${successCount} labcodes`
+            : `Assigned ${successCount} labcodes successfully, ${failureCount} failed`,
+        data: {
+          sessionId: id,
+          totalAssignments: assignmentResults.length,
+          successfulAssignments: successCount,
+          failedAssignments: failureCount,
+          results: assignmentResults,
+        },
       };
     } catch (error) {
-      this.logger.error('Failed to update lab session', error);
+      this.logger.error('Failed to assign lab session:', error);
       throw new InternalServerErrorException(error.message);
     } finally {
-      this.logger.log('Lab Session update process completed');
+      this.logger.log('Lab Session assignment process completed');
     }
   }
 

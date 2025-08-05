@@ -582,6 +582,7 @@ export class LabTestService {
     analysisId: number,
     user: AuthenticatedUser,
   ): Promise<{ message: string }> {
+    console.log('Check haha0', fastqFilePairId, analysisId, user);
     // Find the FastqFilePair with its labcode session
     const fastqFilePair = await this.fastqFilePairRepository.findOne({
       where: { id: fastqFilePairId },
@@ -594,6 +595,8 @@ export class LabTestService {
         },
       },
     });
+
+    console.log('Check fastqFilePair', fastqFilePair);
 
     if (!fastqFilePair) {
       throw new NotFoundException(
@@ -638,15 +641,16 @@ export class LabTestService {
 
     const labcodeAssignment = fastqFilePair.labcodeLabSession?.assignment;
 
-    if (!labcodeAssignment?.analysisId && !analysisId) {
+    console.log('Check labcodeAssignment', labcodeAssignment);
+
+    if (!analysisId) {
       return { message: 'Analysis ID is required' };
-    } else if (!labcodeAssignment?.analysisId && analysisId) {
-      // Update the assignment to include the analysis user
-      await this.assignLabSessionRepository.update(
-        { labcodeLabSessionId: fastqFilePair.labcodeLabSession?.id },
-        { analysisId: analysisId },
-      );
     }
+    console.log('Check labcodeAssignment analysisId', analysisId);
+    await this.assignLabSessionRepository.update(
+      { labcodeLabSessionId: fastqFilePair.labcodeLabSession?.id },
+      { analysisId: analysisId },
+    );
 
     try {
       // Update the status to WAIT_FOR_APPROVAL

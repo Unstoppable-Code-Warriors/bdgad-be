@@ -6,6 +6,33 @@ import {
   UploadCategorizedFilesDto,
 } from '../dtos/upload-categorized-files.dto';
 
+// Form type options mapping
+const formTypeOptions = [
+  {
+    value: 'hereditary_cancer',
+    label:
+      'Phiếu đồng thuận thực hiện xét nghiệm tầm soát nguy cơ ung thư di truyền',
+  },
+  {
+    value: 'gene_mutation',
+    label: 'Phiếu xét nghiệm đột biến gen',
+  },
+  {
+    value: 'prenatal_screening',
+    label:
+      'Phiếu đồng thuận thực hiện xét nghiệm sàng lọc tiền sinh không xâm lấn',
+  },
+];
+
+// Field label mapping for user-friendly error messages
+const fieldLabels: Record<string, string> = {
+  full_name: 'họ và tên',
+  date_of_birth: 'ngày sinh',
+  phone: 'số điện thoại',
+  address: 'địa chỉ',
+  citizen_id: 'số CCCD/CMND',
+};
+
 @Injectable()
 export class FileValidationService {
   private readonly REQUIRED_CATEGORIES = [
@@ -28,6 +55,21 @@ export class FileValidationService {
     'application/vnd.ms-excel',
     'text/csv',
   ];
+
+  /**
+   * Get category label from formTypeOptions
+   */
+  private getCategoryLabel(category: string): string {
+    const option = formTypeOptions.find((option) => option.value === category);
+    return option ? option.label : category; // Fallback to category if not found
+  }
+
+  /**
+   * Get field label in Vietnamese
+   */
+  private getFieldLabel(field: string): string {
+    return fieldLabels[field] || field; // Fallback to original field name if not found
+  }
 
   /**
    * Validate categorized file upload
@@ -210,8 +252,13 @@ export class FileValidationService {
       );
 
       if (missing.length > 0) {
+        const categoryLabel = this.getCategoryLabel(ocrResult.category);
+        const missingFieldLabels = missing.map((field) =>
+          this.getFieldLabel(field),
+        );
+
         throw new BadRequestException(
-          `OCR data missing required fields for ${ocrResult.category}: ${missing.join(', ')}`,
+          `Dữ liệu OCR "${categoryLabel}" thiếu các trường bắt buộc: ${missingFieldLabels.join(', ')}`,
         );
       }
     }

@@ -1361,15 +1361,24 @@ export class StaffService {
 
       // Extract test types from file categories
       const testTypes = this.extractTestTypesFromCategories(fileCategories);
+
+      if (testTypes.length === 0) {
+        this.logger.warn(
+          'No test types found in file categories, using default labcode',
+        );
+        throw new InternalServerErrorException(
+          'No test types found in file categories',
+        );
+      }
       console.log(
         `Extracted test types from categories: ${JSON.stringify(testTypes)}`,
       );
 
       for (const testType of testTypes) {
-        // Find corresponding OCR result with editedData for this test type
-        console.log('?OCR Results:', ocrResults);
+        // Find corresponding OCR result for this test type
+        console.log('OCR Results:', ocrResults);
 
-        let editedData = null;
+        let ocrData = null;
         let matchingOcrResult: any = null;
 
         // Look through all OCR results to find one that matches this test type
@@ -1380,52 +1389,30 @@ export class StaffService {
             const ocrTestType = this.mapCategoryToTestType(ocrCategory);
 
             if (ocrTestType === testType) {
-              // Try to find editedData in different possible locations
-              if (ocrResult.editedData) {
-                editedData = ocrResult.editedData;
+              // Use ocrData directly
+              if (ocrResult.ocrData) {
+                ocrData = ocrResult.ocrData;
                 matchingOcrResult = ocrResult;
-                console.log(
-                  `Found editedData at top level for ${testType}:`,
-                  editedData,
-                );
-                break;
-              } else if (ocrResult.ocrData && ocrResult.ocrData.editedData) {
-                editedData = ocrResult.ocrData.editedData;
-                matchingOcrResult = ocrResult;
-                console.log(
-                  `Found editedData inside ocrData for ${testType}:`,
-                  editedData,
-                );
+                console.log(`Found ocrData for ${testType}:`, ocrData);
                 break;
               }
             }
           }
         }
 
-        if (!matchingOcrResult || !editedData) {
+        if (!matchingOcrResult || !ocrData) {
           this.logger.warn(
-            `No OCR editedData found for test type ${testType}, using default labcode`,
+            `No OCR data found for test type ${testType}, using default labcode`,
           );
-          // Generate default labcode for this test type
-          const number = String(Math.floor(Math.random() * 999) + 1).padStart(
-            3,
-            '0',
+          throw new InternalServerErrorException(
+            `No OCR data found for test type ${testType}`,
           );
-          const letter = String.fromCharCode(
-            65 + Math.floor(Math.random() * 26),
-          );
-          const defaultLabcode = `O5${number}${letter}`;
-          sessionLabcodes.push(defaultLabcode);
-          continue;
         }
 
-        console.log(
-          `Using OCR editedData for test type ${testType}:`,
-          editedData,
-        );
+        console.log(`Using OCR data for test type ${testType}:`, ocrData);
 
         // Generate GenerateLabcodeRequestDto based on test type and OCR data
-        const labcodeRequest = this.buildLabcodeRequest(testType, editedData);
+        const labcodeRequest = this.buildLabcodeRequest(testType, ocrData);
 
         if (labcodeRequest) {
           try {
@@ -1439,16 +1426,9 @@ export class StaffService {
               `Failed to generate labcode for test type ${testType}:`,
               error,
             );
-            // Fallback to default labcode
-            const number = String(Math.floor(Math.random() * 999) + 1).padStart(
-              3,
-              '0',
+            throw new InternalServerErrorException(
+              `Failed to generate labcode for test type ${testType}`,
             );
-            const letter = String.fromCharCode(
-              65 + Math.floor(Math.random() * 26),
-            );
-            const defaultLabcode = `O5${number}${letter}`;
-            sessionLabcodes.push(defaultLabcode);
           }
         }
       }
@@ -1961,19 +1941,14 @@ export class StaffService {
     for (const categoryItem of fileCategories) {
       if (categoryItem.category) {
         // Map category to test type based on your business logic
-        if (categoryItem.category.includes('gene_mutation')) {
+        if (categoryItem.category === 'gene_mutation') {
           testTypes.add('gene_mutation');
-        } else if (categoryItem.category.includes('prenatal_screening')) {
+        } else if (categoryItem.category === 'prenatal_screening') {
           testTypes.add('prenatal_screening');
-        } else if (categoryItem.category.includes('hereditary_cancer')) {
+        } else if (categoryItem.category === 'hereditary_cancer') {
           testTypes.add('hereditary_cancer');
         }
       }
-    }
-
-    // If no specific test type found, default to gene_mutation
-    if (testTypes.size === 0) {
-      testTypes.add('gene_mutation');
     }
 
     return Array.from(testTypes);
@@ -1981,11 +1956,11 @@ export class StaffService {
 
   // Helper method to map OCR category to test type
   private mapCategoryToTestType(category: string): string {
-    if (category.includes('gene_mutation')) {
+    if (category === 'gene_mutation') {
       return 'gene_mutation';
-    } else if (category.includes('prenatal_screening')) {
+    } else if (category === 'prenatal_screening') {
       return 'prenatal_screening';
-    } else if (category.includes('hereditary_cancer')) {
+    } else if (category === 'hereditary_cancer') {
       return 'hereditary_cancer';
     }
 
@@ -1996,18 +1971,18 @@ export class StaffService {
   // Helper method to build GenerateLabcodeRequestDto from test type and OCR data
   private buildLabcodeRequest(
     testType: string,
-    editedData: any,
+    ocrData: any,
   ): GenerateLabcodeRequestDto | null {
     try {
       switch (testType) {
         case 'gene_mutation':
-          return this.buildGeneMutationRequest(editedData);
+          return this.buildGeneMutationRequestFromOCR(ocrData);
 
         case 'prenatal_screening':
-          return this.buildPrenatalScreeningRequest(editedData);
+          return this.buildPrenatalScreeningRequestFromOCR(ocrData);
 
         case 'hereditary_cancer':
-          return this.buildHereditaryCancerRequest(editedData);
+          return this.buildHereditaryCancerRequestFromOCR(ocrData);
 
         default:
           this.logger.warn(`Unknown test type: ${testType}`);
@@ -2022,28 +1997,81 @@ export class StaffService {
     }
   }
 
-  private buildGeneMutationRequest(editedData: any): GenerateLabcodeRequestDto {
-    const packageType = editedData.cancer_panel;
-    if (!packageType) {
+  private buildGeneMutationRequestFromOCR(
+    ocrData: any,
+  ): GenerateLabcodeRequestDto {
+    const geneMutationData = ocrData.gene_mutation_testing;
+    if (!geneMutationData) {
       throw new BadRequestException(
-        'cancer_panel field is required for gene mutation testing',
+        'gene_mutation_testing section is required for gene mutation testing',
       );
     }
 
-    console.log('Edited Data for Gene Mutation:', editedData);
-    // Get sample type from the boolean fields
+    const specimenData = geneMutationData.specimen_and_test_information;
+    if (!specimenData) {
+      throw new BadRequestException(
+        'specimen_and_test_information is required for gene mutation testing',
+      );
+    }
+
+    // Get sample type from specimen_type
     let sampleType: SampleType | undefined;
-    if (editedData.biopsy_tissue_ffpe == true) {
-      sampleType = SampleType.BIOPSY_TISSUE_FFPE;
-    } else if (editedData.blood_stl_ctdna == true) {
-      sampleType = SampleType.BLOOD_STL_CTDNA;
-    } else if (editedData.pleural_peritoneal_fluid == true) {
-      sampleType = SampleType.PLEURAL_PERITONEAL_FLUID;
+    const specimenType = specimenData.specimen_type;
+
+    console.log(`Specimen Type`, specimenType);
+    if (specimenType) {
+      if (specimenType.biopsy_tissue_ffpe === true) {
+        sampleType = SampleType.BIOPSY_TISSUE_FFPE;
+      } else if (specimenType.blood_stl_ctdna === true) {
+        sampleType = SampleType.BLOOD_STL_CTDNA;
+      } else if (specimenType.pleural_peritoneal_fluid === true) {
+        sampleType = SampleType.PLEURAL_PERITONEAL_FLUID;
+      }
     }
 
     if (!sampleType) {
       throw new BadRequestException(
-        'At least one sample type must be true for gene mutation testing',
+        'At least one specimen type must be selected for gene mutation testing',
+      );
+    }
+
+    // Get package type from cancer_type_and_test_panel_please_tick_one
+    let packageType: string | undefined;
+    const cancerPanel = specimenData.cancer_type_and_test_panel_please_tick_one;
+    if (cancerPanel) {
+      if (cancerPanel.onco_81?.is_selected === true) {
+        packageType = GeneMutationPackageType.ONCO81;
+      } else if (cancerPanel.onco_500_plus?.is_selected === true) {
+        packageType = GeneMutationPackageType.ONCO500;
+      } else if (cancerPanel.lung_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.LUNG_CANCER;
+      } else if (cancerPanel.ovarian_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.OVARIAN_CANCER;
+      } else if (cancerPanel.colorectal_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.COLORECTAL_CANCER;
+      } else if (cancerPanel.prostate_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.PROSTATE_CANCER;
+      } else if (cancerPanel.breast_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.BREAST_CANCER;
+      } else if (cancerPanel.cervical_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.CERVICAL_CANCER;
+      } else if (cancerPanel.gastric_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.GASTRIC_CANCER;
+      } else if (cancerPanel.pancreatic_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.PANCREATIC_CANCER;
+      } else if (cancerPanel.thyroid_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.THYROID_CANCER;
+      } else if (
+        cancerPanel.gastrointestinal_stromal_tumor_gist?.is_selected === true
+      ) {
+        packageType =
+          GeneMutationPackageType.GASTROINTESTINAL_STROMAL_TUMOR_GIST;
+      }
+    }
+
+    if (!packageType) {
+      throw new BadRequestException(
+        'At least one cancer type and test panel must be selected for gene mutation testing',
       );
     }
 
@@ -2054,13 +2082,32 @@ export class StaffService {
     };
   }
 
-  private buildPrenatalScreeningRequest(
-    editedData: any,
+  private buildPrenatalScreeningRequestFromOCR(
+    ocrData: any,
   ): GenerateLabcodeRequestDto {
-    const packageType = editedData.nipt_package;
+    const niptData = ocrData.non_invasive_prenatal_testing;
+    if (!niptData) {
+      throw new BadRequestException(
+        'non_invasive_prenatal_testing section is required for prenatal screening',
+      );
+    }
+
+    // Get package type from test_options
+    let packageType: string | undefined;
+    const testOptions = niptData.test_options;
+    if (testOptions && Array.isArray(testOptions)) {
+      // Find the first selected test option
+      const selectedOption = testOptions.find(
+        (option) => option.is_selected === true,
+      );
+      if (selectedOption) {
+        packageType = selectedOption.package_name;
+      }
+    }
+
     if (!packageType) {
       throw new BadRequestException(
-        'nipt_package field is required for prenatal screening',
+        'At least one test option must be selected for prenatal screening',
       );
     }
 
@@ -2070,13 +2117,37 @@ export class StaffService {
     };
   }
 
-  private buildHereditaryCancerRequest(
-    editedData: any,
+  private buildHereditaryCancerRequestFromOCR(
+    ocrData: any,
   ): GenerateLabcodeRequestDto {
-    const packageType = editedData.cancer_screening_package;
+    const hereditaryData = ocrData.hereditary_cancer;
+    if (!hereditaryData) {
+      throw new BadRequestException(
+        'hereditary_cancer section is required for hereditary cancer testing',
+      );
+    }
+
+    // Get package type from the hereditary cancer options
+    let packageType: string | undefined;
+    if (hereditaryData.breast_cancer_bcare?.is_selected === true) {
+      packageType = HereditaryCancerPackageType.BREAST_CANCER_BCARE;
+    } else if (
+      hereditaryData['15_hereditary_cancer_types_more_care']?.is_selected ===
+      true
+    ) {
+      packageType =
+        HereditaryCancerPackageType.FIFTEEN_HEREDITARY_CANCER_TYPES_MORE_CARE;
+    } else if (
+      hereditaryData['20_hereditary_cancer_types_vip_care']?.is_selected ===
+      true
+    ) {
+      packageType =
+        HereditaryCancerPackageType.TWENTY_HEREDITARY_CANCER_TYPES_VIP_CARE;
+    }
+
     if (!packageType) {
       throw new BadRequestException(
-        'cancer_screening_package field is required for hereditary cancer',
+        'At least one hereditary cancer package must be selected',
       );
     }
 

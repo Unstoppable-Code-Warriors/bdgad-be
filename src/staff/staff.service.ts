@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 
-import { In, Repository } from 'typeorm';
+import { In, Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { S3Service } from 'src/utils/s3.service';
 import {
@@ -61,6 +61,24 @@ interface UploadedFiles {
   salesInvoice: Express.Multer.File;
 }
 
+// Form type options mapping
+const formTypeOptions = [
+  {
+    value: 'hereditary_cancer',
+    label:
+      'Phiếu đồng thuận thực hiện xét nghiệm tầm soát nguy cơ ung thư di truyền',
+  },
+  {
+    value: 'gene_mutation',
+    label: 'Phiếu xét nghiệm đột biến gen',
+  },
+  {
+    value: 'prenatal_screening',
+    label:
+      'Phiếu đồng thuận thực hiện xét nghiệm sàng lọc tiền sinh không xâm lấn',
+  },
+];
+
 @Injectable()
 export class StaffService {
   private readonly logger = new Logger(StaffService.name);
@@ -68,6 +86,7 @@ export class StaffService {
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
+    private readonly dataSource: DataSource,
     @InjectRepository(GeneralFile)
     private readonly generalFileRepository: Repository<GeneralFile>,
     private readonly s3Service: S3Service,
@@ -1361,15 +1380,25 @@ export class StaffService {
 
       // Extract test types from file categories
       const testTypes = this.extractTestTypesFromCategories(fileCategories);
+
+      if (testTypes.length === 0) {
+        this.logger.warn(
+          'No test types found in file categories, using default labcode',
+        );
+        throw new InternalServerErrorException(
+          'No test types found in file categories',
+        );
+      }
       console.log(
         `Extracted test types from categories: ${JSON.stringify(testTypes)}`,
       );
 
+      // Generate labcodes first (before starting transaction)
       for (const testType of testTypes) {
-        // Find corresponding OCR result with editedData for this test type
-        console.log('?OCR Results:', ocrResults);
+        // Find corresponding OCR result for this test type
+        console.log('OCR Results:', ocrResults);
 
-        let editedData = null;
+        let ocrData = null;
         let matchingOcrResult: any = null;
 
         // Look through all OCR results to find one that matches this test type
@@ -1380,76 +1409,65 @@ export class StaffService {
             const ocrTestType = this.mapCategoryToTestType(ocrCategory);
 
             if (ocrTestType === testType) {
-              // Try to find editedData in different possible locations
-              if (ocrResult.editedData) {
-                editedData = ocrResult.editedData;
+              // Use ocrData directly
+              if (ocrResult.ocrData) {
+                ocrData = ocrResult.ocrData;
                 matchingOcrResult = ocrResult;
-                console.log(
-                  `Found editedData at top level for ${testType}:`,
-                  editedData,
-                );
-                break;
-              } else if (ocrResult.ocrData && ocrResult.ocrData.editedData) {
-                editedData = ocrResult.ocrData.editedData;
-                matchingOcrResult = ocrResult;
-                console.log(
-                  `Found editedData inside ocrData for ${testType}:`,
-                  editedData,
-                );
+                console.log(`Found ocrData for ${testType}:`, ocrData);
                 break;
               }
             }
           }
         }
 
-        if (!matchingOcrResult || !editedData) {
-          this.logger.warn(
-            `No OCR editedData found for test type ${testType}, using default labcode`,
+        if (!matchingOcrResult || !ocrData) {
+          this.logger.warn(`No OCR data found for test type ${testType}`);
+          const testTypeLabel = this.getTestTypeLabel(testType);
+          //vietname text for error message
+          throw new InternalServerErrorException(
+            `Dữ liệu OCR "${testTypeLabel}" không đúng để tạo mã xét nghiệm labcode`,
           );
-          // Generate default labcode for this test type
-          const number = String(Math.floor(Math.random() * 999) + 1).padStart(
-            3,
-            '0',
-          );
-          const letter = String.fromCharCode(
-            65 + Math.floor(Math.random() * 26),
-          );
-          const defaultLabcode = `O5${number}${letter}`;
-          sessionLabcodes.push(defaultLabcode);
-          continue;
         }
 
-        console.log(
-          `Using OCR editedData for test type ${testType}:`,
-          editedData,
-        );
+        console.log(`Using OCR data for test type ${testType}:`, ocrData);
 
         // Generate GenerateLabcodeRequestDto based on test type and OCR data
-        const labcodeRequest = this.buildLabcodeRequest(testType, editedData);
+        let labcodeRequest;
+        try {
+          labcodeRequest = this.buildLabcodeRequest(testType, ocrData);
+        } catch (error) {
+          this.logger.error(
+            `Failed to build labcode request for test type ${testType}:`,
+            error,
+          );
+          throw new InternalServerErrorException(
+            `Dữ liệu ocr của ${this.getTestTypeLabel(testType)} không đúng để tạo mã xét nghiệm labcode`,
+          );
+        }
 
-        if (labcodeRequest) {
-          try {
-            const labcodeResponse = await this.generateLabcode(labcodeRequest);
-            sessionLabcodes.push(labcodeResponse.labcode);
-            this.logger.log(
-              `Generated labcode: ${labcodeResponse.labcode} for test type: ${testType}`,
-            );
-          } catch (error) {
-            this.logger.error(
-              `Failed to generate labcode for test type ${testType}:`,
-              error,
-            );
-            // Fallback to default labcode
-            const number = String(Math.floor(Math.random() * 999) + 1).padStart(
-              3,
-              '0',
-            );
-            const letter = String.fromCharCode(
-              65 + Math.floor(Math.random() * 26),
-            );
-            const defaultLabcode = `O5${number}${letter}`;
-            sessionLabcodes.push(defaultLabcode);
-          }
+        if (!labcodeRequest) {
+          this.logger.error(
+            `buildLabcodeRequest returned null for test type ${testType}`,
+          );
+          throw new InternalServerErrorException(
+            `Dữ liệu ocr của ${this.getTestTypeLabel(testType)} không đúng để tạo mã xét nghiệm labcode`,
+          );
+        }
+
+        try {
+          const labcodeResponse = await this.generateLabcode(labcodeRequest);
+          sessionLabcodes.push(labcodeResponse.labcode);
+          this.logger.log(
+            `Generated labcode: ${labcodeResponse.labcode} for test type: ${testType}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to generate labcode for test type ${testType}:`,
+            error,
+          );
+          throw new InternalServerErrorException(
+            `Không thể tạo mã labcode cho loại xét nghiệm ${this.getTestTypeLabel(testType)}`,
+          );
         }
       }
 
@@ -1471,152 +1489,179 @@ export class StaffService {
         `Final session labcodes: ${JSON.stringify(sessionLabcodes)}`,
       );
 
-      // Create lab session
-      const labSession = this.labSessionRepository.create({
-        patientId,
-        createdAt: new Date(),
-        typeLabSession,
-      });
-      await this.labSessionRepository.save(labSession);
-      this.logger.log(
-        `Created new categorized lab session with ID: ${labSession.id}`,
-      );
+      // Start database transaction for all database operations
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
 
-      // Create labcode entries
-      const labcodeEntities: LabCodeLabSession[] = [];
-      for (const labcodeItem of sessionLabcodes) {
-        const labcodeEntity = this.labCodeLabSessionRepository.create({
-          labSessionId: labSession.id,
-          labcode: labcodeItem,
+      try {
+        // Create lab session using transaction manager
+        const labSession = queryRunner.manager.create(LabSession, {
+          patientId,
           createdAt: new Date(),
+          typeLabSession,
         });
-        labcodeEntities.push(labcodeEntity);
-      }
-      await this.labCodeLabSessionRepository.save(labcodeEntities);
-      this.logger.log(`Created ${labcodeEntities.length} labcode entries`);
-
-      // Create assignment records for each labcode (initially empty)
-      const assignments: AssignLabSession[] = [];
-      for (const labcodeEntity of labcodeEntities) {
-        const assignment = this.assignLabSessionRepository.create({
-          labcodeLabSessionId: labcodeEntity.id,
-          createdAt: new Date(),
-        });
-        assignments.push(assignment);
-      }
-      await this.assignLabSessionRepository.save(assignments);
-      this.logger.log(`Created ${assignments.length} assignment records`);
-
-      // Get processing order based on priority
-      const processingOrder =
-        this.fileValidationService.getProcessingOrder(fileCategories);
-
-      // Upload files in priority order
-      const uploadedFiles: Array<{
-        id: number;
-        fileName: string;
-        category: string;
-        priority: number;
-        fileSize: number;
-        s3Url: string;
-      }> = [];
-      for (const fileIndex of processingOrder) {
-        const file = files[fileIndex];
-        const category = fileCategories[fileIndex];
-
-        const timestamp = Date.now();
-        const originalFileName = Buffer.from(
-          file.originalname,
-          'binary',
-        ).toString('utf8');
-        const originalFileNameWithoutSpace = originalFileName.replace(
-          /\s+/g,
-          '-',
-        );
-        const originalFileNameWithoutDot = originalFileName
-          .split('.')
-          .slice(0, -1)
-          .join('.');
-
-        // Create enhanced S3 key with category
-        const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
-        const s3Key = `session-${labSession.id}/${category.category}/${safeFileName}`;
-
-        // Upload to S3
-        const s3Url = await this.s3Service.uploadFile(
-          S3Bucket.PATIENT_FILES,
-          s3Key,
-          file.buffer,
-          file.mimetype,
-        );
-
-        // Find corresponding OCR result
-        const correspondingOCR = ocrResults?.find(
-          (ocr) =>
-            ocr.fileIndex === fileIndex && ocr.category === category.category,
-        );
-
-        // Create patient file record with enhanced metadata
-        const patientFile = this.patientFileRepository.create({
-          sessionId: labSession.id,
-          fileName: originalFileNameWithoutDot,
-          filePath: s3Url,
-          fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
-          fileSize: file.size,
-          ocrResult: correspondingOCR?.ocrData || {},
-          uploadedBy: user.id,
-          uploadedAt: new Date(),
-          // Enhanced metadata
-          fileCategory: category.category,
-          processingPriority: category.priority || 5,
-          ocrConfidence: correspondingOCR?.confidence,
-        });
-
-        const savedFile = await this.patientFileRepository.save(patientFile);
-        uploadedFiles.push({
-          id: savedFile.id,
-          fileName: file.originalname,
-          category: category.category,
-          priority: category.priority || 5,
-          fileSize: file.size,
-          s3Url,
-        });
-
+        await queryRunner.manager.save(labSession);
         this.logger.log(
-          `Uploaded categorized file: ${file.originalname} (${category.category}) to session ${labSession.id}`,
+          `Created new categorized lab session with ID: ${labSession.id}`,
         );
+
+        // Create labcode entries
+        const labcodeEntities: LabCodeLabSession[] = [];
+        for (const labcodeItem of sessionLabcodes) {
+          const labcodeEntity = queryRunner.manager.create(LabCodeLabSession, {
+            labSessionId: labSession.id,
+            labcode: labcodeItem,
+            createdAt: new Date(),
+          });
+          labcodeEntities.push(labcodeEntity);
+        }
+        await queryRunner.manager.save(labcodeEntities);
+        this.logger.log(`Created ${labcodeEntities.length} labcode entries`);
+
+        // Create assignment records for each labcode (initially empty)
+        const assignments: AssignLabSession[] = [];
+        for (const labcodeEntity of labcodeEntities) {
+          const assignment = queryRunner.manager.create(AssignLabSession, {
+            labcodeLabSessionId: labcodeEntity.id,
+            createdAt: new Date(),
+          });
+          assignments.push(assignment);
+        }
+        await queryRunner.manager.save(assignments);
+        this.logger.log(`Created ${assignments.length} assignment records`);
+
+        // Get processing order based on priority
+        const processingOrder =
+          this.fileValidationService.getProcessingOrder(fileCategories);
+
+        // Upload files in priority order
+        const uploadedFiles: Array<{
+          id: number;
+          fileName: string;
+          category: string;
+          priority: number;
+          fileSize: number;
+          s3Url: string;
+        }> = [];
+
+        for (const fileIndex of processingOrder) {
+          const file = files[fileIndex];
+          const category = fileCategories[fileIndex];
+
+          const timestamp = Date.now();
+          const originalFileName = Buffer.from(
+            file.originalname,
+            'binary',
+          ).toString('utf8');
+          const originalFileNameWithoutSpace = originalFileName.replace(
+            /\s+/g,
+            '-',
+          );
+          const originalFileNameWithoutDot = originalFileName
+            .split('.')
+            .slice(0, -1)
+            .join('.');
+
+          // Create enhanced S3 key with category
+          const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
+          const s3Key = `session-${labSession.id}/${category.category}/${safeFileName}`;
+
+          // Upload to S3
+          const s3Url = await this.s3Service.uploadFile(
+            S3Bucket.PATIENT_FILES,
+            s3Key,
+            file.buffer,
+            file.mimetype,
+          );
+
+          // Find corresponding OCR result
+          const correspondingOCR = ocrResults?.find(
+            (ocr) =>
+              ocr.fileIndex === fileIndex && ocr.category === category.category,
+          );
+
+          // Create patient file record with enhanced metadata using transaction manager
+          const patientFile = queryRunner.manager.create(PatientFile, {
+            sessionId: labSession.id,
+            fileName: originalFileNameWithoutDot,
+            filePath: s3Url,
+            fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
+            fileSize: file.size,
+            ocrResult: correspondingOCR?.ocrData || {},
+            uploadedBy: user.id,
+            uploadedAt: new Date(),
+            // Enhanced metadata
+            fileCategory: category.category,
+            processingPriority: category.priority || 5,
+            ocrConfidence: correspondingOCR?.confidence,
+          });
+
+          const savedFile = await queryRunner.manager.save(patientFile);
+          uploadedFiles.push({
+            id: savedFile.id,
+            fileName: file.originalname,
+            category: category.category,
+            priority: category.priority || 5,
+            fileSize: file.size,
+            s3Url,
+          });
+
+          this.logger.log(
+            `Uploaded categorized file: ${file.originalname} (${category.category}) to session ${labSession.id}`,
+          );
+        }
+
+        // Commit the transaction
+        await queryRunner.commitTransaction();
+        this.logger.log('Transaction committed successfully');
+
+        // Send notification after successful commit
+        await this.notificationService.createNotification({
+          title: 'Categorized Files Uploaded',
+          message: `Uploaded ${uploadedFiles.length} categorized files for patient ID ${patientId}`,
+          type: TypeNotification.INFO,
+          subType: SubTypeNotification.ACCEPT,
+          taskType: TypeTaskNotification.LAB_TASK,
+          senderId: user.id,
+          receiverId: user.id, // For now, send to same user
+          labcode: sessionLabcodes,
+        } as CreateNotificationReqDto);
+
+        // Validation summary
+        const validationSummary =
+          this.fileValidationService.validateMinimumRequirements(
+            fileCategories,
+          );
+
+        this.logger.log(`Upload completed. ${validationSummary.summary}`);
+
+        return {
+          success: true,
+          message: 'Categorized patient files uploaded successfully',
+          data: {
+            sessionId: labSession.id,
+            uploadedFilesCount: files.length,
+            processingOrder,
+            validationSummary,
+            uploadedFiles,
+            sessionLabcodes,
+          },
+        };
+      } catch (transactionError) {
+        // Rollback the transaction on any error
+        await queryRunner.rollbackTransaction();
+        this.logger.error(
+          'Transaction rolled back due to error:',
+          transactionError,
+        );
+        throw new InternalServerErrorException(
+          'Database transaction failed and was rolled back',
+        );
+      } finally {
+        // Release the query runner
+        await queryRunner.release();
       }
-
-      // Send notification
-      await this.notificationService.createNotification({
-        title: 'Categorized Files Uploaded',
-        message: `Uploaded ${uploadedFiles.length} categorized files for patient ID ${patientId}`,
-        type: TypeNotification.INFO,
-        subType: SubTypeNotification.ACCEPT,
-        taskType: TypeTaskNotification.LAB_TASK,
-        senderId: user.id,
-        receiverId: user.id, // For now, send to same user
-        labcode: sessionLabcodes,
-      } as CreateNotificationReqDto);
-
-      // Validation summary
-      const validationSummary =
-        this.fileValidationService.validateMinimumRequirements(fileCategories);
-
-      this.logger.log(`Upload completed. ${validationSummary.summary}`);
-
-      return {
-        success: true,
-        message: 'Categorized patient files uploaded successfully',
-        data: {
-          sessionId: labSession.id,
-          uploadedFilesCount: files.length,
-          processingOrder,
-          validationSummary,
-          uploadedFiles,
-          sessionLabcodes,
-        },
-      };
     } catch (error) {
       this.logger.error('Failed to upload categorized patient files', error);
       throw new InternalServerErrorException(error.message);
@@ -1954,6 +1999,12 @@ export class StaffService {
     return `${samplePrefix}${oncoType}`;
   }
 
+  // Helper method to get test type label from formTypeOptions
+  private getTestTypeLabel(testType: string): string {
+    const option = formTypeOptions.find((option) => option.value === testType);
+    return option ? option.label : testType; // Fallback to testType if not found
+  }
+
   // Helper method to extract test types from file categories
   private extractTestTypesFromCategories(fileCategories: any[]): string[] {
     const testTypes: Set<string> = new Set();
@@ -1961,19 +2012,14 @@ export class StaffService {
     for (const categoryItem of fileCategories) {
       if (categoryItem.category) {
         // Map category to test type based on your business logic
-        if (categoryItem.category.includes('gene_mutation')) {
+        if (categoryItem.category === 'gene_mutation') {
           testTypes.add('gene_mutation');
-        } else if (categoryItem.category.includes('prenatal_screening')) {
+        } else if (categoryItem.category === 'prenatal_screening') {
           testTypes.add('prenatal_screening');
-        } else if (categoryItem.category.includes('hereditary_cancer')) {
+        } else if (categoryItem.category === 'hereditary_cancer') {
           testTypes.add('hereditary_cancer');
         }
       }
-    }
-
-    // If no specific test type found, default to gene_mutation
-    if (testTypes.size === 0) {
-      testTypes.add('gene_mutation');
     }
 
     return Array.from(testTypes);
@@ -1981,11 +2027,11 @@ export class StaffService {
 
   // Helper method to map OCR category to test type
   private mapCategoryToTestType(category: string): string {
-    if (category.includes('gene_mutation')) {
+    if (category === 'gene_mutation') {
       return 'gene_mutation';
-    } else if (category.includes('prenatal_screening')) {
+    } else if (category === 'prenatal_screening') {
       return 'prenatal_screening';
-    } else if (category.includes('hereditary_cancer')) {
+    } else if (category === 'hereditary_cancer') {
       return 'hereditary_cancer';
     }
 
@@ -1996,18 +2042,18 @@ export class StaffService {
   // Helper method to build GenerateLabcodeRequestDto from test type and OCR data
   private buildLabcodeRequest(
     testType: string,
-    editedData: any,
+    ocrData: any,
   ): GenerateLabcodeRequestDto | null {
     try {
       switch (testType) {
         case 'gene_mutation':
-          return this.buildGeneMutationRequest(editedData);
+          return this.buildGeneMutationRequestFromOCR(ocrData);
 
         case 'prenatal_screening':
-          return this.buildPrenatalScreeningRequest(editedData);
+          return this.buildPrenatalScreeningRequestFromOCR(ocrData);
 
         case 'hereditary_cancer':
-          return this.buildHereditaryCancerRequest(editedData);
+          return this.buildHereditaryCancerRequestFromOCR(ocrData);
 
         default:
           this.logger.warn(`Unknown test type: ${testType}`);
@@ -2022,28 +2068,81 @@ export class StaffService {
     }
   }
 
-  private buildGeneMutationRequest(editedData: any): GenerateLabcodeRequestDto {
-    const packageType = editedData.cancer_panel;
-    if (!packageType) {
+  private buildGeneMutationRequestFromOCR(
+    ocrData: any,
+  ): GenerateLabcodeRequestDto {
+    const geneMutationData = ocrData.gene_mutation_testing;
+    if (!geneMutationData) {
       throw new BadRequestException(
-        'cancer_panel field is required for gene mutation testing',
+        'gene_mutation_testing section is required for gene mutation testing',
       );
     }
 
-    console.log('Edited Data for Gene Mutation:', editedData);
-    // Get sample type from the boolean fields
+    const specimenData = geneMutationData.specimen_and_test_information;
+    if (!specimenData) {
+      throw new BadRequestException(
+        'specimen_and_test_information is required for gene mutation testing',
+      );
+    }
+
+    // Get sample type from specimen_type
     let sampleType: SampleType | undefined;
-    if (editedData.biopsy_tissue_ffpe == true) {
-      sampleType = SampleType.BIOPSY_TISSUE_FFPE;
-    } else if (editedData.blood_stl_ctdna == true) {
-      sampleType = SampleType.BLOOD_STL_CTDNA;
-    } else if (editedData.pleural_peritoneal_fluid == true) {
-      sampleType = SampleType.PLEURAL_PERITONEAL_FLUID;
+    const specimenType = specimenData.specimen_type;
+
+    console.log(`Specimen Type`, specimenType);
+    if (specimenType) {
+      if (specimenType.biopsy_tissue_ffpe === true) {
+        sampleType = SampleType.BIOPSY_TISSUE_FFPE;
+      } else if (specimenType.blood_stl_ctdna === true) {
+        sampleType = SampleType.BLOOD_STL_CTDNA;
+      } else if (specimenType.pleural_peritoneal_fluid === true) {
+        sampleType = SampleType.PLEURAL_PERITONEAL_FLUID;
+      }
     }
 
     if (!sampleType) {
       throw new BadRequestException(
-        'At least one sample type must be true for gene mutation testing',
+        'At least one specimen type must be selected for gene mutation testing',
+      );
+    }
+
+    // Get package type from cancer_type_and_test_panel_please_tick_one
+    let packageType: string | undefined;
+    const cancerPanel = specimenData.cancer_type_and_test_panel_please_tick_one;
+    if (cancerPanel) {
+      if (cancerPanel.onco_81?.is_selected === true) {
+        packageType = GeneMutationPackageType.ONCO81;
+      } else if (cancerPanel.onco_500_plus?.is_selected === true) {
+        packageType = GeneMutationPackageType.ONCO500;
+      } else if (cancerPanel.lung_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.LUNG_CANCER;
+      } else if (cancerPanel.ovarian_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.OVARIAN_CANCER;
+      } else if (cancerPanel.colorectal_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.COLORECTAL_CANCER;
+      } else if (cancerPanel.prostate_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.PROSTATE_CANCER;
+      } else if (cancerPanel.breast_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.BREAST_CANCER;
+      } else if (cancerPanel.cervical_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.CERVICAL_CANCER;
+      } else if (cancerPanel.gastric_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.GASTRIC_CANCER;
+      } else if (cancerPanel.pancreatic_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.PANCREATIC_CANCER;
+      } else if (cancerPanel.thyroid_cancer?.is_selected === true) {
+        packageType = GeneMutationPackageType.THYROID_CANCER;
+      } else if (
+        cancerPanel.gastrointestinal_stromal_tumor_gist?.is_selected === true
+      ) {
+        packageType =
+          GeneMutationPackageType.GASTROINTESTINAL_STROMAL_TUMOR_GIST;
+      }
+    }
+
+    if (!packageType) {
+      throw new BadRequestException(
+        'At least one cancer type and test panel must be selected for gene mutation testing',
       );
     }
 
@@ -2054,13 +2153,32 @@ export class StaffService {
     };
   }
 
-  private buildPrenatalScreeningRequest(
-    editedData: any,
+  private buildPrenatalScreeningRequestFromOCR(
+    ocrData: any,
   ): GenerateLabcodeRequestDto {
-    const packageType = editedData.nipt_package;
+    const niptData = ocrData.non_invasive_prenatal_testing;
+    if (!niptData) {
+      throw new BadRequestException(
+        'non_invasive_prenatal_testing section is required for prenatal screening',
+      );
+    }
+
+    // Get package type from test_options
+    let packageType: string | undefined;
+    const testOptions = niptData.test_options;
+    if (testOptions && Array.isArray(testOptions)) {
+      // Find the first selected test option
+      const selectedOption = testOptions.find(
+        (option) => option.is_selected === true,
+      );
+      if (selectedOption) {
+        packageType = selectedOption.package_name;
+      }
+    }
+
     if (!packageType) {
       throw new BadRequestException(
-        'nipt_package field is required for prenatal screening',
+        'At least one test option must be selected for prenatal screening',
       );
     }
 
@@ -2070,13 +2188,37 @@ export class StaffService {
     };
   }
 
-  private buildHereditaryCancerRequest(
-    editedData: any,
+  private buildHereditaryCancerRequestFromOCR(
+    ocrData: any,
   ): GenerateLabcodeRequestDto {
-    const packageType = editedData.cancer_screening_package;
+    const hereditaryData = ocrData.hereditary_cancer;
+    if (!hereditaryData) {
+      throw new BadRequestException(
+        'hereditary_cancer section is required for hereditary cancer testing',
+      );
+    }
+
+    // Get package type from the hereditary cancer options
+    let packageType: string | undefined;
+    if (hereditaryData.breast_cancer_bcare?.is_selected === true) {
+      packageType = HereditaryCancerPackageType.BREAST_CANCER_BCARE;
+    } else if (
+      hereditaryData['15_hereditary_cancer_types_more_care']?.is_selected ===
+      true
+    ) {
+      packageType =
+        HereditaryCancerPackageType.FIFTEEN_HEREDITARY_CANCER_TYPES_MORE_CARE;
+    } else if (
+      hereditaryData['20_hereditary_cancer_types_vip_care']?.is_selected ===
+      true
+    ) {
+      packageType =
+        HereditaryCancerPackageType.TWENTY_HEREDITARY_CANCER_TYPES_VIP_CARE;
+    }
+
     if (!packageType) {
       throw new BadRequestException(
-        'cancer_screening_package field is required for hereditary cancer',
+        'At least one hereditary cancer package must be selected',
       );
     }
 

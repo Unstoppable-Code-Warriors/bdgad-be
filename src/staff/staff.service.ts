@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import * as arrow from 'apache-arrow';
 
 import { In, Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -1600,27 +1601,45 @@ export class StaffService {
             Object.keys(correspondingOCR.ocrData).length > 0
           ) {
             try {
+              // Save as JSON
               const ocrJsonKey = `session-${labSession.id}/${category.category}/ocr-result.json`;
               const ocrJsonData = JSON.stringify(
                 correspondingOCR.ocrData,
                 null,
                 2,
               );
-              const ocrBuffer = Buffer.from(ocrJsonData, 'utf8');
+              const ocrJsonBuffer = Buffer.from(ocrJsonData, 'utf8');
 
               await this.s3Service.uploadFile(
                 S3Bucket.PATIENT_FILES,
                 ocrJsonKey,
-                ocrBuffer,
+                ocrJsonBuffer,
                 'application/json',
               );
 
               this.logger.log(
                 `Saved OCR result JSON for file: ${file.originalname} at key: ${ocrJsonKey}`,
               );
+
+              // Save as Arrow format (Parquet-compatible)
+              const ocrParquetKey = `session-${labSession.id}/${category.category}/ocr-result.parquet`;
+              const parquetBuffer = await this.convertOcrToParquet(
+                correspondingOCR.ocrData,
+              );
+
+              await this.s3Service.uploadFile(
+                S3Bucket.PATIENT_FILES,
+                ocrParquetKey,
+                parquetBuffer,
+                'application/x-parquet',
+              );
+
+              this.logger.log(
+                `Saved OCR result Parquet for file: ${file.originalname} at key: ${ocrParquetKey}`,
+              );
             } catch (ocrUploadError) {
               this.logger.error(
-                `Failed to upload OCR result JSON for file ${file.originalname}:`,
+                `Failed to upload OCR result files for file ${file.originalname}:`,
                 ocrUploadError,
               );
               // Don't throw here - OCR upload failure shouldn't break the main file upload
@@ -2427,6 +2446,196 @@ export class StaffService {
       testType: TestType.HEREDITARY_CANCER,
       packageType,
     };
+  }
+
+  /**
+   * Convert OCR data to Parquet format
+   */
+  private async convertOcrToParquet(ocrData: any): Promise<Buffer> {
+    try {
+      // Flatten the OCR data into rows
+      const flattenedData = this.flattenOcrDataToRows(ocrData);
+      
+      // Prepare data arrays for Arrow
+      const fieldNames: string[] = [];
+      const fieldValues: string[] = [];
+      const createdAts: Date[] = [];
+      const dataTypes: string[] = [];
+      
+      for (const record of flattenedData) {
+        fieldNames.push(record.field_name);
+        fieldValues.push(record.field_value);
+        createdAts.push(new Date());
+        dataTypes.push('ocr_result');
+      }
+      
+      // Create Arrow vectors
+      const fieldNameVector = arrow.vectorFromArray(fieldNames);
+      const fieldValueVector = arrow.vectorFromArray(fieldValues);
+      const createdAtVector = arrow.vectorFromArray(createdAts);
+      const dataTypeVector = arrow.vectorFromArray(dataTypes);
+      
+      // Create Arrow table
+      const table = new arrow.Table({
+        field_name: fieldNameVector,
+        field_value: fieldValueVector,
+        created_at: createdAtVector,
+        data_type: dataTypeVector,
+      });
+      
+      // Serialize to Arrow IPC format (which can be read by Parquet readers)
+      const buffer = arrow.tableToIPC(table, 'file');
+      
+      // Convert Uint8Array to Buffer
+      const resultBuffer = Buffer.from(buffer);
+      
+      this.logger.log(
+        `Generated Arrow/Parquet buffer with size: ${resultBuffer.length} bytes`,
+      );
+      return resultBuffer;
+    } catch (error) {
+      this.logger.error('Failed to convert OCR data to Arrow format:', error);
+      throw new Error(`Arrow conversion failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Flatten OCR data into rows for Parquet storage
+   */
+  private flattenOcrDataToRows(ocrData: any): Array<{
+    field_name: string;
+    field_value: string;
+    confidence?: number;
+  }> {
+    const rows: Array<{
+      field_name: string;
+      field_value: string;
+      confidence?: number;
+    }> = [];
+    
+    const flattenObject = (obj: any, prefix: string = '') => {
+      for (const [key, value] of Object.entries(obj)) {
+        const fieldName = prefix ? `${prefix}.${key}` : key;
+        
+        if (value === null || value === undefined) {
+          rows.push({
+            field_name: fieldName,
+            field_value: '',
+          });
+        } else if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+          // For nested objects, recurse
+          flattenObject(value, fieldName);
+        } else if (Array.isArray(value)) {
+          // Convert arrays to JSON string
+          rows.push({
+            field_name: fieldName,
+            field_value: JSON.stringify(value),
+          });
+        } else {
+          // For primitive values
+          rows.push({
+            field_name: fieldName,
+            field_value: String(value),
+          });
+        }
+      }
+    };
+    
+    flattenObject(ocrData);
+    return rows;
+  }
+
+  /**
+   * Generate Parquet schema dynamically based on OCR data structure
+   */
+  private generateParquetSchema(ocrData: any): any {
+    const schema: any = {};
+
+    const processValue = (key: string, value: any) => {
+      if (value === null || value === undefined) {
+        schema[key] = { type: 'UTF8', optional: true };
+      } else if (typeof value === 'string') {
+        schema[key] = { type: 'UTF8', optional: true };
+      } else if (typeof value === 'number') {
+        if (Number.isInteger(value)) {
+          schema[key] = { type: 'INT64', optional: true };
+        } else {
+          schema[key] = { type: 'DOUBLE', optional: true };
+        }
+      } else if (typeof value === 'boolean') {
+        schema[key] = { type: 'BOOLEAN', optional: true };
+      } else if (value instanceof Date) {
+        schema[key] = { type: 'TIMESTAMP_MILLIS', optional: true };
+      } else if (typeof value === 'object') {
+        // For nested objects, convert to JSON string
+        schema[key] = { type: 'UTF8', optional: true };
+      } else {
+        // Default to string for unknown types
+        schema[key] = { type: 'UTF8', optional: true };
+      }
+    };
+
+    // Process all keys in the OCR data
+    this.processObjectKeys(ocrData, '', processValue);
+
+    return schema;
+  }
+
+  /**
+   * Recursively process object keys for schema generation
+   */
+  private processObjectKeys(
+    obj: any,
+    prefix: string,
+    callback: (key: string, value: any) => void,
+  ) {
+    for (const [key, value] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}_${key}` : key;
+
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        !(value instanceof Date)
+      ) {
+        // For nested objects, flatten them
+        this.processObjectKeys(value, fullKey, callback);
+      } else {
+        callback(fullKey, value);
+      }
+    }
+  }
+
+  /**
+   * Flatten OCR data for Parquet storage
+   */
+  private flattenOcrData(ocrData: any): any {
+    const flattened: any = {};
+
+    const flatten = (obj: any, prefix: string = '') => {
+      for (const [key, value] of Object.entries(obj)) {
+        const newKey = prefix ? `${prefix}_${key}` : key;
+
+        if (value === null || value === undefined) {
+          flattened[newKey] = null;
+        } else if (
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          !(value instanceof Date)
+        ) {
+          // Recursively flatten nested objects
+          flatten(value, newKey);
+        } else if (Array.isArray(value)) {
+          // Convert arrays to JSON string
+          flattened[newKey] = JSON.stringify(value);
+        } else {
+          flattened[newKey] = value;
+        }
+      }
+    };
+
+    flatten(ocrData);
+    return flattened;
   }
 
   async testRb() {

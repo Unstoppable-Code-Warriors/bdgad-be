@@ -37,6 +37,7 @@
     "@nestjs/websockets": "^11.1.5",
     "amqp-connection-manager": "^4.1.14",
     "amqplib": "^0.10.8",
+    "apache-arrow": "^21.0.0",
     "axios": "^1.9.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",

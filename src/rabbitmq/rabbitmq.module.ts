@@ -25,6 +25,24 @@ import { Env } from 'src/utils/constant';
         }),
         inject: [ConfigService],
       },
+      {
+        name: 'PHARMACY_SERVICE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [
+              configService.get<string>(Env.RABBITMQ_URL) ||
+                'amqp://localhost:5672',
+            ],
+            queue: 'pharmacy_be',
+            queueOptions: {
+              durable: true,
+            },
+          },
+        }),
+        inject: [ConfigService],
+      },
     ]),
   ],
   providers: [RabbitmqService],

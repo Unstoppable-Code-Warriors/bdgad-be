@@ -2398,4 +2398,8 @@ export class StaffService {
       packageType,
     };
   }
+
+  async testRb() {
+    this.rabbitmqService.emitEvent('ping', 'pong');
+  }
 }

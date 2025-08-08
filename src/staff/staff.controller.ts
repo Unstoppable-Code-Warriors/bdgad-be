@@ -14,6 +14,7 @@ import {
   ValidationPipe,
   Body,
   Put,
+  Logger,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
@@ -47,12 +48,14 @@ import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
 import { SendGeneralFileToEMRDto } from './dtos/send-general-file-to-emr.dto';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
+import { MessagePattern, Payload } from '@nestjs/microservices';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
 @ApiSecurity('token')
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
+  private readonly logger = new Logger(StaffController.name);
 
   @ApiTags('Test')
   @Post('/test')
@@ -1189,5 +1192,22 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async generateLabcode(@Body() request: GenerateLabcodeRequestDto) {
     return this.staffService.generateLabcode(request);
+  }
+
+  @Get('pingpong')
+  @AuthZ([Role.STAFF])
+  async pingPong() {
+    return this.staffService.testRb();
+  }
+
+  @MessagePattern({ cmd: 'pharmacy_patient_info' })
+  async getPharmacyPatientInfo(@Payload() data: any) {
+    this.logger.log('Received pharmacy patient info request:', data);
+    if (!data) {
+      this.logger.warn('Invalid pharmacy patient info request:', data);
+      return { error: 'Invalid request' };
+    }
+
+    return data;
   }
 }

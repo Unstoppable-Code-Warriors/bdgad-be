@@ -1577,7 +1577,7 @@ export class StaffService {
             .join('.');
 
           // Create enhanced S3 key with category
-          const safeFileName = `${originalFileNameWithoutSpace}_${shortId}`;
+          const safeFileName = `${originalFileNameWithoutSpace}`;
           const s3Key = `session-${labSession.id}/${category.category}/${safeFileName}`;
 
           // Upload to S3
@@ -1593,6 +1593,39 @@ export class StaffService {
             (ocr) =>
               ocr.fileIndex === fileIndex && ocr.category === category.category,
           );
+
+          // Save OCR result as JSON file to S3 if available
+          if (
+            correspondingOCR?.ocrData &&
+            Object.keys(correspondingOCR.ocrData).length > 0
+          ) {
+            try {
+              const ocrJsonKey = `session-${labSession.id}/${category.category}/ocr-result.json`;
+              const ocrJsonData = JSON.stringify(
+                correspondingOCR.ocrData,
+                null,
+                2,
+              );
+              const ocrBuffer = Buffer.from(ocrJsonData, 'utf8');
+
+              await this.s3Service.uploadFile(
+                S3Bucket.PATIENT_FILES,
+                ocrJsonKey,
+                ocrBuffer,
+                'application/json',
+              );
+
+              this.logger.log(
+                `Saved OCR result JSON for file: ${file.originalname} at key: ${ocrJsonKey}`,
+              );
+            } catch (ocrUploadError) {
+              this.logger.error(
+                `Failed to upload OCR result JSON for file ${file.originalname}:`,
+                ocrUploadError,
+              );
+              // Don't throw here - OCR upload failure shouldn't break the main file upload
+            }
+          }
 
           // Create patient file record with enhanced metadata using transaction manager
           const patientFile = queryRunner.manager.create(PatientFile, {

@@ -265,13 +265,11 @@ export class FileValidationService {
   }
 
   /**
-   * Get file processing priority order
+   * Get file processing order - now returns sequential order since priority is removed
    */
   getProcessingOrder(categories: FileCategoryDto[]): number[] {
-    return categories
-      .map((cat, index) => ({ index, priority: cat.priority || 5 }))
-      .sort((a, b) => b.priority - a.priority) // Higher priority first
-      .map((item) => item.index);
+    // Return sequential order (0, 1, 2, ...) since priority field was removed
+    return categories.map((_, index) => index);
   }
 
   /**

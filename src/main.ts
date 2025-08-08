@@ -55,7 +55,7 @@ async function bootstrap() {
       urls: [rmqUrl],
       queue: 'pharmacy_be',
       queueOptions: {
-        durable: true,
+        durable: false,
       },
     },
   };

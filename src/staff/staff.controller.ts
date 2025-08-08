@@ -784,12 +784,10 @@ export class StaffController {
           example: JSON.stringify([
             {
               category: 'hereditary_cancer',
-              priority: 8,
               fileName: 'hereditary_cancer_form.pdf',
             },
             {
               category: 'gene_mutation',
-              priority: 7,
               fileName: 'gene_mutation_test.jpg',
             },
           ]),
@@ -1086,16 +1084,6 @@ export class StaffController {
         throw new BadRequestException(
           `fileCategories[${i}].fileName must be a non-empty string`,
         );
-      }
-
-      if (category.priority !== undefined) {
-        const priority = Number(category.priority);
-        if (Number.isNaN(priority) || priority < 1 || priority > 10) {
-          throw new BadRequestException(
-            `fileCategories[${i}].priority must be a number between 1 and 10`,
-          );
-        }
-        category.priority = priority; // Ensure it's a number
       }
     }
 

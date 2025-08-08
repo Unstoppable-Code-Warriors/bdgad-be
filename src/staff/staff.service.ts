@@ -1545,16 +1545,15 @@ export class StaffService {
         await queryRunner.manager.save(assignments);
         this.logger.log(`Created ${assignments.length} assignment records`);
 
-        // Get processing order based on priority
+        // Get processing order
         const processingOrder =
           this.fileValidationService.getProcessingOrder(fileCategories);
 
-        // Upload files in priority order
+        // Upload files in processing order
         const uploadedFiles: Array<{
           id: number;
           fileName: string;
           category: string;
-          priority: number;
           fileSize: number;
           s3Url: string;
         }> = [];
@@ -1607,7 +1606,6 @@ export class StaffService {
             uploadedAt: new Date(),
             // Enhanced metadata
             fileCategory: category.category,
-            processingPriority: category.priority || 5,
             ocrConfidence: correspondingOCR?.confidence,
           });
 
@@ -1616,7 +1614,6 @@ export class StaffService {
             id: savedFile.id,
             fileName: file.originalname,
             category: category.category,
-            priority: category.priority || 5,
             fileSize: file.size,
             s3Url,
           });

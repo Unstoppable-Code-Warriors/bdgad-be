@@ -58,7 +58,9 @@ export class LabSessionResponseDto {
   id: number;
   labcode: string[];
   barcode: string;
-  requestDate: Date;
+  requestDateLabTesting?: Date | null;
+  requestDateAnalysis?: Date | null;
+  requestDateValidation?: Date | null;
   createdAt: Date;
   metadata: Record<string, any>;
   patient: PatientResponseDto;

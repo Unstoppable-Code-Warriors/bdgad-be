@@ -42,6 +42,9 @@ export class AssignLabSession {
   @JoinColumn({ name: 'lab_testing_id' })
   labTesting: User | null;
 
+  @Column({ name: 'request_date_lab_testing', nullable: true })
+  requestDateLabTesting: Date;
+
   @Column({ name: 'analysis_id', nullable: true })
   analysisId: number | null;
 
@@ -49,12 +52,18 @@ export class AssignLabSession {
   @JoinColumn({ name: 'analysis_id' })
   analysis: User | null;
 
+  @Column({ name: 'request_date_analysis', nullable: true })
+  requestDateAnalysis: Date;
+
   @Column({ name: 'validation_id', nullable: true })
   validationId: number | null;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'validation_id' })
   validation: User | null;
+
+  @Column({ name: 'request_date_validation', nullable: true })
+  requestDateValidation: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

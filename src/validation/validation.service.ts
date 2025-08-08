@@ -100,6 +100,9 @@ export class ValidationService {
         'assignment.labTestingId',
         'assignment.analysisId',
         'assignment.validationId',
+        'assignment.requestDateLabTesting',
+        'assignment.requestDateAnalysis',
+        'assignment.requestDateValidation',
         'doctor.id',
         'doctor.name',
         'doctor.email',
@@ -173,7 +176,9 @@ export class ValidationService {
           id: labcode.id,
           labcode: [labcode.labcode], // Convert single labcode to array for backward compatibility
           barcode: labcode.labSession.patient.barcode,
-          requestDate: labcode.createdAt, // Use labcode creation date as request date
+          requestDateLabTesting: labcode.assignment?.requestDateLabTesting || null,
+          requestDateAnalysis: labcode.assignment?.requestDateAnalysis || null,
+          requestDateValidation: labcode.assignment?.requestDateValidation || null,
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
@@ -252,7 +257,6 @@ export class ValidationService {
       id: labcode.id,
       labcode: [labcode.labcode], // Single labcode as array for consistency
       barcode: session.patient.barcode,
-      requestDate: labcode.createdAt, // Use labcode creation date as request date
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,

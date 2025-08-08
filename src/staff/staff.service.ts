@@ -57,6 +57,10 @@ import {
   GenerateLabcodeResponseDto,
 } from './dtos/generate-labcode.dto';
 import { generateShortId } from 'src/utils/generateShortId';
+import {
+  FastqFilePair,
+  FastqFileStatus,
+} from 'src/entities/fastq-file-pair.entity';
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
   salesInvoice: Express.Multer.File;
@@ -101,6 +105,8 @@ export class StaffService {
     private readonly assignLabSessionRepository: Repository<AssignLabSession>,
     @InjectRepository(PatientFile)
     private readonly patientFileRepository: Repository<PatientFile>,
+    @InjectRepository(FastqFilePair)
+    private readonly fastqFilePairRepository: Repository<FastqFilePair>,
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
@@ -1671,13 +1677,6 @@ export class StaffService {
     }
   }
 
-  private formatLabcodeArray(labcodes: string[] | null | undefined): string {
-    if (!labcodes || labcodes.length === 0) {
-      return 'unknown';
-    }
-    return labcodes.join(', ');
-  }
-
   async assignDoctorAndLabTestingLabSession(
     id: number,
     assignLabcodeDto: AssignLabcodeDto,
@@ -1757,6 +1756,7 @@ export class StaffService {
             // Create new assignment
             assignmentRecord = this.assignLabSessionRepository.create({
               labcodeLabSessionId: labcodeEntity.id,
+              requestDateLabTesting: new Date(),
               createdAt: new Date(),
             });
           }
@@ -1765,6 +1765,7 @@ export class StaffService {
           assignmentRecord.doctorId = doctorId;
           assignmentRecord.labTestingId = labTestingId;
           assignmentRecord.updatedAt = new Date();
+          assignmentRecord.requestDateLabTesting = new Date();
 
           await this.assignLabSessionRepository.save(assignmentRecord);
 

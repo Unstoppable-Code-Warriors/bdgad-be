@@ -14,6 +14,7 @@ import { AssignLabSession } from '../entities/assign-lab-session.entity';
 import { NotificationModule } from 'src/notification/notification.module';
 import { CategoryGeneralFileModule } from 'src/category-general-file/category-general-file.module';
 import { FileValidationService } from './services/file-validation.service';
+import { FastqFilePair } from 'src/entities/fastq-file-pair.entity';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { FileValidationService } from './services/file-validation.service';
       User,
       LabCodeLabSession,
       AssignLabSession,
+      FastqFilePair,
     ]),
     NotificationModule,
     CategoryGeneralFileModule,

@@ -148,6 +148,9 @@ export class LabTestService {
           'assignment.labTestingId',
           'assignment.analysisId',
           'assignment.validationId',
+          'assignment.requestDateLabTesting',
+          'assignment.requestDateAnalysis',
+          'assignment.requestDateValidation',
           'doctor.id',
           'doctor.name',
           'doctor.email',
@@ -239,14 +242,17 @@ export class LabTestService {
           },
         });
 
-        // Transform to match expected DTO structure
         return {
           id: labcode.id,
-          labcode: [labcode.labcode], // Convert single labcode to array for backward compatibility
+          labcode: [labcode.labcode],
           barcode: labcode.labSession.patient.barcode,
-          requestDate: labcode.createdAt, // Use labcode creation date as request date
+          requestDateLabTesting:
+            labcode.assignment?.requestDateLabTesting || null,
+          requestDateAnalysis: labcode.assignment?.requestDateAnalysis || null,
+          requestDateValidation:
+            labcode.assignment?.requestDateValidation || null,
           createdAt: labcode.labSession.createdAt,
-          metadata: {}, // Empty object for backward compatibility
+          metadata: {},
           patient: labcode.labSession.patient,
           doctor: labcode.assignment?.doctor || null,
           analysis: labcode.assignment?.analysis || null,
@@ -374,7 +380,6 @@ export class LabTestService {
       id: labcodeSession.id,
       labcode: [labcodeSession.labcode], // Array containing this specific labcode
       barcode: session.patient.barcode,
-      requestDate: labcodeSession.createdAt, // Use this labcode creation date as request date
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
@@ -390,7 +395,7 @@ export class LabTestService {
     id: number,
     files: Express.Multer.File[],
     user: AuthenticatedUser,
-  ): Promise<{ message: string; fastqFilePairId: number }> {
+  ) {
     // Validate files
     if (!files || files.length !== 2) {
       throw new BadRequestException(
@@ -650,7 +655,7 @@ export class LabTestService {
     console.log('Check labcodeAssignment analysisId', analysisId);
     await this.assignLabSessionRepository.update(
       { labcodeLabSessionId: fastqFilePair.labcodeLabSession?.id },
-      { analysisId: analysisId },
+      { analysisId: analysisId, requestDateAnalysis: new Date() },
     );
 
     try {

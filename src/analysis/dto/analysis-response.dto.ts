@@ -76,7 +76,6 @@ export class AnalysisSessionResponseDto {
   id: number;
   labcode: string[];
   barcode: string;
-  requestDate: Date;
   createdAt: Date;
   metadata: Record<string, any>;
   patient: PatientResponseDto;

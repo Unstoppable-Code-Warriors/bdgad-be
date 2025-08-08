@@ -112,6 +112,9 @@ export class AnalysisService {
           'assignment.labTestingId',
           'assignment.analysisId',
           'assignment.validationId',
+          'assignment.requestDateLabTesting',
+          'assignment.requestDateAnalysis',
+          'assignment.requestDateValidation',
           'doctor.id',
           'doctor.name',
           'doctor.email',
@@ -235,7 +238,9 @@ export class AnalysisService {
           id: labcode.id,
           labcode: [labcode.labcode], // Convert single labcode to array for backward compatibility
           barcode: labcode.labSession.patient.barcode,
-          requestDate: labcode.createdAt, // Use labcode creation date as request date
+          requestDateLabTesting: labcode.assignment?.requestDateLabTesting || null,
+          requestDateAnalysis: labcode.assignment?.requestDateAnalysis || null,
+          requestDateValidation: labcode.assignment?.requestDateValidation || null,
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
@@ -407,7 +412,6 @@ export class AnalysisService {
       id: labcodeSession.id,
       labcode: [labcodeSession.labcode], // Array containing this specific labcode
       barcode: session.patient.barcode,
-      requestDate: labcodeSession.createdAt, // Use this labcode creation date as request date
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
@@ -775,6 +779,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
     }
 
     assignment.validationId = validationId;
+    assignment.requestDateValidation = new Date();
     await this.assignLabSessionRepository.save(assignment);
     const formattedLabcodes = this.formatLabcodeArray(labcode);
     await this.notificationService.createNotification({

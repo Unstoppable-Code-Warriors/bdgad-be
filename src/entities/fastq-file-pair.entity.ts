@@ -16,6 +16,7 @@ export enum FastqFileStatus {
   WAIT_FOR_APPROVAL = 'wait_for_approval',
   APPROVED = 'approved',
   REJECTED = 'rejected',
+  NOT_UPLOADED = 'not_uploaded',
 }
 @Entity('fastq_file_pairs')
 export class FastqFilePair {
@@ -29,15 +30,15 @@ export class FastqFilePair {
   @JoinColumn({ name: 'fastq_file_r1_id' })
   fastqFileR1: FastqFile;
 
-  @Column({ name: 'fastq_file_r1_id' })
-  fastqFileR1Id: number;
+  @Column({ name: 'fastq_file_r1_id', nullable: true })
+  fastqFileR1Id: number | null;
 
   @OneToOne(() => FastqFile)
   @JoinColumn({ name: 'fastq_file_r2_id' })
   fastqFileR2: FastqFile;
 
-  @Column({ name: 'fastq_file_r2_id' })
-  fastqFileR2Id: number;
+  @Column({ name: 'fastq_file_r2_id', nullable: true })
+  fastqFileR2Id: number | null;
 
   @CreateDateColumn({
     name: 'created_at',

@@ -115,7 +115,7 @@ export class StaffService {
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
-    private readonly rabbitmqService: RabbitmqService,
+    private readonly rabbitmqService: RabbitmqService, // Assuming this is the correct service to inject
   ) {}
 
   async test(file: Express.Multer.File) {
@@ -2005,12 +2005,16 @@ export class StaffService {
         `Successfully processed ${filesToUpdate.length} new files and ${generalFiles.length - filesToUpdate.length} already sent files from ${categoriesWithFiles.length} categories`,
       );
 
-      return result;
-    } catch (error) {
-      this.logger.error('Failed to send general files to EMR', error);
-      throw new InternalServerErrorException(error.message);
-    } finally {
-      this.logger.log('General Files send to EMR process completed');
+      // Send success result to RabbitMQ
+
+      await this.rabbitmqService.sendMessage('folder-batch', result);
+      this.logger.log('Success result sent to RabbitMQ');
+    } catch (rabbitError) {
+      this.logger.error(
+        'Failed to send success message to RabbitMQ',
+        rabbitError,
+      );
+      // Don't throw here - we don't want to fail the main operation
     }
   }
 

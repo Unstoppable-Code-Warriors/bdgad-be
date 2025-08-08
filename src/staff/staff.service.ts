@@ -56,6 +56,7 @@ import {
   SampleType,
   GenerateLabcodeResponseDto,
 } from './dtos/generate-labcode.dto';
+import { generateShortId } from 'src/utils/generateShortId';
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
   salesInvoice: Express.Multer.File;
@@ -107,7 +108,7 @@ export class StaffService {
 
   async test(file: Express.Multer.File) {
     this.logger.log('Starting OCR file processing');
-    const timestamp = Date.now();
+    const shortId = generateShortId();
 
     // Properly decode UTF-8 filename
     const originalFileName = Buffer.from(file.originalname, 'binary').toString(
@@ -116,7 +117,7 @@ export class StaffService {
     const originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
 
     // Create a safe S3 key
-    const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
+    const s3Key = `${originalFileNameWithoutSpace}_${shortId}`;
 
     const s3Url = await this.s3Service.uploadFile(
       S3Bucket.OCR_FILE_TEMP,
@@ -156,7 +157,7 @@ export class StaffService {
   }
 
   async ocrFilePath(file: Express.Multer.File) {
-    const timestamp = Date.now();
+    const shortId = generateShortId();
 
     // Properly decode UTF-8 filename
     const originalFileName = Buffer.from(file.originalname, 'binary').toString(
@@ -165,7 +166,7 @@ export class StaffService {
     const originalFileNameWithoutSpace = originalFileName.replace(/\s+/g, '-');
 
     // Create a safe S3 key
-    const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
+    const s3Key = `${originalFileNameWithoutSpace}_${shortId}`;
 
     const s3Url = await this.s3Service.uploadFile(
       S3Bucket.OCR_FILE_TEMP,
@@ -237,7 +238,7 @@ export class StaffService {
       await this.categoryGeneralFileService.findOne(categoryGeneralFileId);
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const timestamp = Date.now();
+        const shortId = generateShortId();
 
         // Properly decode UTF-8 filename
         const originalFileName = Buffer.from(
@@ -250,7 +251,7 @@ export class StaffService {
         );
 
         // Create a safe S3 key
-        const s3Key = `${timestamp}_${originalFileNameWithoutSpace}`;
+        const s3Key = `${originalFileNameWithoutSpace}_${shortId}`;
 
         // Upload to S3
         const s3Url = await this.s3Service.uploadFile(
@@ -1130,7 +1131,7 @@ export class StaffService {
       const uploadedFiles: PatientFile[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const timestamp = Date.now();
+        const shortId = generateShortId();
 
         // Properly decode UTF-8 filename
         const originalFileName = Buffer.from(
@@ -1147,7 +1148,7 @@ export class StaffService {
           .join('.');
 
         // Create a safe S3 key without special characters
-        const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
+        const safeFileName = `${originalFileNameWithoutSpace}_${shortId}`;
         const s3Key = `session-${labSessionId}/${safeFileName}`;
 
         // Upload to S3
@@ -1270,7 +1271,7 @@ export class StaffService {
       // Upload files and create patient file records
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const timestamp = Date.now();
+        const shortId = generateShortId();
 
         // Properly decode UTF-8 filename
         const originalFileName = Buffer.from(
@@ -1287,7 +1288,7 @@ export class StaffService {
           .join('.');
 
         // Create a safe S3 key without special characters
-        const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
+        const safeFileName = `${originalFileNameWithoutSpace}_${shortId}`;
         const s3Key = `session-${labSession.id}/${safeFileName}`;
 
         // Upload to S3
@@ -1549,7 +1550,7 @@ export class StaffService {
           const file = files[fileIndex];
           const category = fileCategories[fileIndex];
 
-          const timestamp = Date.now();
+          const shortId = generateShortId();
           const originalFileName = Buffer.from(
             file.originalname,
             'binary',
@@ -1564,7 +1565,7 @@ export class StaffService {
             .join('.');
 
           // Create enhanced S3 key with category
-          const safeFileName = `${timestamp}_${originalFileNameWithoutSpace}`;
+          const safeFileName = `${originalFileNameWithoutSpace}_${shortId}`;
           const s3Key = `session-${labSession.id}/${category.category}/${safeFileName}`;
 
           // Upload to S3

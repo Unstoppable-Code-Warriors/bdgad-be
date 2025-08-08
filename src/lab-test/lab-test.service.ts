@@ -39,6 +39,7 @@ import { CreateMultiNotificationReqDto } from 'src/notification/dto/create-notif
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { Notifications } from 'src/entities/notification.entity';
 import { NotificationService } from 'src/notification/notification.service';
+import { generateShortId } from 'src/utils/generateShortId';
 
 @Injectable()
 export class LabTestService {
@@ -423,11 +424,11 @@ export class LabTestService {
     }
 
     try {
-      const timestamp = Date.now();
+      const shortId = generateShortId();
 
       // Upload both files to S3 and create FastqFile records
       const uploadPromises = files.map(async (file, index) => {
-        const s3Key = `fastq/${labcodeSession.id}/${timestamp}_${file.originalname}`;
+        const s3Key = `fastq/${labcodeSession.id}/${file.originalname}_${shortId}`;
 
         // Upload file to S3 (Cloudflare R2)
         const s3Url = await this.s3Service.uploadFile(

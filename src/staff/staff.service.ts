@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -62,6 +63,7 @@ import {
   FastqFilePair,
   FastqFileStatus,
 } from 'src/entities/fastq-file-pair.entity';
+import { RabbitmqService } from 'src/rabbitmq/rabbitmq.service';
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
   salesInvoice: Express.Multer.File;
@@ -113,6 +115,7 @@ export class StaffService {
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
+    private readonly rabbitmqService: RabbitmqService,
   ) {}
 
   async test(file: Express.Multer.File) {

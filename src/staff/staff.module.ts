@@ -16,6 +16,7 @@ import { CategoryGeneralFileModule } from 'src/category-general-file/category-ge
 import { FileValidationService } from './services/file-validation.service';
 import { FastqFilePair } from 'src/entities/fastq-file-pair.entity';
 import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
+import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
     ]),
     NotificationModule,
     CategoryGeneralFileModule,
+    RabbitmqModule,
   ],
   controllers: [StaffController],
   providers: [StaffService, S3Service, FileValidationService],

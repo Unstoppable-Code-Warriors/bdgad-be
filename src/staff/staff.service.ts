@@ -431,6 +431,7 @@ export class StaffService {
           'generalFile.fileSize',
           'generalFile.uploadedBy',
           'generalFile.uploadedAt',
+          'generalFile.sendEmrAt',
           'uploader.id',
           'uploader.name',
           'uploader.email',
@@ -1914,10 +1915,51 @@ export class StaffService {
         },
       });
 
-      // Update sendEmrAt for all general files
+      // Filter files that haven't been sent to EMR yet (sendEmrAt is null)
+      const filesToUpdate = generalFiles.filter(
+        (file) => file.sendEmrAt === null,
+      );
+
+      // If no files need to be updated, return early
+      if (filesToUpdate.length === 0) {
+        this.logger.log(
+          'All general files have already been sent to EMR. No updates needed.',
+        );
+
+        // Return the existing data without any updates
+        const result = categoriesWithFiles.map((category) => {
+          const categoryFiles = generalFiles.filter(
+            (file) => file.categoryId === category.id,
+          );
+
+          return {
+            id: category.id,
+            name: category.name,
+            description: category.description,
+            generalFiles: categoryFiles.map((file) => ({
+              id: file.id,
+              fileName: file.fileName,
+              fileType: file.fileType,
+              fileSize: file.fileSize,
+              filePath: file.filePath,
+              description: file.description,
+              categoryId: file.categoryId,
+              uploadedBy: file.uploadedBy,
+              uploadedAt: file.uploadedAt,
+              sendEmrAt: file.sendEmrAt,
+            })),
+          };
+        });
+
+        return result;
+      }
+
+      // Update sendEmrAt only for files that haven't been sent to EMR yet
       const currentDate = new Date();
+      const fileIdsToUpdate = filesToUpdate.map((file) => file.id);
+
       await this.generalFileRepository.update(
-        { categoryId: In(categoryGeneralFileIds) },
+        { id: In(fileIdsToUpdate) },
         { sendEmrAt: currentDate },
       );
 
@@ -1927,19 +1969,26 @@ export class StaffService {
           (file) => file.categoryId === category.id,
         );
 
-        // Update sendEmrAt in the response objects
-        const filesWithUpdatedSendEmrAt = categoryFiles.map((file) => ({
-          id: file.id,
-          fileName: file.fileName,
-          fileType: file.fileType,
-          fileSize: file.fileSize,
-          filePath: file.filePath,
-          description: file.description,
-          categoryId: file.categoryId,
-          uploadedBy: file.uploadedBy,
-          uploadedAt: file.uploadedAt,
-          sendEmrAt: currentDate,
-        }));
+        // Update sendEmrAt in the response objects only for files that were actually updated
+        const filesWithUpdatedSendEmrAt = categoryFiles.map((file) => {
+          // If this file was in the filesToUpdate list, use currentDate; otherwise, use existing sendEmrAt
+          const wasUpdated = filesToUpdate.some(
+            (updatedFile) => updatedFile.id === file.id,
+          );
+
+          return {
+            id: file.id,
+            fileName: file.fileName,
+            fileType: file.fileType,
+            fileSize: file.fileSize,
+            filePath: file.filePath,
+            description: file.description,
+            categoryId: file.categoryId,
+            uploadedBy: file.uploadedBy,
+            uploadedAt: file.uploadedAt,
+            sendEmrAt: wasUpdated ? currentDate : file.sendEmrAt,
+          };
+        });
 
         return {
           id: category.id,
@@ -1950,7 +1999,7 @@ export class StaffService {
       });
 
       this.logger.log(
-        `Successfully sent ${generalFiles.length} files from ${categoriesWithFiles.length} categories to EMR`,
+        `Successfully processed ${filesToUpdate.length} new files and ${generalFiles.length - filesToUpdate.length} already sent files from ${categoriesWithFiles.length} categories`,
       );
 
       return result;

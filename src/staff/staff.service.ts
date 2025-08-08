@@ -1691,6 +1691,14 @@ export class StaffService {
           labcode: sessionLabcodes,
         } as CreateNotificationReqDto);
 
+        // Trigger Airflow DAG for processing uploaded files
+        await this.triggerAirflowDAG(
+          uploadedFiles[0]?.s3Url,
+          user.id,
+          sessionLabcodes,
+          patient.barcode,
+        );
+
         // Validation summary
         const validationSummary =
           this.fileValidationService.validateMinimumRequirements(
@@ -2455,26 +2463,26 @@ export class StaffService {
     try {
       // Flatten the OCR data into rows
       const flattenedData = this.flattenOcrDataToRows(ocrData);
-      
+
       // Prepare data arrays for Arrow
       const fieldNames: string[] = [];
       const fieldValues: string[] = [];
       const createdAts: Date[] = [];
       const dataTypes: string[] = [];
-      
+
       for (const record of flattenedData) {
         fieldNames.push(record.field_name);
         fieldValues.push(record.field_value);
         createdAts.push(new Date());
         dataTypes.push('ocr_result');
       }
-      
+
       // Create Arrow vectors
       const fieldNameVector = arrow.vectorFromArray(fieldNames);
       const fieldValueVector = arrow.vectorFromArray(fieldValues);
       const createdAtVector = arrow.vectorFromArray(createdAts);
       const dataTypeVector = arrow.vectorFromArray(dataTypes);
-      
+
       // Create Arrow table
       const table = new arrow.Table({
         field_name: fieldNameVector,
@@ -2482,13 +2490,13 @@ export class StaffService {
         created_at: createdAtVector,
         data_type: dataTypeVector,
       });
-      
+
       // Serialize to Arrow IPC format (which can be read by Parquet readers)
       const buffer = arrow.tableToIPC(table, 'file');
-      
+
       // Convert Uint8Array to Buffer
       const resultBuffer = Buffer.from(buffer);
-      
+
       this.logger.log(
         `Generated Arrow/Parquet buffer with size: ${resultBuffer.length} bytes`,
       );
@@ -2512,17 +2520,21 @@ export class StaffService {
       field_value: string;
       confidence?: number;
     }> = [];
-    
+
     const flattenObject = (obj: any, prefix: string = '') => {
       for (const [key, value] of Object.entries(obj)) {
         const fieldName = prefix ? `${prefix}.${key}` : key;
-        
+
         if (value === null || value === undefined) {
           rows.push({
             field_name: fieldName,
             field_value: '',
           });
-        } else if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        } else if (
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          !(value instanceof Date)
+        ) {
           // For nested objects, recurse
           flattenObject(value, fieldName);
         } else if (Array.isArray(value)) {
@@ -2540,7 +2552,7 @@ export class StaffService {
         }
       }
     };
-    
+
     flattenObject(ocrData);
     return rows;
   }
@@ -2636,6 +2648,140 @@ export class StaffService {
 
     flatten(ocrData);
     return flattened;
+  }
+
+  /**
+   * Trigger Airflow DAG for processing uploaded patient files
+   */
+  private async triggerAirflowDAG(
+    s3Url: string,
+    doctorId: number,
+    labcodes: string[],
+    barcode: string,
+  ): Promise<void> {
+    try {
+      // Extract bio link from S3 URL (from beginning to session-{id} part)
+      const bioLink = this.extractBioLinkFromS3Url(s3Url);
+
+      const airflowUrl = this.configService.get<string>('AIRFLOW_URL');
+      const airflowUsername =
+        this.configService.get<string>('AIRFLOW_USERNAME');
+      const airflowPassword =
+        this.configService.get<string>('AIRFLOW_PASSWORD');
+
+      // Validate required configuration
+      if (!airflowUsername || !airflowPassword) {
+        this.logger.warn(
+          'Airflow credentials not configured, skipping DAG trigger',
+        );
+        return;
+      }
+
+      const dagRunPayload = {
+        conf: {
+          link_bio: bioLink,
+          doctor_id: doctorId.toString(),
+          labcode: labcodes.join(','), // Convert array to comma-separated string
+          barcode: barcode,
+        },
+        logical_date: new Date().toISOString(),
+      };
+
+      const authHeader = Buffer.from(
+        `${airflowUsername}:${airflowPassword}`,
+      ).toString('base64');
+
+      this.logger.log(
+        `Triggering Airflow DAG with payload: ${JSON.stringify(dagRunPayload)}`,
+      );
+      this.logger.log(`Using Airflow URL: ${airflowUrl}`);
+      this.logger.log(`Using Airflow username: ${airflowUsername}`);
+
+      const response = await this.httpService.axiosRef.post(
+        `${airflowUrl}/api/v1/dags/s3_download_process_dag/dagRuns`,
+        dagRunPayload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Basic ${authHeader}`,
+          },
+          timeout: 10000, // 10 second timeout
+        },
+      );
+
+      this.logger.log(
+        `Airflow DAG triggered successfully. Response status: ${response.status}`,
+      );
+      this.logger.log(`Airflow DAG response: ${JSON.stringify(response.data)}`);
+    } catch (error) {
+      this.logger.error('Failed to trigger Airflow DAG:', error);
+
+      if (error.response) {
+        this.logger.error(
+          `Airflow API responded with status: ${error.response.status}`,
+        );
+        this.logger.error(
+          `Airflow API response: ${JSON.stringify(error.response.data)}`,
+        );
+
+        if (error.response.status === 401) {
+          this.logger.error(
+            'Airflow authentication failed. Please check AIRFLOW_USERNAME and AIRFLOW_PASSWORD configuration.',
+          );
+        } else if (error.response.status === 404) {
+          this.logger.error(
+            'Airflow DAG not found. Please check if s3_download_process_dag exists.',
+          );
+        }
+      } else if (error.request) {
+        this.logger.error(
+          'No response received from Airflow API. Please check AIRFLOW_URL configuration and network connectivity.',
+        );
+      } else {
+        this.logger.error(`Error setting up Airflow request: ${error.message}`);
+      }
+
+      // Don't throw here - DAG trigger failure shouldn't break the main upload process
+      this.logger.warn(
+        'Continuing with upload process despite Airflow DAG trigger failure',
+      );
+    }
+  }
+
+  /**
+   * Extract bio link from S3 URL (from beginning to session-{id} part)
+   */
+  private extractBioLinkFromS3Url(s3Url: string): string {
+    try {
+      // Example: https://bucket.com/patient-files/session-76/category/file.jpg
+      // Should return: https://bucket.com/patient-files/session-76
+
+      const url = new URL(s3Url);
+      const pathParts = url.pathname.split('/');
+
+      // Find the session part (session-{id})
+      const sessionIndex = pathParts.findIndex((part) =>
+        part.startsWith('session-'),
+      );
+
+      if (sessionIndex === -1) {
+        this.logger.warn(`No session part found in S3 URL: ${s3Url}`);
+        return s3Url; // Return original URL if no session part found
+      }
+
+      // Take parts up to and including the session part
+      const bioLinkPath = pathParts.slice(0, sessionIndex + 1).join('/');
+      const bioLink = `${url.protocol}//${url.host}${bioLinkPath}`;
+
+      this.logger.log(`Extracted bio link: ${bioLink} from S3 URL: ${s3Url}`);
+      return bioLink;
+    } catch (error) {
+      this.logger.error(
+        `Failed to extract bio link from S3 URL: ${s3Url}`,
+        error,
+      );
+      return s3Url; // Return original URL as fallback
+    }
   }
 
   async testRb() {

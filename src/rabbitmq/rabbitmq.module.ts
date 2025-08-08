@@ -19,7 +19,7 @@ import { Env } from 'src/utils/constant';
             ],
             queue: 'general_file',
             queueOptions: {
-              durable: true,
+              durable: false,
             },
           },
         }),

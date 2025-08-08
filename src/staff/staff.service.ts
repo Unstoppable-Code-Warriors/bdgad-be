@@ -38,6 +38,7 @@ import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { GeneralFile } from 'src/entities/general-file.entity';
+import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
 import { LabCodeLabSession } from 'src/entities/labcode-lab-session.entity';
 import { AssignLabSession } from 'src/entities/assign-lab-session.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
@@ -107,6 +108,8 @@ export class StaffService {
     private readonly patientFileRepository: Repository<PatientFile>,
     @InjectRepository(FastqFilePair)
     private readonly fastqFilePairRepository: Repository<FastqFilePair>,
+    @InjectRepository(CategoryGeneralFile)
+    private readonly categoryGeneralFileRepository: Repository<CategoryGeneralFile>,
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
@@ -1847,6 +1850,116 @@ export class StaffService {
     );
 
     return presignedUrl;
+  }
+
+  async sendGeneralFileToEMR(categoryGeneralFileIds: number[]) {
+    this.logger.log('Starting General Files send to EMR process');
+    try {
+      // Validate that we have category IDs
+      if (!categoryGeneralFileIds || categoryGeneralFileIds.length === 0) {
+        throw new InternalServerErrorException('Category IDs are required');
+      }
+
+      // Fetch categories with their general files
+      const categoriesWithFiles = await this.categoryGeneralFileRepository.find(
+        {
+          where: {
+            id: In(categoryGeneralFileIds),
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+      );
+
+      if (categoriesWithFiles.length === 0) {
+        throw new InternalServerErrorException(
+          'No categories found with provided IDs',
+        );
+      }
+
+      // Get all general files for these categories
+      const generalFiles = await this.generalFileRepository.find({
+        where: {
+          categoryId: In(categoryGeneralFileIds),
+        },
+        relations: {
+          category: true,
+          uploader: true,
+        },
+        select: {
+          id: true,
+          fileName: true,
+          fileType: true,
+          fileSize: true,
+          filePath: true,
+          description: true,
+          categoryId: true,
+          uploadedBy: true,
+          uploadedAt: true,
+          sendEmrAt: true,
+          category: {
+            id: true,
+            name: true,
+            description: true,
+          },
+          uploader: {
+            id: true,
+            name: true,
+            email: true,
+            metadata: true,
+          },
+        },
+      });
+
+      // Update sendEmrAt for all general files
+      const currentDate = new Date();
+      await this.generalFileRepository.update(
+        { categoryId: In(categoryGeneralFileIds) },
+        { sendEmrAt: currentDate },
+      );
+
+      // Group files by category
+      const result = categoriesWithFiles.map((category) => {
+        const categoryFiles = generalFiles.filter(
+          (file) => file.categoryId === category.id,
+        );
+
+        // Update sendEmrAt in the response objects
+        const filesWithUpdatedSendEmrAt = categoryFiles.map((file) => ({
+          id: file.id,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          fileSize: file.fileSize,
+          filePath: file.filePath,
+          description: file.description,
+          categoryId: file.categoryId,
+          uploadedBy: file.uploadedBy,
+          uploadedAt: file.uploadedAt,
+          sendEmrAt: currentDate,
+        }));
+
+        return {
+          id: category.id,
+          name: category.name,
+          description: category.description,
+          generalFiles: filesWithUpdatedSendEmrAt,
+        };
+      });
+
+      this.logger.log(
+        `Successfully sent ${generalFiles.length} files from ${categoriesWithFiles.length} categories to EMR`,
+      );
+
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to send general files to EMR', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('General Files send to EMR process completed');
+    }
   }
 
   // Generates a unique labcode based on test type, package type, and sample type

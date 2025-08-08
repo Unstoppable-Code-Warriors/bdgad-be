@@ -44,6 +44,7 @@ import { GeneralFilesQueryDto } from './dtos/general-files-query.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
+import { SendGeneralFileToEMRDto } from './dtos/send-general-file-to-emr.dto';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
 
@@ -327,6 +328,31 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async getAllGeneralFiles(@Query() query: GeneralFilesQueryDto) {
     return this.staffService.getAllGeneralFiles(query);
+  }
+
+  @ApiTags('Staff - General Files')
+  @Post('/general-files/send-to-emr')
+  @ApiOperation({
+    summary: 'Send general files to EMR system',
+    description:
+      'Send multiple categories of general files to EMR system and update sendEmrAt timestamp',
+  })
+  @AuthZ([Role.STAFF])
+  @UsePipes(new ValidationPipe({ transform: true }))
+  @ApiBody({
+    type: SendGeneralFileToEMRDto,
+    examples: {
+      'example 1': {
+        value: {
+          categoryGeneralFileIds: [1, 6],
+        },
+      },
+    },
+  })
+  async sendGeneralFileToEMR(@Body() sendDto: SendGeneralFileToEMRDto) {
+    return this.staffService.sendGeneralFileToEMR(
+      sendDto.categoryGeneralFileIds,
+    );
   }
 
   // Patient api

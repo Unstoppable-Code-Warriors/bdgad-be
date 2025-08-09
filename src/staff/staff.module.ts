@@ -17,6 +17,7 @@ import { FileValidationService } from './services/file-validation.service';
 import { FastqFilePair } from 'src/entities/fastq-file-pair.entity';
 import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
 import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
+import { StaffQueueController } from './staff.queue.controller';
 
 @Module({
   imports: [
@@ -36,7 +37,7 @@ import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
     CategoryGeneralFileModule,
     RabbitmqModule,
   ],
-  controllers: [StaffController],
+  controllers: [StaffController, StaffQueueController],
   providers: [StaffService, S3Service, FileValidationService],
 })
 export class StaffModule {}

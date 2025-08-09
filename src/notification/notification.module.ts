@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
-import { NotificationGateway } from './notification.gateway';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Notifications } from 'src/entities/notification.entity';
 import { User } from 'src/entities/user.entity';
@@ -23,23 +22,7 @@ import { NotificationSseController } from './notification.sse.controller';
     }),
   ],
   controllers: [NotificationController, NotificationSseController],
-  providers: [
-    NotificationService,
-    NotificationGateway,
-    NotificationSseService,
-    {
-      provide: 'NOTIFICATION_GATEWAY_INIT',
-      useFactory: (
-        notificationService: NotificationService,
-        notificationGateway: NotificationGateway,
-      ) => {
-        // Set up the gateway reference in the service
-        notificationService.setGateway(notificationGateway);
-        return true;
-      },
-      inject: [NotificationService, NotificationGateway],
-    },
-  ],
-  exports: [NotificationService, NotificationGateway, NotificationSseService],
+  providers: [NotificationService, NotificationSseService],
+  exports: [NotificationService, NotificationSseService],
 })
 export class NotificationModule {}

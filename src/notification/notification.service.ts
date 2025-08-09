@@ -30,13 +30,6 @@ export class NotificationService {
 
   private logger = new Logger(NotificationService.name);
 
-  // Lazy injection to avoid circular dependency
-  private notificationGateway: any = null;
-
-  setGateway(gateway: any): void {
-    this.notificationGateway = gateway;
-  }
-
   /**
    * Validate taskType parameter
    */
@@ -135,7 +128,6 @@ export class NotificationService {
         senderId,
         receiverId,
         isRead: false,
-        createdAt: new Date(),
       });
 
       const savedNotification =
@@ -167,7 +159,7 @@ export class NotificationService {
         ])
         .getOne();
 
-      // Emit real-time events (SSE + WebSocket if available)
+      // Emit real-time events (SSE only)
       if (fullNotification) {
         try {
           this.sseService.emitNotificationCreated(receiverId, fullNotification);
@@ -175,24 +167,6 @@ export class NotificationService {
           this.logger.warn(
             `Failed to emit SSE notification: ${(e as Error).message}`,
           );
-        }
-
-        if (this.notificationGateway) {
-          try {
-            this.notificationGateway.emitNotificationToUser(
-              receiverId,
-              fullNotification,
-            );
-            this.logger.log(
-              `WebSocket notification sent to user ${receiverId}`,
-            );
-          } catch (wsError: unknown) {
-            const message =
-              wsError instanceof Error ? wsError.message : String(wsError);
-            this.logger.warn(
-              `Failed to emit WebSocket notification: ${message}`,
-            );
-          }
         }
       }
 
@@ -430,7 +404,7 @@ export class NotificationService {
       const updatedNotification =
         await this.notificationRepository.save(notification);
 
-      // Emit real-time events (SSE + WebSocket if available)
+      // Emit SSE only
       if (notification.receiverId) {
         try {
           this.sseService.emitNotificationUpdated(
@@ -441,24 +415,6 @@ export class NotificationService {
           this.logger.warn(
             `Failed to emit SSE notification update: ${(e as Error).message}`,
           );
-        }
-
-        if (this.notificationGateway) {
-          try {
-            this.notificationGateway.emitNotificationUpdateToUser(
-              notification.receiverId,
-              updatedNotification,
-            );
-            this.logger.log(
-              `WebSocket notification update sent to user ${notification.receiverId}`,
-            );
-          } catch (wsError: unknown) {
-            const message =
-              wsError instanceof Error ? wsError.message : String(wsError);
-            this.logger.warn(
-              `Failed to emit WebSocket notification update: ${message}`,
-            );
-          }
         }
       }
 

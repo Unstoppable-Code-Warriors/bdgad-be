@@ -4,7 +4,6 @@ import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { IoAdapter } from '@nestjs/platform-socket.io';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
@@ -33,9 +32,6 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     allowedHeaders: 'Content-Type, Authorization',
   });
-
-  // Configure WebSocket adapter
-  app.useWebSocketAdapter(new IoAdapter(app));
 
   app.setGlobalPrefix('api/v1');
   const config = new DocumentBuilder()

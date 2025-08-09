@@ -1707,13 +1707,13 @@ export class StaffService {
 
         // Send notification after successful commit
         await this.notificationService.createNotification({
-          title: 'Categorized Files Uploaded',
-          message: `Uploaded ${uploadedFiles.length} categorized files for patient ID ${patientId}`,
+          title: 'Đã tải lên hồ sơ theo phân loại',
+          message: `Đã tải lên ${uploadedFiles.length} tệp theo phân loại cho bệnh nhân ID ${patientId}`,
           type: TypeNotification.INFO,
           subType: SubTypeNotification.ACCEPT,
           taskType: TypeTaskNotification.LAB_TASK,
           senderId: user.id,
-          receiverId: user.id, // For now, send to same user
+          receiverId: user.id,
           labcode: sessionLabcodes,
         } as CreateNotificationReqDto);
 

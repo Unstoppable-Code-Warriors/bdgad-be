@@ -15,6 +15,7 @@ import {
   Body,
   Put,
   Logger,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
@@ -1182,9 +1183,59 @@ export class StaffController {
     return this.staffService.generateLabcode(request);
   }
 
-  @Get('pingpong')
+  @ApiTags('Staff - Pharmacy Patient')
+  @Get('pharmacy-patient')
+  @ApiOperation({ summary: 'Get all pharmacy patient records with pagination' })
   @AuthZ([Role.STAFF])
-  async pingPong() {
-    return this.staffService.testRb();
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (default: 1)',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page (default: 10, max: 100)',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Search by patient fullname or citizen ID',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description: 'Sort by field (default: updatedAt)',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    description: 'Sort order (ASC or DESC, default: DESC)',
+    type: String,
+  })
+  @UseGuards(AuthGuard, RolesGuard)
+  @AuthZ([Role.STAFF])
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getAllPharmacyPatient(@Query() query: PaginationQueryDto) {
+    return this.staffService.getAllPharmacyPatient(query);
+  }
+
+  @ApiTags('Staff - Pharmacy Patient')
+  @Get('pharmacy-patient/:id')
+  @ApiOperation({ summary: 'Get pharmacy patient record by ID' })
+  @ApiParam({
+    name: 'id',
+    required: true,
+    description: 'Pharmacy patient record ID',
+    type: Number,
+  })
+  @UseGuards(AuthGuard, RolesGuard)
+  @AuthZ([Role.STAFF])
+  async getPharmacyPatientById(@Param('id') id: number) {
+    return this.staffService.getPharmacyPatientById(id);
   }
 }

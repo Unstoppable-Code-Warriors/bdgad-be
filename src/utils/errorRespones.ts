@@ -243,3 +243,21 @@ export const errorLabcode = (errorMessage: string) => {
     400,
   );
 };
+
+export const errorPharmacyPatient = {
+  pharmacyPatientRecordNotFound: new ErrorResponse(
+    'PHARMACY_PATIENT_RECORD_NOT_FOUND',
+    'Pharmacy patient record not found',
+    404,
+  ),
+  invalidPharmacyPatientData: new ErrorResponse(
+    'INVALID_PHARMACY_PATIENT_DATA',
+    'Invalid pharmacy patient data provided',
+    400,
+  ),
+  citizenIdRequired: new ErrorResponse(
+    'CITIZEN_ID_REQUIRED',
+    'Citizen ID is required for pharmacy patient processing',
+    400,
+  ),
+};

@@ -1712,6 +1712,7 @@ export class StaffService {
           sessionLabcodes,
           patient.barcode,
           patient.id,
+          patient.citizenId,
         );
 
         // Validation summary
@@ -2676,6 +2677,7 @@ export class StaffService {
     labcodes: string[],
     barcode: string,
     patientId: number,
+    citizenId: string,
   ): Promise<void> {
     const execAsync = promisify(exec);
 

@@ -7,6 +7,8 @@ RUN npm ci
 # Stage 2: build the app
 FROM node:22.16.0 AS build
 WORKDIR /usr/src/app
+# Needed so npm can find scripts
+COPY package.json package-lock.json ./
 COPY tsconfig.json nest-cli.json ./
 COPY src ./src
 COPY --from=deps /usr/src/app/node_modules ./node_modules

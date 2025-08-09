@@ -34,6 +34,7 @@ import {
   errorOCR,
   errorPatient,
   errorPatientFile,
+  errorPharmacyPatient,
 } from 'src/utils/errorRespones';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
 import { UploadPatientFilesDto } from './dtos/upload-patient-files.dto';
@@ -45,10 +46,12 @@ import { GeneralFile } from 'src/entities/general-file.entity';
 import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
 import { LabCodeLabSession } from 'src/entities/labcode-lab-session.entity';
 import { AssignLabSession } from 'src/entities/assign-lab-session.entity';
+import { PharmacyPatient } from 'src/entities/pharmacy-patient.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
+import { PharmacyPatientDataDto } from './dtos/pharmacy-patient.dto';
 import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
 import { CategoryGeneralFileService } from 'src/category-general-file/category-general-file.service';
 import { FileValidationService } from './services/file-validation.service';
@@ -115,6 +118,8 @@ export class StaffService {
     private readonly fastqFilePairRepository: Repository<FastqFilePair>,
     @InjectRepository(CategoryGeneralFile)
     private readonly categoryGeneralFileRepository: Repository<CategoryGeneralFile>,
+    @InjectRepository(PharmacyPatient)
+    private readonly pharmacyRepository: Repository<PharmacyPatient>,
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
@@ -2845,7 +2850,195 @@ export class StaffService {
     }
   }
 
-  async testRb() {
-    this.rabbitmqService.emitEvent('ping', 'pong');
+  async processPharmacyPatientData(pharmacyData: PharmacyPatientDataDto) {
+    this.logger.log('Starting pharmacy patient data processing');
+    try {
+      const { patient, appointment, medical_record } = pharmacyData;
+      const citizenId = patient.citizen_id;
+
+      if (!citizenId) {
+        this.logger.error(
+          'Citizen ID is required for pharmacy patient processing',
+        );
+        return errorPharmacyPatient.citizenIdRequired;
+      }
+
+      // Check if pharmacy record exists for this citizen_id
+      let pharmacyRecord = await this.pharmacyRepository.findOne({
+        where: { citizenId },
+      });
+
+      if (pharmacyRecord) {
+        // Update existing record
+        this.logger.log(
+          `Updating existing pharmacy record for citizen ID: ${citizenId}`,
+        );
+        pharmacyRecord.patient = patient;
+        pharmacyRecord.appointment = appointment;
+        pharmacyRecord.medicalRecord = medical_record;
+        pharmacyRecord.updatedAt = new Date();
+
+        await this.pharmacyRepository.save(pharmacyRecord);
+        this.logger.log(
+          `Successfully updated pharmacy record for citizen ID: ${citizenId}`,
+        );
+
+        return {
+          message: 'Pharmacy patient data updated successfully',
+          recordId: pharmacyRecord.id,
+          citizenId: citizenId,
+        };
+      } else {
+        // Create new record
+        this.logger.log(
+          `Creating new pharmacy record for citizen ID: ${citizenId}`,
+        );
+        pharmacyRecord = this.pharmacyRepository.create({
+          citizenId,
+          patient,
+          appointment,
+          medicalRecord: medical_record,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        const savedRecord = await this.pharmacyRepository.save(pharmacyRecord);
+        this.logger.log(
+          `Successfully created pharmacy record for citizen ID: ${citizenId}`,
+        );
+
+        return {
+          message: 'Pharmacy patient data created successfully',
+          recordId: savedRecord.id,
+          citizenId: citizenId,
+        };
+      }
+    } catch (error) {
+      this.logger.error('Failed to process pharmacy patient data', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Pharmacy patient data processing completed');
+    }
+  }
+
+  async getAllPharmacyPatient(query: PaginationQueryDto) {
+    this.logger.log('Starting pharmacy patient get all process');
+    try {
+      const {
+        page = 1,
+        limit = 100,
+        search,
+        sortBy = 'updatedAt',
+        sortOrder = 'DESC',
+      } = query;
+
+      const queryBuilder = this.pharmacyRepository
+        .createQueryBuilder('pharmacy')
+        .select([
+          'pharmacy.id',
+          'pharmacy.citizenId',
+          'pharmacy.patient',
+          'pharmacy.appointment',
+          'pharmacy.medicalRecord',
+          'pharmacy.createdAt',
+          'pharmacy.updatedAt',
+        ]);
+
+      // Global search functionality - search by patient fullname and citizen_id
+      if (search) {
+        const searchTerm = `%${search.trim().toLowerCase()}%`;
+        queryBuilder.andWhere(
+          "(LOWER(pharmacy.citizenId) LIKE :search OR LOWER(pharmacy.patient->>'fullname') LIKE :search)",
+          { search: searchTerm },
+        );
+      }
+
+      // Sorting
+      const validSortFields = ['id', 'citizenId', 'createdAt', 'updatedAt'];
+      const sortField = validSortFields.includes(sortBy) ? sortBy : 'updatedAt';
+
+      queryBuilder.orderBy(`pharmacy.${sortField}`, sortOrder);
+
+      // Get total count before applying pagination
+      const total = await queryBuilder.getCount();
+
+      // Apply pagination
+      const offset = (page - 1) * limit;
+      queryBuilder.skip(offset).take(limit);
+
+      // Execute query
+      const pharmacyRecords = await queryBuilder.getMany();
+
+      // Transform the data to include patient fullname for easier frontend handling
+      const transformedRecords = pharmacyRecords.map((record) => ({
+        id: record.id,
+        citizenId: record.citizenId,
+        patientFullname: record.patient?.['fullname'] || 'N/A',
+        appointment: record.appointment,
+        patient: record.patient,
+        medicalRecord: record.medicalRecord,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      }));
+
+      // Return paginated response
+      return new PaginatedResponseDto(
+        transformedRecords,
+        page,
+        limit,
+        total,
+        'Pharmacy patient records retrieved successfully',
+      );
+    } catch (error) {
+      this.logger.error('Failed to get all pharmacy patient records', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Pharmacy patient get all process completed');
+    }
+  }
+
+  async getPharmacyPatientById(id: number) {
+    this.logger.log('Starting pharmacy patient get by ID process');
+    try {
+      const pharmacyRecord = await this.pharmacyRepository.findOne({
+        where: { id },
+        select: {
+          id: true,
+          citizenId: true,
+          patient: true,
+          appointment: true,
+          medicalRecord: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!pharmacyRecord) {
+        this.logger.warn(`Pharmacy patient record not found for ID: ${id}`);
+        return errorPharmacyPatient.pharmacyPatientRecordNotFound;
+      }
+
+      // Transform the data to include patient fullname for easier frontend handling
+      const transformedRecord = {
+        id: pharmacyRecord.id,
+        citizenId: pharmacyRecord.citizenId,
+        patientFullname: pharmacyRecord.patient?.['fullname'] || 'N/A',
+        appointment: pharmacyRecord.appointment,
+        patient: pharmacyRecord.patient,
+        medicalRecord: pharmacyRecord.medicalRecord,
+        createdAt: pharmacyRecord.createdAt,
+        updatedAt: pharmacyRecord.updatedAt,
+      };
+
+      this.logger.log(
+        `Successfully retrieved pharmacy patient record for ID: ${id}`,
+      );
+      return transformedRecord;
+    } catch (error) {
+      this.logger.error('Failed to get pharmacy patient record by ID', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Pharmacy patient get by ID process completed');
+    }
   }
 }

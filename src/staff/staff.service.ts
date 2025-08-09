@@ -1031,6 +1031,8 @@ export class StaffService {
           labcodes: {
             id: true,
             labcode: true,
+            packageType: true,
+            sampleType: true,
             assignment: {
               id: true,
               doctor: {
@@ -1052,6 +1054,7 @@ export class StaffService {
             fileType: true,
             fileSize: true,
             ocrResult: true,
+            fileCategory: true,
             uploader: {
               id: true,
               email: true,

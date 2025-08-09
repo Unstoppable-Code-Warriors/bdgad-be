@@ -128,6 +128,8 @@ export class LabTestService {
         .select([
           'labcode.id',
           'labcode.labcode',
+          'labcode.packageType',
+          'labcode.sampleType',
           'labcode.createdAt',
           'labSession.id',
           'labSession.patientId',
@@ -245,6 +247,8 @@ export class LabTestService {
         return {
           id: labcode.id,
           labcode: [labcode.labcode],
+          packageType: labcode.packageType || null,
+          sampleType: labcode.sampleType || null,
           barcode: labcode.labSession.patient.barcode,
           requestDateLabTesting:
             labcode.assignment?.requestDateLabTesting || null,

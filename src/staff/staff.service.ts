@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import * as arrow from 'apache-arrow';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 import { In, Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -2651,7 +2653,7 @@ export class StaffService {
   }
 
   /**
-   * Trigger Airflow DAG for processing uploaded patient files
+   * Trigger Airflow DAG for processing uploaded patient files using curl command
    */
   private async triggerAirflowDAG(
     s3Url: string,
@@ -2659,6 +2661,8 @@ export class StaffService {
     labcodes: string[],
     barcode: string,
   ): Promise<void> {
+    const execAsync = promisify(exec);
+
     try {
       // Extract bio link from S3 URL (from beginning to session-{id} part)
       const bioLink = this.extractBioLinkFromS3Url(s3Url);
@@ -2687,58 +2691,86 @@ export class StaffService {
         logical_date: new Date().toISOString(),
       };
 
-      const authHeader = Buffer.from(
-        `${airflowUsername}:${airflowPassword}`,
-      ).toString('base64');
-
       this.logger.log(
         `Triggering Airflow DAG with payload: ${JSON.stringify(dagRunPayload)}`,
       );
       this.logger.log(`Using Airflow URL: ${airflowUrl}`);
       this.logger.log(`Using Airflow username: ${airflowUsername}`);
 
-      const response = await this.httpService.axiosRef.post(
-        `${airflowUrl}/api/v1/dags/s3_download_process_dag/dagRuns`,
-        dagRunPayload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Basic ${authHeader}`,
-          },
-          timeout: 10000, // 10 second timeout
-        },
-      );
+      // Construct curl command for Airflow DAG trigger
+      const curlCommand = [
+        'curl',
+        '-X POST',
+        `"${airflowUrl}/api/v1/dags/s3_download_process_dag/dagRuns"`,
+        '-H "Content-Type: application/json"',
+        `-u "${airflowUsername}:${airflowPassword}"`,
+        '--connect-timeout 10',
+        '--max-time 30',
+        '-w "%{http_code}"',
+        '-s',
+        `-d '${JSON.stringify(dagRunPayload)}'`,
+      ].join(' ');
 
-      this.logger.log(
-        `Airflow DAG triggered successfully. Response status: ${response.status}`,
-      );
-      this.logger.log(`Airflow DAG response: ${JSON.stringify(response.data)}`);
-    } catch (error) {
-      this.logger.error('Failed to trigger Airflow DAG:', error);
+      this.logger.log(`Executing curl command: ${curlCommand}`);
 
-      if (error.response) {
-        this.logger.error(
-          `Airflow API responded with status: ${error.response.status}`,
-        );
-        this.logger.error(
-          `Airflow API response: ${JSON.stringify(error.response.data)}`,
-        );
+      const { stdout, stderr } = await execAsync(curlCommand, {
+        timeout: 30000, // 30 second timeout
+      });
 
-        if (error.response.status === 401) {
-          this.logger.error(
-            'Airflow authentication failed. Please check AIRFLOW_USERNAME and AIRFLOW_PASSWORD configuration.',
-          );
-        } else if (error.response.status === 404) {
-          this.logger.error(
-            'Airflow DAG not found. Please check if s3_download_process_dag exists.',
-          );
+      // Parse the response (last 3 characters should be HTTP status code)
+      const responseBody = stdout.slice(0, -3);
+      const httpStatusCode = stdout.slice(-3);
+
+      this.logger.log(`Curl HTTP status code: ${httpStatusCode}`);
+      this.logger.log(`Curl response body: ${responseBody}`);
+
+      if (stderr) {
+        this.logger.warn(`Curl stderr: ${stderr}`);
+      }
+
+      // Check if the HTTP status code indicates success (2xx)
+      const statusCode = parseInt(httpStatusCode, 10);
+      if (statusCode >= 200 && statusCode < 300) {
+        this.logger.log('Airflow DAG triggered successfully via curl');
+
+        // Try to parse response as JSON if it's not empty
+        if (responseBody.trim()) {
+          try {
+            const jsonResponse = JSON.parse(responseBody);
+            this.logger.log(
+              `Airflow DAG response: ${JSON.stringify(jsonResponse)}`,
+            );
+          } catch (parseError) {
+            this.logger.log(`Airflow raw response: ${responseBody}`);
+          }
         }
-      } else if (error.request) {
+      } else {
+        throw new Error(`HTTP ${statusCode}: ${responseBody}`);
+      }
+    } catch (error) {
+      this.logger.error('Failed to trigger Airflow DAG via curl:', error);
+
+      if (error.code === 'ETIMEDOUT') {
         this.logger.error(
-          'No response received from Airflow API. Please check AIRFLOW_URL configuration and network connectivity.',
+          'Curl command timed out. Please check Airflow server connectivity.',
+        );
+      } else if (error.message.includes('HTTP 401')) {
+        this.logger.error(
+          'Airflow authentication failed. Please check AIRFLOW_USERNAME and AIRFLOW_PASSWORD configuration.',
+        );
+      } else if (error.message.includes('HTTP 404')) {
+        this.logger.error(
+          'Airflow DAG not found. Please check if s3_download_process_dag exists.',
+        );
+      } else if (
+        error.message.includes('command not found') ||
+        error.message.includes('curl')
+      ) {
+        this.logger.error(
+          'Curl command not found. Please ensure curl is installed on the system.',
         );
       } else {
-        this.logger.error(`Error setting up Airflow request: ${error.message}`);
+        this.logger.error(`Curl execution error: ${error.message}`);
       }
 
       // Don't throw here - DAG trigger failure shouldn't break the main upload process

@@ -32,20 +32,6 @@ export class FileCategoryDto {
   category: FileCategory;
 
   @ApiProperty({
-    description: 'Processing priority (1-10, higher number = higher priority)',
-    example: 5,
-    required: false,
-    minimum: 1,
-    maximum: 10,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(10)
-  @Type(() => Number)
-  priority?: number;
-
-  @ApiProperty({
     description: 'Original file name for reference',
     example: 'hereditary_cancer_form.pdf',
   })
@@ -135,12 +121,10 @@ export class UploadCategorizedFilesDto {
     example: [
       {
         category: 'hereditary_cancer',
-        priority: 8,
         fileName: 'hereditary_cancer_form.pdf',
       },
       {
         category: 'gene_mutation',
-        priority: 7,
         fileName: 'gene_mutation_test.jpg',
       },
     ],

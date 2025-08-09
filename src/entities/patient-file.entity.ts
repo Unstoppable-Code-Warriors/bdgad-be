@@ -53,13 +53,6 @@ export class PatientFile {
   fileCategory?: string;
 
   @Column({
-    name: 'processing_priority',
-    nullable: true,
-    default: 5,
-  })
-  processingPriority?: number;
-
-  @Column({
     name: 'ocr_confidence',
     type: 'decimal',
     precision: 3,

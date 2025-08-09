@@ -5,6 +5,7 @@ import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -45,6 +46,23 @@ async function bootstrap() {
       whitelist: true,
     }),
   );
+
+  const rmqUrl =
+    configService.get<string>('RABBITMQ_URL') || 'amqp://localhost:5672';
+  const microserviceOptions: MicroserviceOptions = {
+    transport: Transport.RMQ,
+    options: {
+      urls: [rmqUrl],
+      queue: 'pharmacy_be',
+      queueOptions: {
+        durable: false,
+      },
+    },
+  };
+
+  app.connectMicroservice(microserviceOptions);
+  await app.startAllMicroservices();
+
   await app.listen(configService.get('PORT') ?? 3000);
 }
 void bootstrap();

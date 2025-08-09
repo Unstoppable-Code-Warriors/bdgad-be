@@ -11,6 +11,7 @@ import { AnalysisModule } from './analysis/analysis.module';
 import { ValidationModule } from './validation/validation.module';
 import { NotificationModule } from './notification/notification.module';
 import { CategoryGeneralFileModule } from './category-general-file/category-general-file.module';
+import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { CategoryGeneralFileModule } from './category-general-file/category-gene
         S3_ENDPOINT: Joi.string().required(),
         S3_ACCESS_KEY_ID: Joi.string().required(),
         S3_SECRET_ACCESS_KEY: Joi.string().required(),
+        RABBITMQ_URL: Joi.string().required(),
       }),
     }),
     HttpModule.register({
@@ -43,6 +45,7 @@ import { CategoryGeneralFileModule } from './category-general-file/category-gene
     ValidationModule,
     NotificationModule,
     CategoryGeneralFileModule,
+    RabbitmqModule,
   ],
   controllers: [],
   providers: [],

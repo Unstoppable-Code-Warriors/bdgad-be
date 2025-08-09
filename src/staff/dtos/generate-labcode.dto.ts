@@ -95,6 +95,21 @@ export class GenerateLabcodeResponseDto {
   randomNumber: string;
 
   @ApiProperty({
+    example: 'NIPT 5',
+    description: 'Package type used for labcode generation',
+    required: false,
+  })
+  packageType?: string;
+
+  @ApiProperty({
+    enum: SampleType,
+    example: SampleType.BIOPSY_TISSUE_FFPE,
+    description: 'Sample type used for labcode generation (if applicable)',
+    required: false,
+  })
+  sampleType?: SampleType;
+
+  @ApiProperty({
     example: 'Labcode generated successfully',
     description: 'Response message',
   })

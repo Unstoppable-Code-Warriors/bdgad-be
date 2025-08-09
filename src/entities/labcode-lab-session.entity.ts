@@ -25,6 +25,12 @@ export class LabCodeLabSession {
   @Column({ name: 'labcode', type: 'varchar' })
   labcode: string;
 
+  @Column({ name: 'package_type', type: 'varchar', nullable: true })
+  packageType?: string;
+
+  @Column({ name: 'sample_type', type: 'varchar', nullable: true })
+  sampleType?: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

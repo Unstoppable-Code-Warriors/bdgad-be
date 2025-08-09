@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -7,6 +8,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import * as arrow from 'apache-arrow';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 import { In, Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -38,6 +42,7 @@ import { Patient } from 'src/entities/patient.entity';
 import { LabSession } from 'src/entities/lab-session.entity';
 import { PatientFile } from 'src/entities/patient-file.entity';
 import { GeneralFile } from 'src/entities/general-file.entity';
+import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
 import { LabCodeLabSession } from 'src/entities/labcode-lab-session.entity';
 import { AssignLabSession } from 'src/entities/assign-lab-session.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
@@ -61,6 +66,7 @@ import {
   FastqFilePair,
   FastqFileStatus,
 } from 'src/entities/fastq-file-pair.entity';
+import { RabbitmqService } from 'src/rabbitmq/rabbitmq.service';
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
   salesInvoice: Express.Multer.File;
@@ -107,9 +113,12 @@ export class StaffService {
     private readonly patientFileRepository: Repository<PatientFile>,
     @InjectRepository(FastqFilePair)
     private readonly fastqFilePairRepository: Repository<FastqFilePair>,
+    @InjectRepository(CategoryGeneralFile)
+    private readonly categoryGeneralFileRepository: Repository<CategoryGeneralFile>,
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
+    private readonly rabbitmqService: RabbitmqService, // Assuming this is the correct service to inject
   ) {}
 
   async test(file: Express.Multer.File) {
@@ -428,6 +437,7 @@ export class StaffService {
           'generalFile.fileSize',
           'generalFile.uploadedBy',
           'generalFile.uploadedAt',
+          'generalFile.sendEmrAt',
           'uploader.id',
           'uploader.name',
           'uploader.email',
@@ -1021,6 +1031,8 @@ export class StaffService {
           labcodes: {
             id: true,
             labcode: true,
+            packageType: true,
+            sampleType: true,
             assignment: {
               id: true,
               doctor: {
@@ -1042,6 +1054,7 @@ export class StaffService {
             fileType: true,
             fileSize: true,
             ocrResult: true,
+            fileCategory: true,
             uploader: {
               id: true,
               email: true,
@@ -1384,6 +1397,10 @@ export class StaffService {
 
       // Generate labcodes automatically from OCR results and file categories
       const sessionLabcodes: string[] = [];
+      const labcodeResponsesMap: Map<
+        string,
+        { packageType?: string; sampleType?: string }
+      > = new Map();
 
       // Extract test types from file categories
       const testTypes = this.extractTestTypesFromCategories(fileCategories);
@@ -1463,7 +1480,18 @@ export class StaffService {
 
         try {
           const labcodeResponse = await this.generateLabcode(labcodeRequest);
+          console.log(
+            `Generated labcode response for test type ${testType}:`,
+            labcodeResponse,
+          );
           sessionLabcodes.push(labcodeResponse.labcode);
+
+          // Store the packageType and sampleType for later use
+          labcodeResponsesMap.set(labcodeResponse.labcode, {
+            packageType: labcodeResponse.packageType,
+            sampleType: labcodeResponse.sampleType,
+          });
+
           this.logger.log(
             `Generated labcode: ${labcodeResponse.labcode} for test type: ${testType}`,
           );
@@ -1487,6 +1515,10 @@ export class StaffService {
         const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
         const defaultLabcode = `O5${letter}${number}${letter}`;
         sessionLabcodes.push(defaultLabcode);
+
+        // Store default labcode in the map without packageType and sampleType
+        labcodeResponsesMap.set(defaultLabcode, {});
+
         this.logger.log(
           `Generated fallback default labcode: ${defaultLabcode}`,
         );
@@ -1516,11 +1548,13 @@ export class StaffService {
         // Create labcode entries
         const labcodeEntities: LabCodeLabSession[] = [];
         for (const labcodeItem of sessionLabcodes) {
-          const labcodeEntity = queryRunner.manager.create(LabCodeLabSession, {
-            labSessionId: labSession.id,
-            labcode: labcodeItem,
-            createdAt: new Date(),
-          });
+          const labcodeMetadata = labcodeResponsesMap.get(labcodeItem);
+          const labcodeEntity = new LabCodeLabSession();
+          labcodeEntity.labSessionId = labSession.id;
+          labcodeEntity.labcode = labcodeItem;
+          labcodeEntity.packageType = labcodeMetadata?.packageType;
+          labcodeEntity.sampleType = labcodeMetadata?.sampleType;
+          labcodeEntity.createdAt = new Date();
           labcodeEntities.push(labcodeEntity);
         }
         await queryRunner.manager.save(labcodeEntities);
@@ -1538,16 +1572,15 @@ export class StaffService {
         await queryRunner.manager.save(assignments);
         this.logger.log(`Created ${assignments.length} assignment records`);
 
-        // Get processing order based on priority
+        // Get processing order
         const processingOrder =
           this.fileValidationService.getProcessingOrder(fileCategories);
 
-        // Upload files in priority order
+        // Upload files in processing order
         const uploadedFiles: Array<{
           id: number;
           fileName: string;
           category: string;
-          priority: number;
           fileSize: number;
           s3Url: string;
         }> = [];
@@ -1571,7 +1604,7 @@ export class StaffService {
             .join('.');
 
           // Create enhanced S3 key with category
-          const safeFileName = `${originalFileNameWithoutSpace}_${shortId}`;
+          const safeFileName = `${originalFileNameWithoutSpace}`;
           const s3Key = `session-${labSession.id}/${category.category}/${safeFileName}`;
 
           // Upload to S3
@@ -1588,6 +1621,57 @@ export class StaffService {
               ocr.fileIndex === fileIndex && ocr.category === category.category,
           );
 
+          // Save OCR result as JSON file to S3 if available
+          if (
+            correspondingOCR?.ocrData &&
+            Object.keys(correspondingOCR.ocrData).length > 0
+          ) {
+            try {
+              // Save as JSON
+              const ocrJsonKey = `session-${labSession.id}/${category.category}/ocr-result.json`;
+              const ocrJsonData = JSON.stringify(
+                correspondingOCR.ocrData,
+                null,
+                2,
+              );
+              const ocrJsonBuffer = Buffer.from(ocrJsonData, 'utf8');
+
+              await this.s3Service.uploadFile(
+                S3Bucket.PATIENT_FILES,
+                ocrJsonKey,
+                ocrJsonBuffer,
+                'application/json',
+              );
+
+              this.logger.log(
+                `Saved OCR result JSON for file: ${file.originalname} at key: ${ocrJsonKey}`,
+              );
+
+              // Save as Arrow format (Parquet-compatible)
+              const ocrParquetKey = `session-${labSession.id}/${category.category}/ocr-result.parquet`;
+              const parquetBuffer = await this.convertOcrToParquet(
+                correspondingOCR.ocrData,
+              );
+
+              await this.s3Service.uploadFile(
+                S3Bucket.PATIENT_FILES,
+                ocrParquetKey,
+                parquetBuffer,
+                'application/x-parquet',
+              );
+
+              this.logger.log(
+                `Saved OCR result Parquet for file: ${file.originalname} at key: ${ocrParquetKey}`,
+              );
+            } catch (ocrUploadError) {
+              this.logger.error(
+                `Failed to upload OCR result files for file ${file.originalname}:`,
+                ocrUploadError,
+              );
+              // Don't throw here - OCR upload failure shouldn't break the main file upload
+            }
+          }
+
           // Create patient file record with enhanced metadata using transaction manager
           const patientFile = queryRunner.manager.create(PatientFile, {
             sessionId: labSession.id,
@@ -1600,7 +1684,6 @@ export class StaffService {
             uploadedAt: new Date(),
             // Enhanced metadata
             fileCategory: category.category,
-            processingPriority: category.priority || 5,
             ocrConfidence: correspondingOCR?.confidence,
           });
 
@@ -1609,7 +1692,6 @@ export class StaffService {
             id: savedFile.id,
             fileName: file.originalname,
             category: category.category,
-            priority: category.priority || 5,
             fileSize: file.size,
             s3Url,
           });
@@ -1634,6 +1716,14 @@ export class StaffService {
           receiverId: user.id, // For now, send to same user
           labcode: sessionLabcodes,
         } as CreateNotificationReqDto);
+
+        // Trigger Airflow DAG for processing uploaded files
+        await this.triggerAirflowDAG(
+          uploadedFiles[0]?.s3Url,
+          user.id,
+          sessionLabcodes,
+          patient.barcode,
+        );
 
         // Validation summary
         const validationSummary =
@@ -1849,6 +1939,168 @@ export class StaffService {
     return presignedUrl;
   }
 
+  async sendGeneralFileToEMR(categoryGeneralFileIds: number[]) {
+    this.logger.log('Starting General Files send to EMR process');
+    try {
+      // Validate that we have category IDs
+      if (!categoryGeneralFileIds || categoryGeneralFileIds.length === 0) {
+        throw new InternalServerErrorException('Category IDs are required');
+      }
+
+      // Fetch categories with their general files
+      const categoriesWithFiles = await this.categoryGeneralFileRepository.find(
+        {
+          where: {
+            id: In(categoryGeneralFileIds),
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+      );
+
+      if (categoriesWithFiles.length === 0) {
+        throw new InternalServerErrorException(
+          'No categories found with provided IDs',
+        );
+      }
+
+      // Get all general files for these categories
+      const generalFiles = await this.generalFileRepository.find({
+        where: {
+          categoryId: In(categoryGeneralFileIds),
+        },
+        relations: {
+          category: true,
+          uploader: true,
+        },
+        select: {
+          id: true,
+          fileName: true,
+          fileType: true,
+          fileSize: true,
+          filePath: true,
+          description: true,
+          categoryId: true,
+          uploadedBy: true,
+          uploadedAt: true,
+          sendEmrAt: true,
+          category: {
+            id: true,
+            name: true,
+            description: true,
+          },
+          uploader: {
+            id: true,
+            name: true,
+            email: true,
+            metadata: true,
+          },
+        },
+      });
+
+      // Filter files that haven't been sent to EMR yet (sendEmrAt is null)
+      const filesToUpdate = generalFiles.filter(
+        (file) => file.sendEmrAt === null,
+      );
+
+      // If no files need to be updated, return early
+      if (filesToUpdate.length === 0) {
+        this.logger.log(
+          'All general files have already been sent to EMR. No updates needed.',
+        );
+
+        // Return the existing data without any updates
+        const result = categoriesWithFiles.map((category) => {
+          const categoryFiles = generalFiles.filter(
+            (file) => file.categoryId === category.id,
+          );
+
+          return {
+            id: category.id,
+            name: category.name,
+            description: category.description,
+            generalFiles: categoryFiles.map((file) => ({
+              id: file.id,
+              fileName: file.fileName,
+              fileType: file.fileType,
+              fileSize: file.fileSize,
+              filePath: file.filePath,
+              description: file.description,
+              categoryId: file.categoryId,
+              uploadedBy: file.uploadedBy,
+              uploadedAt: file.uploadedAt,
+              sendEmrAt: file.sendEmrAt,
+            })),
+          };
+        });
+
+        return result;
+      }
+
+      // Update sendEmrAt only for files that haven't been sent to EMR yet
+      const currentDate = new Date();
+      const fileIdsToUpdate = filesToUpdate.map((file) => file.id);
+
+      await this.generalFileRepository.update(
+        { id: In(fileIdsToUpdate) },
+        { sendEmrAt: currentDate },
+      );
+
+      // Group files by category
+      const result = categoriesWithFiles.map((category) => {
+        const categoryFiles = generalFiles.filter(
+          (file) => file.categoryId === category.id,
+        );
+
+        // Update sendEmrAt in the response objects only for files that were actually updated
+        const filesWithUpdatedSendEmrAt = categoryFiles.map((file) => {
+          // If this file was in the filesToUpdate list, use currentDate; otherwise, use existing sendEmrAt
+          const wasUpdated = filesToUpdate.some(
+            (updatedFile) => updatedFile.id === file.id,
+          );
+
+          return {
+            id: file.id,
+            fileName: file.fileName,
+            fileType: file.fileType,
+            fileSize: file.fileSize,
+            filePath: file.filePath,
+            description: file.description,
+            categoryId: file.categoryId,
+            uploadedBy: file.uploadedBy,
+            uploadedAt: file.uploadedAt,
+            sendEmrAt: wasUpdated ? currentDate : file.sendEmrAt,
+          };
+        });
+
+        return {
+          id: category.id,
+          name: category.name,
+          description: category.description,
+          generalFiles: filesWithUpdatedSendEmrAt,
+        };
+      });
+
+      this.logger.log(
+        `Successfully processed ${filesToUpdate.length} new files and ${generalFiles.length - filesToUpdate.length} already sent files from ${categoriesWithFiles.length} categories`,
+      );
+
+      // Send success result to RabbitMQ
+
+      await this.rabbitmqService.sendMessage('folder-batch', result);
+      this.logger.log('Success result sent to RabbitMQ');
+    } catch (rabbitError) {
+      this.logger.error(
+        'Failed to send success message to RabbitMQ',
+        rabbitError,
+      );
+      // Don't throw here - we don't want to fail the main operation
+    }
+  }
+
   // Generates a unique labcode based on test type, package type, and sample type
   async generateLabcode(
     request: GenerateLabcodeRequestDto,
@@ -1878,6 +2130,8 @@ export class StaffService {
         testCode,
         randomLetter,
         randomNumber,
+        packageType,
+        sampleType,
         message: 'Labcode generated successfully',
       };
     } catch (error) {
@@ -2228,5 +2482,377 @@ export class StaffService {
       testType: TestType.HEREDITARY_CANCER,
       packageType,
     };
+  }
+
+  /**
+   * Convert OCR data to Parquet format
+   */
+  private async convertOcrToParquet(ocrData: any): Promise<Buffer> {
+    try {
+      // Flatten the OCR data into rows
+      const flattenedData = this.flattenOcrDataToRows(ocrData);
+
+      // Prepare data arrays for Arrow
+      const fieldNames: string[] = [];
+      const fieldValues: string[] = [];
+      const createdAts: Date[] = [];
+      const dataTypes: string[] = [];
+
+      for (const record of flattenedData) {
+        fieldNames.push(record.field_name);
+        fieldValues.push(record.field_value);
+        createdAts.push(new Date());
+        dataTypes.push('ocr_result');
+      }
+
+      // Create Arrow vectors
+      const fieldNameVector = arrow.vectorFromArray(fieldNames);
+      const fieldValueVector = arrow.vectorFromArray(fieldValues);
+      const createdAtVector = arrow.vectorFromArray(createdAts);
+      const dataTypeVector = arrow.vectorFromArray(dataTypes);
+
+      // Create Arrow table
+      const table = new arrow.Table({
+        field_name: fieldNameVector,
+        field_value: fieldValueVector,
+        created_at: createdAtVector,
+        data_type: dataTypeVector,
+      });
+
+      // Serialize to Arrow IPC format (which can be read by Parquet readers)
+      const buffer = arrow.tableToIPC(table, 'file');
+
+      // Convert Uint8Array to Buffer
+      const resultBuffer = Buffer.from(buffer);
+
+      this.logger.log(
+        `Generated Arrow/Parquet buffer with size: ${resultBuffer.length} bytes`,
+      );
+      return resultBuffer;
+    } catch (error) {
+      this.logger.error('Failed to convert OCR data to Arrow format:', error);
+      throw new Error(`Arrow conversion failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Flatten OCR data into rows for Parquet storage
+   */
+  private flattenOcrDataToRows(ocrData: any): Array<{
+    field_name: string;
+    field_value: string;
+    confidence?: number;
+  }> {
+    const rows: Array<{
+      field_name: string;
+      field_value: string;
+      confidence?: number;
+    }> = [];
+
+    const flattenObject = (obj: any, prefix: string = '') => {
+      for (const [key, value] of Object.entries(obj)) {
+        const fieldName = prefix ? `${prefix}.${key}` : key;
+
+        if (value === null || value === undefined) {
+          rows.push({
+            field_name: fieldName,
+            field_value: '',
+          });
+        } else if (
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          !(value instanceof Date)
+        ) {
+          // For nested objects, recurse
+          flattenObject(value, fieldName);
+        } else if (Array.isArray(value)) {
+          // Convert arrays to JSON string
+          rows.push({
+            field_name: fieldName,
+            field_value: JSON.stringify(value),
+          });
+        } else {
+          // For primitive values
+          rows.push({
+            field_name: fieldName,
+            field_value: String(value),
+          });
+        }
+      }
+    };
+
+    flattenObject(ocrData);
+    return rows;
+  }
+
+  /**
+   * Generate Parquet schema dynamically based on OCR data structure
+   */
+  private generateParquetSchema(ocrData: any): any {
+    const schema: any = {};
+
+    const processValue = (key: string, value: any) => {
+      if (value === null || value === undefined) {
+        schema[key] = { type: 'UTF8', optional: true };
+      } else if (typeof value === 'string') {
+        schema[key] = { type: 'UTF8', optional: true };
+      } else if (typeof value === 'number') {
+        if (Number.isInteger(value)) {
+          schema[key] = { type: 'INT64', optional: true };
+        } else {
+          schema[key] = { type: 'DOUBLE', optional: true };
+        }
+      } else if (typeof value === 'boolean') {
+        schema[key] = { type: 'BOOLEAN', optional: true };
+      } else if (value instanceof Date) {
+        schema[key] = { type: 'TIMESTAMP_MILLIS', optional: true };
+      } else if (typeof value === 'object') {
+        // For nested objects, convert to JSON string
+        schema[key] = { type: 'UTF8', optional: true };
+      } else {
+        // Default to string for unknown types
+        schema[key] = { type: 'UTF8', optional: true };
+      }
+    };
+
+    // Process all keys in the OCR data
+    this.processObjectKeys(ocrData, '', processValue);
+
+    return schema;
+  }
+
+  /**
+   * Recursively process object keys for schema generation
+   */
+  private processObjectKeys(
+    obj: any,
+    prefix: string,
+    callback: (key: string, value: any) => void,
+  ) {
+    for (const [key, value] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}_${key}` : key;
+
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        !(value instanceof Date)
+      ) {
+        // For nested objects, flatten them
+        this.processObjectKeys(value, fullKey, callback);
+      } else {
+        callback(fullKey, value);
+      }
+    }
+  }
+
+  /**
+   * Flatten OCR data for Parquet storage
+   */
+  private flattenOcrData(ocrData: any): any {
+    const flattened: any = {};
+
+    const flatten = (obj: any, prefix: string = '') => {
+      for (const [key, value] of Object.entries(obj)) {
+        const newKey = prefix ? `${prefix}_${key}` : key;
+
+        if (value === null || value === undefined) {
+          flattened[newKey] = null;
+        } else if (
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          !(value instanceof Date)
+        ) {
+          // Recursively flatten nested objects
+          flatten(value, newKey);
+        } else if (Array.isArray(value)) {
+          // Convert arrays to JSON string
+          flattened[newKey] = JSON.stringify(value);
+        } else {
+          flattened[newKey] = value;
+        }
+      }
+    };
+
+    flatten(ocrData);
+    return flattened;
+  }
+
+  /**
+   * Trigger Airflow DAG for processing uploaded patient files using curl command
+   */
+  private async triggerAirflowDAG(
+    s3Url: string,
+    doctorId: number,
+    labcodes: string[],
+    barcode: string,
+  ): Promise<void> {
+    const execAsync = promisify(exec);
+
+    try {
+      // Extract bio link from S3 URL (from beginning to session-{id} part)
+      const bioLink = this.extractBioLinkFromS3Url(s3Url);
+
+      const airflowUrl = this.configService.get<string>('AIRFLOW_URL');
+      const airflowUsername =
+        this.configService.get<string>('AIRFLOW_USERNAME');
+      const airflowPassword =
+        this.configService.get<string>('AIRFLOW_PASSWORD');
+
+      // Validate required configuration
+      if (!airflowUsername || !airflowPassword) {
+        this.logger.warn(
+          'Airflow credentials not configured, skipping DAG trigger',
+        );
+        return;
+      }
+
+      const dagRunPayload = {
+        conf: {
+          link_bio: bioLink,
+          doctor_id: doctorId.toString(),
+          labcode: labcodes.join(','), // Convert array to comma-separated string
+          barcode: barcode,
+        },
+        logical_date: new Date().toISOString(),
+      };
+
+      this.logger.log(
+        `Triggering Airflow DAG with payload: ${JSON.stringify(dagRunPayload)}`,
+      );
+      this.logger.log(`Using Airflow URL: ${airflowUrl}`);
+      this.logger.log(`Using Airflow username: ${airflowUsername}`);
+
+      // Construct curl command for Airflow DAG trigger
+      const curlCommand = [
+        'curl',
+        '-X POST',
+        `"${airflowUrl}/api/v1/dags/s3_download_process_dag/dagRuns"`,
+        '-H "Content-Type: application/json"',
+        `-u "${airflowUsername}:${airflowPassword}"`,
+        '--connect-timeout 10',
+        '--max-time 30',
+        '-w "%{http_code}"',
+        '-s',
+        `-d '${JSON.stringify(dagRunPayload)}'`,
+      ].join(' ');
+
+      this.logger.log(`Executing curl command: ${curlCommand}`);
+
+      const { stdout, stderr } = await execAsync(curlCommand, {
+        timeout: 30000, // 30 second timeout
+      });
+
+      // Parse the response (last 3 characters should be HTTP status code)
+      const responseBody = stdout.slice(0, -3);
+      const httpStatusCode = stdout.slice(-3);
+
+      this.logger.log(`Curl HTTP status code: ${httpStatusCode}`);
+      this.logger.log(`Curl response body: ${responseBody}`);
+
+      if (stderr) {
+        this.logger.warn(`Curl stderr: ${stderr}`);
+      }
+
+      // Check if the HTTP status code indicates success (2xx)
+      const statusCode = parseInt(httpStatusCode, 10);
+      if (statusCode >= 200 && statusCode < 300) {
+        this.logger.log('Airflow DAG triggered successfully via curl');
+
+        // Try to parse response as JSON if it's not empty
+        if (responseBody.trim()) {
+          try {
+            const jsonResponse = JSON.parse(responseBody);
+            this.logger.log(
+              `Airflow DAG response: ${JSON.stringify(jsonResponse)}`,
+            );
+          } catch (parseError) {
+            this.logger.log(`Airflow raw response: ${responseBody}`);
+          }
+        }
+      } else {
+        throw new Error(`HTTP ${statusCode}: ${responseBody}`);
+      }
+    } catch (error) {
+      this.logger.error('Failed to trigger Airflow DAG via curl:', error);
+
+      if (error.code === 'ETIMEDOUT') {
+        this.logger.error(
+          'Curl command timed out. Please check Airflow server connectivity.',
+        );
+      } else if (error.message.includes('HTTP 401')) {
+        this.logger.error(
+          'Airflow authentication failed. Please check AIRFLOW_USERNAME and AIRFLOW_PASSWORD configuration.',
+        );
+      } else if (error.message.includes('HTTP 404')) {
+        this.logger.error(
+          'Airflow DAG not found. Please check if s3_download_process_dag exists.',
+        );
+      } else if (
+        error.message.includes('command not found') ||
+        error.message.includes('curl')
+      ) {
+        this.logger.error(
+          'Curl command not found. Please ensure curl is installed on the system.',
+        );
+      } else {
+        this.logger.error(`Curl execution error: ${error.message}`);
+      }
+
+      // Don't throw here - DAG trigger failure shouldn't break the main upload process
+      this.logger.warn(
+        'Continuing with upload process despite Airflow DAG trigger failure',
+      );
+    }
+  }
+
+  /**
+   * Extract bio link from S3 URL (patient-files/session-{id} part only)
+   */
+  private extractBioLinkFromS3Url(s3Url: string): string {
+    try {
+      // Example: https://d46919b3b31b61ac349836b18c9ac671.r2.cloudflarestorage.com/patient-files/session-84/gene_mutation/Mutt-bien.png
+      // Should return: patient-files/session-84
+
+      const url = new URL(s3Url);
+      const pathParts = url.pathname.split('/').filter((part) => part !== ''); // Remove empty parts
+
+      // Find the patient-files index
+      const patientFilesIndex = pathParts.findIndex(
+        (part) => part === 'patient-files',
+      );
+
+      if (patientFilesIndex === -1) {
+        this.logger.warn(`No patient-files part found in S3 URL: ${s3Url}`);
+        return s3Url; // Return original URL if no patient-files part found
+      }
+
+      // Find the session part (session-{id}) after patient-files
+      const sessionIndex = pathParts.findIndex(
+        (part, index) =>
+          index > patientFilesIndex && part.startsWith('session-'),
+      );
+
+      if (sessionIndex === -1) {
+        this.logger.warn(`No session part found in S3 URL: ${s3Url}`);
+        return s3Url; // Return original URL if no session part found
+      }
+
+      // Extract only patient-files/session-{id}
+      const bioLink = `${pathParts[patientFilesIndex]}/${pathParts[sessionIndex]}`;
+
+      this.logger.log(`Extracted bio link: ${bioLink} from S3 URL: ${s3Url}`);
+      return bioLink;
+    } catch (error) {
+      this.logger.error(
+        `Failed to extract bio link from S3 URL: ${s3Url}`,
+        error,
+      );
+      return s3Url; // Return original URL as fallback
+    }
+  }
+
+  async testRb() {
+    this.rabbitmqService.emitEvent('ping', 'pong');
   }
 }

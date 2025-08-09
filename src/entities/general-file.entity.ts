@@ -52,4 +52,7 @@ export class GeneralFile {
   })
   @JoinColumn({ name: 'uploaded_by' })
   uploader: User;
+
+  @Column({ name: 'send_emr_at', nullable: true, type: 'timestamp' })
+  sendEmrAt: Date | null;
 }

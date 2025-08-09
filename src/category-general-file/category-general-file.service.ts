@@ -83,6 +83,7 @@ export class CategoryGeneralFileService {
           filePath: true,
           description: true,
           uploadedAt: true,
+          sendEmrAt: true,
         },
       },
     });

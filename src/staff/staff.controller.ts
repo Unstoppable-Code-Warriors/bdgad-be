@@ -14,6 +14,7 @@ import {
   ValidationPipe,
   Body,
   Put,
+  Logger,
 } from '@nestjs/common';
 import {
   FileFieldsInterceptor,
@@ -44,14 +45,17 @@ import { GeneralFilesQueryDto } from './dtos/general-files-query.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
+import { SendGeneralFileToEMRDto } from './dtos/send-general-file-to-emr.dto';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
 @ApiSecurity('token')
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
+  private readonly logger = new Logger(StaffController.name);
 
   @ApiTags('Test')
   @Post('/test')
@@ -327,6 +331,31 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async getAllGeneralFiles(@Query() query: GeneralFilesQueryDto) {
     return this.staffService.getAllGeneralFiles(query);
+  }
+
+  @ApiTags('Staff - General Files')
+  @Post('/general-files/send-to-emr')
+  @ApiOperation({
+    summary: 'Send general files to EMR system',
+    description:
+      'Send multiple categories of general files to EMR system and update sendEmrAt timestamp',
+  })
+  @AuthZ([Role.STAFF])
+  @UsePipes(new ValidationPipe({ transform: true }))
+  @ApiBody({
+    type: SendGeneralFileToEMRDto,
+    examples: {
+      'example 1': {
+        value: {
+          categoryGeneralFileIds: [1, 6],
+        },
+      },
+    },
+  })
+  async sendGeneralFileToEMR(@Body() sendDto: SendGeneralFileToEMRDto) {
+    return this.staffService.sendGeneralFileToEMR(
+      sendDto.categoryGeneralFileIds,
+    );
   }
 
   // Patient api
@@ -755,12 +784,10 @@ export class StaffController {
           example: JSON.stringify([
             {
               category: 'hereditary_cancer',
-              priority: 8,
               fileName: 'hereditary_cancer_form.pdf',
             },
             {
               category: 'gene_mutation',
-              priority: 7,
               fileName: 'gene_mutation_test.jpg',
             },
           ]),
@@ -1058,16 +1085,6 @@ export class StaffController {
           `fileCategories[${i}].fileName must be a non-empty string`,
         );
       }
-
-      if (category.priority !== undefined) {
-        const priority = Number(category.priority);
-        if (Number.isNaN(priority) || priority < 1 || priority > 10) {
-          throw new BadRequestException(
-            `fileCategories[${i}].priority must be a number between 1 and 10`,
-          );
-        }
-        category.priority = priority; // Ensure it's a number
-      }
     }
 
     // Validate ocrResults (optional)
@@ -1163,5 +1180,22 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async generateLabcode(@Body() request: GenerateLabcodeRequestDto) {
     return this.staffService.generateLabcode(request);
+  }
+
+  @Get('pingpong')
+  @AuthZ([Role.STAFF])
+  async pingPong() {
+    return this.staffService.testRb();
+  }
+
+  @EventPattern('pharmacy_patient_info')
+  async getPharmacyPatientInfo(data: any) {
+    this.logger.log('Received pharmacy patient info request:', data);
+    if (!data) {
+      this.logger.warn('Invalid pharmacy patient info request:', data);
+      return { error: 'Invalid request' };
+    }
+
+    return data;
   }
 }

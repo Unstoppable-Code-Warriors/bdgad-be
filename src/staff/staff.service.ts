@@ -1714,13 +1714,13 @@ export class StaffService {
           labcode: sessionLabcodes,
         } as CreateNotificationReqDto);
 
-        // // Trigger Airflow DAG for processing uploaded files
-        // await this.triggerAirflowDAG(
-        //   uploadedFiles[0]?.s3Url,
-        //   user.id,
-        //   sessionLabcodes,
-        //   patient.barcode,
-        // );
+        // Trigger Airflow DAG for processing uploaded files
+        await this.triggerAirflowDAG(
+          uploadedFiles[0]?.s3Url,
+          user.id,
+          sessionLabcodes,
+          patient.barcode,
+        );
 
         // Validation summary
         const validationSummary =
@@ -2804,19 +2804,30 @@ export class StaffService {
   }
 
   /**
-   * Extract bio link from S3 URL (from beginning to session-{id} part)
+   * Extract bio link from S3 URL (patient-files/session-{id} part only)
    */
   private extractBioLinkFromS3Url(s3Url: string): string {
     try {
-      // Example: https://bucket.com/patient-files/session-76/category/file.jpg
-      // Should return: https://bucket.com/patient-files/session-76
+      // Example: https://d46919b3b31b61ac349836b18c9ac671.r2.cloudflarestorage.com/patient-files/session-84/gene_mutation/Mutt-bien.png
+      // Should return: patient-files/session-84
 
       const url = new URL(s3Url);
-      const pathParts = url.pathname.split('/');
+      const pathParts = url.pathname.split('/').filter((part) => part !== ''); // Remove empty parts
 
-      // Find the session part (session-{id})
-      const sessionIndex = pathParts.findIndex((part) =>
-        part.startsWith('session-'),
+      // Find the patient-files index
+      const patientFilesIndex = pathParts.findIndex(
+        (part) => part === 'patient-files',
+      );
+
+      if (patientFilesIndex === -1) {
+        this.logger.warn(`No patient-files part found in S3 URL: ${s3Url}`);
+        return s3Url; // Return original URL if no patient-files part found
+      }
+
+      // Find the session part (session-{id}) after patient-files
+      const sessionIndex = pathParts.findIndex(
+        (part, index) =>
+          index > patientFilesIndex && part.startsWith('session-'),
       );
 
       if (sessionIndex === -1) {
@@ -2824,9 +2835,8 @@ export class StaffService {
         return s3Url; // Return original URL if no session part found
       }
 
-      // Take parts up to and including the session part
-      const bioLinkPath = pathParts.slice(0, sessionIndex + 1).join('/');
-      const bioLink = `${url.protocol}//${url.host}${bioLinkPath}`;
+      // Extract only patient-files/session-{id}
+      const bioLink = `${pathParts[patientFilesIndex]}/${pathParts[sessionIndex]}`;
 
       this.logger.log(`Extracted bio link: ${bioLink} from S3 URL: ${s3Url}`);
       return bioLink;

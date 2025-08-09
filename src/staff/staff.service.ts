@@ -1705,18 +1705,6 @@ export class StaffService {
         await queryRunner.commitTransaction();
         this.logger.log('Transaction committed successfully');
 
-        // Send notification after successful commit
-        await this.notificationService.createNotification({
-          title: 'Đã tải lên hồ sơ theo phân loại',
-          message: `Đã tải lên ${uploadedFiles.length} tệp theo phân loại cho bệnh nhân ID ${patientId}`,
-          type: TypeNotification.INFO,
-          subType: SubTypeNotification.ACCEPT,
-          taskType: TypeTaskNotification.LAB_TASK,
-          senderId: user.id,
-          receiverId: user.id,
-          labcode: sessionLabcodes,
-        } as CreateNotificationReqDto);
-
         // Trigger Airflow DAG for processing uploaded files
         await this.triggerAirflowDAG(
           uploadedFiles[0]?.s3Url,

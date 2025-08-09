@@ -1723,6 +1723,7 @@ export class StaffService {
           user.id,
           sessionLabcodes,
           patient.barcode,
+          patient.id,
         );
 
         // Validation summary
@@ -2686,6 +2687,7 @@ export class StaffService {
     doctorId: number,
     labcodes: string[],
     barcode: string,
+    patientId: number,
   ): Promise<void> {
     const execAsync = promisify(exec);
 
@@ -2711,8 +2713,9 @@ export class StaffService {
         conf: {
           link_bio: bioLink,
           doctor_id: doctorId.toString(),
-          labcode: labcodes.join(','), // Convert array to comma-separated string
+          labcode: labcodes.join(','),
           barcode: barcode,
+          patient_id: patientId.toString(),
         },
         logical_date: new Date().toISOString(),
       };

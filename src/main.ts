@@ -17,11 +17,21 @@ async function bootstrap() {
   app.use(express.raw({ limit: '100mb' }));
 
   // Enable CORS for both HTTP and WebSocket
+  // app.enableCors({
+  //   origin: "*",
+  //   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  //   allowedHeaders: ['Content-Type', 'Authorization'],
+  //   credentials: true,
+  // });
+
   app.enableCors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
+    origin: [
+      /^http:\/\/localhost(:\d+)?$/,
+      /^https?:\/\/.*\.bdgad\.bio$/,
+      /^https?:\/\/bdgad\.bio$/,
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    allowedHeaders: 'Content-Type, Authorization',
   });
 
   // Configure WebSocket adapter

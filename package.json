@@ -39,6 +39,7 @@
     "amqplib": "^0.10.8",
     "apache-arrow": "^21.0.0",
     "axios": "^1.9.0",
+    "brace-expansion": "^4.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "joi": "^17.13.3",

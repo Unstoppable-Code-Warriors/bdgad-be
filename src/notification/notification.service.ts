@@ -16,6 +16,7 @@ import {
   TypeNotification,
   SubTypeNotification,
 } from 'src/utils/constant';
+import { NotificationSseService } from './notification.sse.service';
 
 @Injectable()
 export class NotificationService {
@@ -24,6 +25,7 @@ export class NotificationService {
     private readonly notificationRepository: Repository<Notifications>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly sseService: NotificationSseService,
   ) {}
 
   private logger = new Logger(NotificationService.name);
@@ -139,36 +141,44 @@ export class NotificationService {
       const savedNotification =
         await this.notificationRepository.save(newNotification);
 
-      // Emit WebSocket event for real-time notification
-      if (this.notificationGateway) {
-        try {
-          // Get full notification with relations for WebSocket
-          const fullNotification = await this.notificationRepository
-            .createQueryBuilder('notification')
-            .leftJoinAndSelect('notification.sender', 'sender')
-            .leftJoinAndSelect('notification.receiver', 'receiver')
-            .where('notification.id = :id', { id: savedNotification.id })
-            .select([
-              'notification.id',
-              'notification.title',
-              'notification.message',
-              'notification.taskType',
-              'notification.type',
-              'notification.subType',
-              'notification.labcode',
-              'notification.barcode',
-              'sender.id',
-              'sender.name',
-              'sender.email',
-              'receiver.id',
-              'receiver.name',
-              'receiver.email',
-              'notification.isRead',
-              'notification.createdAt',
-            ])
-            .getOne();
+      // Get full notification with relations for pushes
+      const fullNotification = await this.notificationRepository
+        .createQueryBuilder('notification')
+        .leftJoinAndSelect('notification.sender', 'sender')
+        .leftJoinAndSelect('notification.receiver', 'receiver')
+        .where('notification.id = :id', { id: savedNotification.id })
+        .select([
+          'notification.id',
+          'notification.title',
+          'notification.message',
+          'notification.taskType',
+          'notification.type',
+          'notification.subType',
+          'notification.labcode',
+          'notification.barcode',
+          'sender.id',
+          'sender.name',
+          'sender.email',
+          'receiver.id',
+          'receiver.name',
+          'receiver.email',
+          'notification.isRead',
+          'notification.createdAt',
+        ])
+        .getOne();
 
-          if (fullNotification) {
+      // Emit real-time events (SSE + WebSocket if available)
+      if (fullNotification) {
+        try {
+          this.sseService.emitNotificationCreated(receiverId, fullNotification);
+        } catch (e) {
+          this.logger.warn(
+            `Failed to emit SSE notification: ${(e as Error).message}`,
+          );
+        }
+
+        if (this.notificationGateway) {
+          try {
             this.notificationGateway.emitNotificationToUser(
               receiverId,
               fullNotification,
@@ -176,12 +186,13 @@ export class NotificationService {
             this.logger.log(
               `WebSocket notification sent to user ${receiverId}`,
             );
+          } catch (wsError: unknown) {
+            const message =
+              wsError instanceof Error ? wsError.message : String(wsError);
+            this.logger.warn(
+              `Failed to emit WebSocket notification: ${message}`,
+            );
           }
-        } catch (wsError) {
-          this.logger.warn(
-            `Failed to emit WebSocket notification: ${wsError.message}`,
-          );
-          // Don't fail the notification creation if WebSocket fails
         }
       }
 
@@ -419,21 +430,35 @@ export class NotificationService {
       const updatedNotification =
         await this.notificationRepository.save(notification);
 
-      // Emit WebSocket event for real-time notification update
-      if (this.notificationGateway && notification.receiverId) {
+      // Emit real-time events (SSE + WebSocket if available)
+      if (notification.receiverId) {
         try {
-          this.notificationGateway.emitNotificationUpdateToUser(
+          this.sseService.emitNotificationUpdated(
             notification.receiverId,
             updatedNotification,
           );
-          this.logger.log(
-            `WebSocket notification update sent to user ${notification.receiverId}`,
-          );
-        } catch (wsError: any) {
+        } catch (e) {
           this.logger.warn(
-            `Failed to emit WebSocket notification update: ${wsError.message}`,
+            `Failed to emit SSE notification update: ${(e as Error).message}`,
           );
-          // Don't fail the update if WebSocket fails
+        }
+
+        if (this.notificationGateway) {
+          try {
+            this.notificationGateway.emitNotificationUpdateToUser(
+              notification.receiverId,
+              updatedNotification,
+            );
+            this.logger.log(
+              `WebSocket notification update sent to user ${notification.receiverId}`,
+            );
+          } catch (wsError: unknown) {
+            const message =
+              wsError instanceof Error ? wsError.message : String(wsError);
+            this.logger.warn(
+              `Failed to emit WebSocket notification update: ${message}`,
+            );
+          }
         }
       }
 

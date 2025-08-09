@@ -7,6 +7,8 @@ import { Notifications } from 'src/entities/notification.entity';
 import { User } from 'src/entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { NotificationSseService } from './notification.sse.service';
+import { NotificationSseController } from './notification.sse.controller';
 
 @Module({
   imports: [
@@ -20,10 +22,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       inject: [ConfigService],
     }),
   ],
-  controllers: [NotificationController],
+  controllers: [NotificationController, NotificationSseController],
   providers: [
     NotificationService,
     NotificationGateway,
+    NotificationSseService,
     {
       provide: 'NOTIFICATION_GATEWAY_INIT',
       useFactory: (
@@ -37,6 +40,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       inject: [NotificationService, NotificationGateway],
     },
   ],
-  exports: [NotificationService, NotificationGateway],
+  exports: [NotificationService, NotificationGateway, NotificationSseService],
 })
 export class NotificationModule {}

@@ -238,9 +238,11 @@ export class AnalysisService {
           id: labcode.id,
           labcode: [labcode.labcode], // Convert single labcode to array for backward compatibility
           barcode: labcode.labSession.patient.barcode,
-          requestDateLabTesting: labcode.assignment?.requestDateLabTesting || null,
+          requestDateLabTesting:
+            labcode.assignment?.requestDateLabTesting || null,
           requestDateAnalysis: labcode.assignment?.requestDateAnalysis || null,
-          requestDateValidation: labcode.assignment?.requestDateValidation || null,
+          requestDateValidation:
+            labcode.assignment?.requestDateValidation || null,
           createdAt: labcode.labSession.createdAt,
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,

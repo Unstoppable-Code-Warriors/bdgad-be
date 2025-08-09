@@ -1394,6 +1394,10 @@ export class StaffService {
 
       // Generate labcodes automatically from OCR results and file categories
       const sessionLabcodes: string[] = [];
+      const labcodeResponsesMap: Map<
+        string,
+        { packageType?: string; sampleType?: string }
+      > = new Map();
 
       // Extract test types from file categories
       const testTypes = this.extractTestTypesFromCategories(fileCategories);
@@ -1473,7 +1477,18 @@ export class StaffService {
 
         try {
           const labcodeResponse = await this.generateLabcode(labcodeRequest);
+          console.log(
+            `Generated labcode response for test type ${testType}:`,
+            labcodeResponse,
+          );
           sessionLabcodes.push(labcodeResponse.labcode);
+
+          // Store the packageType and sampleType for later use
+          labcodeResponsesMap.set(labcodeResponse.labcode, {
+            packageType: labcodeResponse.packageType,
+            sampleType: labcodeResponse.sampleType,
+          });
+
           this.logger.log(
             `Generated labcode: ${labcodeResponse.labcode} for test type: ${testType}`,
           );
@@ -1497,6 +1512,10 @@ export class StaffService {
         const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
         const defaultLabcode = `O5${letter}${number}${letter}`;
         sessionLabcodes.push(defaultLabcode);
+
+        // Store default labcode in the map without packageType and sampleType
+        labcodeResponsesMap.set(defaultLabcode, {});
+
         this.logger.log(
           `Generated fallback default labcode: ${defaultLabcode}`,
         );
@@ -1526,11 +1545,13 @@ export class StaffService {
         // Create labcode entries
         const labcodeEntities: LabCodeLabSession[] = [];
         for (const labcodeItem of sessionLabcodes) {
-          const labcodeEntity = queryRunner.manager.create(LabCodeLabSession, {
-            labSessionId: labSession.id,
-            labcode: labcodeItem,
-            createdAt: new Date(),
-          });
+          const labcodeMetadata = labcodeResponsesMap.get(labcodeItem);
+          const labcodeEntity = new LabCodeLabSession();
+          labcodeEntity.labSessionId = labSession.id;
+          labcodeEntity.labcode = labcodeItem;
+          labcodeEntity.packageType = labcodeMetadata?.packageType;
+          labcodeEntity.sampleType = labcodeMetadata?.sampleType;
+          labcodeEntity.createdAt = new Date();
           labcodeEntities.push(labcodeEntity);
         }
         await queryRunner.manager.save(labcodeEntities);
@@ -1693,13 +1714,13 @@ export class StaffService {
           labcode: sessionLabcodes,
         } as CreateNotificationReqDto);
 
-        // Trigger Airflow DAG for processing uploaded files
-        await this.triggerAirflowDAG(
-          uploadedFiles[0]?.s3Url,
-          user.id,
-          sessionLabcodes,
-          patient.barcode,
-        );
+        // // Trigger Airflow DAG for processing uploaded files
+        // await this.triggerAirflowDAG(
+        //   uploadedFiles[0]?.s3Url,
+        //   user.id,
+        //   sessionLabcodes,
+        //   patient.barcode,
+        // );
 
         // Validation summary
         const validationSummary =
@@ -2106,6 +2127,8 @@ export class StaffService {
         testCode,
         randomLetter,
         randomNumber,
+        packageType,
+        sampleType,
         message: 'Labcode generated successfully',
       };
     } catch (error) {

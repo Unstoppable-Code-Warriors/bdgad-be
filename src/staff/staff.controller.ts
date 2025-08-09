@@ -48,7 +48,7 @@ import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
 import { SendGeneralFileToEMRDto } from './dtos/send-general-file-to-emr.dto';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -1188,8 +1188,8 @@ export class StaffController {
     return this.staffService.testRb();
   }
 
-  @MessagePattern({ cmd: 'pharmacy_patient_info' })
-  async getPharmacyPatientInfo(@Payload() data: any) {
+  @EventPattern('pharmacy_patient_info')
+  async getPharmacyPatientInfo(data: any) {
     this.logger.log('Received pharmacy patient info request:', data);
     if (!data) {
       this.logger.warn('Invalid pharmacy patient info request:', data);

@@ -1187,15 +1187,4 @@ export class StaffController {
   async pingPong() {
     return this.staffService.testRb();
   }
-
-  // @EventPattern('pharmacy_patient_info')
-  // async getPharmacyPatientInfo(data: any) {
-  //   this.logger.log('Received pharmacy patient info request:', data);
-  //   if (!data) {
-  //     this.logger.warn('Invalid pharmacy patient info request:', data);
-  //     return { error: 'Invalid request' };
-  //   }
-
-  //   return data;
-  // }
 }

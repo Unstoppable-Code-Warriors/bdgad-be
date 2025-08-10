@@ -502,6 +502,7 @@ export class ValidationService {
         fastqR2Path: etlResult.fastqPair.fastqFileR2.filePath
           ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR2.filePath, S3Bucket.FASTQ_FILE)}`
           : '',
+        etlCompletedAt: etlResult.etlCompletedQueueAt,
       };
 
       this.client.emit('etl-result', alfData);

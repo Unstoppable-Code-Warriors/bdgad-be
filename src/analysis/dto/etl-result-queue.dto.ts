@@ -7,6 +7,7 @@ export interface EtlResultQueueDto {
   fastq_2_url: string;
   genome: string;
   resultS3Url: string;
+  complete_time: string | null;
 }
 
 export interface EtlResultQueueResponseDto {

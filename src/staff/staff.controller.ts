@@ -451,6 +451,20 @@ export class StaffController {
   }
 
   @ApiTags('Staff - Patients')
+  @Get('/patients/:patientId')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Get patient information by ID' })
+  @ApiParam({
+    name: 'patientId',
+    required: true,
+    description: 'Patient ID',
+    type: Number,
+  })
+  async getPatientById(@Param('patientId') patientId: number) {
+    return this.staffService.getPatientById(patientId);
+  }
+
+  @ApiTags('Staff - Patients')
   @Put('patients/:patientId')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Update a folder patient' })

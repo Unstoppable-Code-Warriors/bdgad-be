@@ -368,10 +368,34 @@ export class StaffController {
   @ApiBody({
     type: CreatePatientDto,
     examples: {
-      'example 1': {
+      'basic example': {
+        summary: 'Basic patient creation with required fields only',
         value: {
           fullName: 'John Doe',
           citizenId: '1234567890',
+        },
+      },
+      'complete example': {
+        summary: 'Complete patient creation with all optional fields',
+        value: {
+          fullName: 'Nguyễn Văn An',
+          citizenId: '048196020166',
+          ethnicity: 'Kinh',
+          maritalStatus: 'Đã kết hôn',
+          address1: '123 Đường ABC',
+          address2: 'Quận 1, TP.HCM',
+          gender: 'Nam',
+          nation: 'Việt Nam',
+          workAddress: 'Công ty XYZ, Quận 3, TP.HCM',
+          allergiesInfo: {
+            allergies: 'Dị ứng tôm cua',
+            personal_history: 'Từng bị cao huyết áp',
+            family_history: 'Gia đình có tiền sử tiểu đường',
+          },
+          appointment: {
+            id: '142e8872-94ef-449c-9b7b-5bb0d2e37a25',
+            date: '2025-08-09T14:15:57.820Z',
+          },
         },
       },
     },
@@ -439,7 +463,8 @@ export class StaffController {
           fullName: 'Nguyễn Văn A',
           dateOfBirth: '1990-01-01T00:00:00.000Z',
           phone: '0912345678',
-          address: '123 Đường ABC, Quận 1, TP.HCM',
+          address1: '123 Đường ABC',
+          address2: 'Quận 1, TP.HCM',
           citizenId: '012345678901',
         },
       },

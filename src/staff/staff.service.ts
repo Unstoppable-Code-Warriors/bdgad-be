@@ -596,7 +596,21 @@ export class StaffService {
   async createPatient(createPatientDto: CreatePatientDto) {
     this.logger.log('Starting Patient create process');
     try {
-      const { fullName, citizenId } = createPatientDto;
+      const {
+        fullName,
+        citizenId,
+        ethnicity,
+        maritalStatus,
+        address1,
+        address2,
+        gender,
+        nation,
+        workAddress,
+        allergiesInfo,
+        appointment,
+        dateOfBirth,
+        phone,
+      } = createPatientDto;
 
       // Generate barcode with format YYMMDD + ascending order number
       const barcode = await this.generatePatientBarcode();
@@ -608,15 +622,25 @@ export class StaffService {
         return errorPatient.citizenIdExists;
       }
 
-      const patient = this.patientRepository.create({
+      const patientData = {
         fullName: fullName.trim(),
-        dateOfBirth: new Date('1995-07-05'),
-        phone: '081234567890',
-        address: 'Jl. Raya No. 123',
+        dateOfBirth: dateOfBirth || undefined,
+        phone: phone?.trim() || undefined,
         citizenId: citizenId.trim(),
         barcode: barcode,
+        ethnicity: ethnicity?.trim() || undefined,
+        maritalStatus: maritalStatus?.trim() || undefined,
+        address1: address1?.trim() || undefined,
+        address2: address2?.trim() || undefined,
+        gender: gender?.trim() || undefined,
+        nation: nation?.trim() || undefined,
+        workAddress: workAddress?.trim() || undefined,
+        allergiesInfo: allergiesInfo || undefined,
+        appointment: appointment || undefined,
         createdAt: new Date(),
-      });
+      };
+
+      const patient = this.patientRepository.create(patientData);
       await this.patientRepository.save(patient);
       return { message: 'Patient created successfully' };
     } catch (error) {
@@ -648,7 +672,13 @@ export class StaffService {
           'patient.fullName',
           'patient.dateOfBirth',
           'patient.phone',
-          'patient.address',
+          'patient.address1',
+          'patient.address2',
+          'patient.ethnicity',
+          'patient.maritalStatus',
+          'patient.gender',
+          'patient.nation',
+          'patient.workAddress',
           'patient.citizenId',
           'patient.barcode',
           'patient.createdAt',
@@ -753,7 +783,13 @@ export class StaffService {
           fullName: patient.fullName,
           dateOfBirth: patient.dateOfBirth,
           phone: patient.phone,
-          address: patient.address,
+          address1: patient.address1 || null,
+          address2: patient.address2 || null,
+          ethnicity: patient.ethnicity,
+          maritalStatus: patient.maritalStatus,
+          gender: patient.gender,
+          nation: patient.nation,
+          workAddress: patient.workAddress || null,
           citizenId: patient.citizenId,
           barcode: patient.barcode,
           createdAt: patient.createdAt,
@@ -869,9 +905,18 @@ export class StaffService {
           fullName: patient.fullName,
           dateOfBirth: patient.dateOfBirth,
           phone: patient.phone,
-          address: patient.address,
+          address1: patient.address1,
+          address2: patient.address2,
           barcode: patient.barcode,
           citizenId: patient.citizenId,
+          ethnicity: patient.ethnicity,
+          maritalStatus: patient.maritalStatus,
+          gender: patient.gender,
+          nation: patient.nation,
+          workAddress: patient.workAddress,
+          allergiesInfo: patient.allergiesInfo,
+          medicalRecord: patient.medicalRecord,
+          appointment: patient.appointment,
         },
       };
     } catch (error) {
@@ -920,7 +965,8 @@ export class StaffService {
           fullName: true,
           dateOfBirth: true,
           phone: true,
-          address: true,
+          address1: true,
+          address2: true,
           citizenId: true,
           createdAt: true,
           barcode: true,
@@ -938,7 +984,8 @@ export class StaffService {
         fullName: patient.fullName,
         dateOfBirth: patient.dateOfBirth,
         phone: patient.phone,
-        address: patient.address,
+        address1: patient.address1,
+        address2: patient.address2,
         barcode: patient.barcode,
         citizenId: patient.citizenId,
       };
@@ -1028,7 +1075,8 @@ export class StaffService {
             fullName: true,
             dateOfBirth: true,
             phone: true,
-            address: true,
+            address1: true,
+            address2: true,
             citizenId: true,
             barcode: true,
             createdAt: true,

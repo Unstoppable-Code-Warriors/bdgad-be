@@ -2711,6 +2711,7 @@ export class StaffService {
           labcode: labcodes.join(','),
           barcode: barcode,
           patient_id: patientId.toString(),
+          citizen_id: citizenId,
         },
         logical_date: new Date().toISOString(),
       };

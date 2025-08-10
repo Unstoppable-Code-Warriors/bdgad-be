@@ -967,6 +967,11 @@ export class StaffService {
           phone: true,
           address1: true,
           address2: true,
+          ethnicity: true,
+          maritalStatus: true,
+          gender: true,
+          nation: true,
+          workAddress: true,
           citizenId: true,
           createdAt: true,
           barcode: true,
@@ -988,6 +993,11 @@ export class StaffService {
         address2: patient.address2,
         barcode: patient.barcode,
         citizenId: patient.citizenId,
+        ethnicity: patient.ethnicity,
+        maritalStatus: patient.maritalStatus,
+        gender: patient.gender,
+        nation: patient.nation,
+        workAddress: patient.workAddress,
       };
       const labSessions = patient.labSessions.flatMap(
         (labSession) => labSession.id,

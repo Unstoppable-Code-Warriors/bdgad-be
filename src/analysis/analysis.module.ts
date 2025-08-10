@@ -10,6 +10,8 @@ import { EtlResult } from '../entities/etl-result.entity';
 import { S3Service } from '../utils/s3.service';
 import { User } from 'src/entities/user.entity';
 import { NotificationModule } from 'src/notification/notification.module';
+import { AnalysisQueueController } from './analysis.queue.controller';
+import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
 
 @Module({
   imports: [
@@ -22,8 +24,9 @@ import { NotificationModule } from 'src/notification/notification.module';
       User,
     ]),
     NotificationModule,
+    RabbitmqModule,
   ],
-  controllers: [AnalysisController],
+  controllers: [AnalysisController, AnalysisQueueController],
   providers: [AnalysisService, S3Service],
   exports: [AnalysisService],
 })

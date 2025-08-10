@@ -1805,16 +1805,6 @@ export class StaffService {
         await queryRunner.commitTransaction();
         this.logger.log('Transaction committed successfully');
 
-        // Trigger Airflow DAG for processing uploaded files
-        await this.triggerAirflowDAG(
-          uploadedFiles[0]?.s3Url,
-          user.id,
-          sessionLabcodes,
-          patient.barcode,
-          patient.id,
-          patient.citizenId,
-        );
-
         // Validation summary
         const validationSummary =
           this.fileValidationService.validateMinimumRequirements(
@@ -1990,6 +1980,42 @@ export class StaffService {
       this.logger.log(
         `Assignment completed: ${successCount} successful, ${failureCount} failed`,
       );
+
+      // Trigger Airflow DAG after successful assignments
+      if (successCount > 0) {
+        try {
+          // Get the first patient file URL for the session to use as s3Url parameter
+          const patientFile = await this.patientFileRepository.findOne({
+            where: { sessionId: id },
+            order: { uploadedAt: 'ASC' },
+            select: { filePath: true },
+          });
+
+          if (patientFile) {
+            const successfulLabcodes = assignmentResults
+              .filter((r) => r.success)
+              .map((r) => r.labcode);
+
+            await this.triggerAirflowDAG(
+              patientFile.filePath,
+              doctorId,
+              successfulLabcodes,
+              labSession.patient.barcode,
+              labSession.patient.id,
+              labSession.patient.citizenId,
+            );
+
+            this.logger.log('Airflow DAG triggered successfully');
+          } else {
+            this.logger.warn(
+              'No patient files found for session, skipping Airflow trigger',
+            );
+          }
+        } catch (airflowError) {
+          this.logger.error('Failed to trigger Airflow DAG:', airflowError);
+          // Don't fail the assignment if Airflow trigger fails
+        }
+      }
 
       return {
         success: failureCount === 0,

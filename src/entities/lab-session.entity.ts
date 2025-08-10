@@ -62,4 +62,7 @@ export class LabSession {
     },
   )
   labcodes: LabCodeLabSession[];
+
+  @Column({ name: 'metadata_status', type: 'boolean', default: false })
+  metadataStatus: boolean;
 }

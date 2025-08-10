@@ -55,7 +55,8 @@ async function bootstrap() {
 
   const rmqUrl =
     configService.get<string>('RABBITMQ_URL') || 'amqp://localhost:5672';
-  const microserviceOptions: MicroserviceOptions = {
+  // Microservice cho queue pharmacy_be
+  const pharmacyMicroserviceOptions: MicroserviceOptions = {
     transport: Transport.RMQ,
     options: {
       urls: [rmqUrl],
@@ -66,7 +67,21 @@ async function bootstrap() {
     },
   };
 
-  app.connectMicroservice(microserviceOptions);
+  // Microservice cho queue etl_result
+  const etlResultMicroserviceOptions: MicroserviceOptions = {
+    transport: Transport.RMQ,
+    options: {
+      urls: [rmqUrl],
+      queue: 'etl_result',
+      queueOptions: {
+        durable: false,
+      },
+    },
+  };
+
+  // Connect cả hai microservices
+  app.connectMicroservice(pharmacyMicroserviceOptions);
+  app.connectMicroservice(etlResultMicroserviceOptions);
   await app.startAllMicroservices();
 
   await app.listen(configService.get('PORT') ?? 3000);

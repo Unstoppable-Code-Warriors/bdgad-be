@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, In, Not } from 'typeorm';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { LabSession } from '../entities/lab-session.entity';
 import { FastqFile } from '../entities/fastq-file.entity';
 import {
@@ -19,6 +21,10 @@ import {
   AnalysisSessionWithLatestResponseDto,
   AnalysisSessionDetailResponseDto,
 } from './dto/analysis-response.dto';
+import {
+  EtlResultQueueDto,
+  EtlResultQueueResponseDto,
+} from './dto/etl-result-queue.dto';
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
@@ -42,6 +48,7 @@ import e from 'express';
 export class AnalysisService {
   constructor(
     private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
     private readonly s3Service: S3Service,
     private readonly notificationService: NotificationService,
     @InjectRepository(LabSession)
@@ -446,6 +453,8 @@ export class AnalysisService {
           },
         },
         creator: true,
+        fastqFileR1: true,
+        fastqFileR2: true,
       },
     });
 
@@ -500,15 +509,19 @@ export class AnalysisService {
 
     await this.etlResultRepository.save(etlResult);
 
-    // Start mock ETL pipeline (async)
-    this.runMockEtlPipeline(etlResult, labcode, barcode, user.id).catch(
-      async (error) => {
-        // Mark as failed if pipeline fails
-        etlResult.status = EtlResultStatus.FAILED;
-        etlResult.reasonReject = `Processing failed: ${error.message}`;
-        await this.etlResultRepository.save(etlResult);
-      },
-    );
+    // Start real ETL pipeline (async)
+    this.runEtlPipeline(
+      etlResult,
+      labcode,
+      barcode,
+      user.id,
+      fastqFilePair,
+    ).catch(async (error) => {
+      // Mark as failed if pipeline fails
+      etlResult.status = EtlResultStatus.FAILED;
+      etlResult.reasonReject = `Processing failed: ${error.message}`;
+      await this.etlResultRepository.save(etlResult);
+    });
     return {
       message: 'Analysis pipeline started successfully',
     };
@@ -590,6 +603,194 @@ export class AnalysisService {
       await this.notificationService.createNotifications({
         notifications: notificaitonReqs,
       });
+    }
+  }
+
+  private async runEtlPipeline(
+    etlResult: EtlResult,
+    labcode: string[],
+    barcode: string,
+    userId: number,
+    fastqFilePair: FastqFilePair,
+  ): Promise<void> {
+    const notificationReqs: CreateNotificationReqDto[] = [];
+
+    try {
+      // Update status to processing
+      etlResult.status = EtlResultStatus.PROCESSING;
+      await this.etlResultRepository.save(etlResult);
+
+      // Validate FastQ files exist
+      if (!fastqFilePair.fastqFileR1 || !fastqFilePair.fastqFileR1.filePath) {
+        throw new Error('FastQ file R1 is missing or has no file path');
+      }
+      if (!fastqFilePair.fastqFileR2 || !fastqFilePair.fastqFileR2.filePath) {
+        throw new Error('FastQ file R2 is missing or has no file path');
+      }
+
+      // Get presigned URLs for FastQ files
+      const fastqFileR1Url = await this.s3Service.generatePresigned(
+        S3Bucket.FASTQ_FILE,
+        this.s3Service.extractKeyFromUrl(
+          fastqFilePair.fastqFileR1.filePath,
+          S3Bucket.FASTQ_FILE,
+        ),
+        3600, // 1 hour
+      );
+
+      const fastqFileR2Url = await this.s3Service.generatePresigned(
+        S3Bucket.FASTQ_FILE,
+        this.s3Service.extractKeyFromUrl(
+          fastqFilePair.fastqFileR2.filePath,
+          S3Bucket.FASTQ_FILE,
+        ),
+        3600, // 1 hour
+      );
+
+      // Call ETL service API
+      await this.callEtlAnalyzeApi({
+        etlResultId: etlResult.id,
+        labcode: labcode[0] || 'unknown',
+        barcode: barcode,
+        lane: 'L1',
+        fastq_1_url: fastqFileR1Url,
+        fastq_2_url: fastqFileR2Url,
+        genome: 'GATK.GRCh38',
+      });
+
+      notificationReqs.push({
+        title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+        message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} đã được gửi đến hệ thống phân tích.`,
+        taskType: TypeTaskNotification.ANALYSIS_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.ACCEPT,
+        labcode: labcode,
+        barcode: barcode,
+        senderId: userId,
+        receiverId: userId,
+      });
+    } catch (error) {
+      // Handle pipeline failure
+      etlResult.status = EtlResultStatus.FAILED;
+      etlResult.reasonReject = `ETL Pipeline failed: ${error.message}`;
+      await this.etlResultRepository.save(etlResult);
+      notificationReqs.push({
+        title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+        message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thất bại.`,
+        taskType: TypeTaskNotification.ANALYSIS_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.REJECT,
+        labcode: labcode,
+        barcode: barcode,
+        senderId: userId,
+        receiverId: userId,
+      });
+      throw error;
+    } finally {
+      await this.notificationService.createNotifications({
+        notifications: notificationReqs,
+      });
+    }
+  }
+
+  private async callEtlAnalyzeApi(payload: {
+    etlResultId: number;
+    labcode: string;
+    barcode: string;
+    lane: string;
+    fastq_1_url: string;
+    fastq_2_url: string;
+    genome: string;
+  }): Promise<void> {
+    const etlServiceUrl = this.configService
+      .get<string>('ETL_SERVICE_URL')
+      ?.trim()
+      .replace(/^"|"$/g, '');
+
+    if (!etlServiceUrl) {
+      throw new InternalServerErrorException('ETL_SERVICE_URL not configured');
+    }
+
+    const analyzeEndpoint = `${etlServiceUrl}/analyze`;
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(analyzeEndpoint, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000, // 30 seconds timeout
+        }),
+      );
+
+      if (response.status !== 200 && response.status !== 201) {
+        throw new Error(
+          `ETL API returned status ${response.status}: ${response.statusText}`,
+        );
+      }
+
+      console.log('ETL Analysis API called successfully:', response.data);
+    } catch (error) {
+      console.error('Failed to call ETL Analysis API:', error);
+      throw new InternalServerErrorException(
+        `Failed to call ETL Analysis API: ${error.message}`,
+      );
+    }
+  }
+
+  async processEtlResultFromQueue(
+    data: EtlResultQueueDto,
+  ): Promise<EtlResultQueueResponseDto> {
+    try {
+      const { etlResultId, resultS3Url, labcode, barcode } = data;
+
+      // Find the ETL result by ID
+      const etlResult = await this.etlResultRepository.findOne({
+        where: { id: etlResultId },
+        relations: {
+          labcodeLabSession: {
+            labSession: {
+              patient: true,
+            },
+          },
+        },
+      });
+
+      if (!etlResult) {
+        throw new NotFoundException(
+          `ETL result with ID ${etlResultId} not found`,
+        );
+      }
+
+      // Update ETL result with completion data
+      etlResult.status = EtlResultStatus.COMPLETED;
+      etlResult.resultPath = resultS3Url;
+      etlResult.etlCompletedAt = new Date();
+      await this.etlResultRepository.save(etlResult);
+
+      // Create success notification
+      await this.notificationService.createNotification({
+        title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
+        message: `Quá trình xử lý file kết quả ETL #${etlResult.id} của lần khám với Barcode ${barcode} thành công.`,
+        taskType: TypeTaskNotification.ANALYSIS_TASK,
+        type: TypeNotification.PROCESS,
+        subType: SubTypeNotification.ACCEPT,
+        labcode: [labcode],
+        barcode: barcode,
+        senderId: 1, // System sender
+        receiverId: etlResult.labcodeLabSession?.labSession?.patient?.id || 1,
+      });
+
+      return {
+        message: `ETL result ${etlResultId} processed successfully`,
+        success: true,
+      };
+    } catch (error) {
+      console.error('Failed to process ETL result from queue:', error);
+      return {
+        message: `Failed to process ETL result: ${error.message}`,
+        success: false,
+      };
     }
   }
 
@@ -866,6 +1067,8 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
           },
         },
         creator: true,
+        fastqFileR1: true,
+        fastqFileR2: true,
       },
     });
 
@@ -909,16 +1112,29 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 
     await this.etlResultRepository.save(newEtlResult);
 
-    // Start mock ETL pipeline (async) for retry
-    this.runMockEtlPipeline(newEtlResult, labcode, barcode, user.id).catch(
-      async (error) => {
+    // Start real ETL pipeline (async) for retry
+    if (latestFastqFilePair) {
+      this.runEtlPipeline(
+        newEtlResult,
+        labcode,
+        barcode,
+        user.id,
+        latestFastqFilePair,
+      ).catch(async (error) => {
         // Mark as failed if pipeline fails again
         newEtlResult.status = EtlResultStatus.FAILED;
         newEtlResult.reasonReject = `Retry failed: ${error.message}`;
         newEtlResult.rejectBy = user.id;
         await this.etlResultRepository.save(newEtlResult);
-      },
-    );
+      });
+    } else {
+      // If no FastQ file pair found, mark ETL as failed
+      newEtlResult.status = EtlResultStatus.FAILED;
+      newEtlResult.reasonReject = 'No FastQ file pair found for retry';
+      newEtlResult.rejectBy = user.id;
+      await this.etlResultRepository.save(newEtlResult);
+      throw new BadRequestException('No FastQ file pair found for retry');
+    }
 
     return {
       message: 'ETL process retry started successfully with new ETL result',

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -32,6 +33,7 @@ import {
 import { In } from 'typeorm';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
+import { ClientProxy } from '@nestjs/microservices';
 
 @Injectable()
 export class ValidationService {
@@ -48,6 +50,7 @@ export class ValidationService {
     private fastqFilePairRepository: Repository<FastqFilePair>,
     private s3Service: S3Service,
     private notificationService: NotificationService,
+    @Inject('ETL_RESULT_SERVICE') private readonly client: ClientProxy,
   ) {}
 
   private formatLabcodeArray(labcodes: string[] | null | undefined): string {
@@ -431,6 +434,10 @@ export class ValidationService {
           },
           assignment: true,
         },
+        fastqPair: {
+          fastqFileR1: true,
+          fastqFileR2: true,
+        },
       },
     });
 
@@ -481,6 +488,23 @@ export class ValidationService {
     if (labSession) {
       labSession.finishedAt = new Date();
       await this.labSessionRepository.save(labSession);
+    }
+
+    // Emit message to ALF system with ETL result data
+    if (etlResult.fastqPair?.fastqFileR1 && etlResult.fastqPair?.fastqFileR2) {
+      const alfData = {
+        labcode: labcode[0] || 'unknown',
+        barcode: barcode,
+        resultPath: etlResult.resultPath,
+        fastqR1Path: etlResult.fastqPair.fastqFileR1.filePath
+          ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR1.filePath, S3Bucket.FASTQ_FILE)}`
+          : '',
+        fastqR2Path: etlResult.fastqPair.fastqFileR2.filePath
+          ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR2.filePath, S3Bucket.FASTQ_FILE)}`
+          : '',
+      };
+
+      this.client.emit('etl-result', alfData);
     }
 
     return { message: 'ETL result accepted successfully' };

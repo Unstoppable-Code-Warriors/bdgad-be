@@ -46,7 +46,6 @@ import { GeneralFile } from 'src/entities/general-file.entity';
 import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
 import { LabCodeLabSession } from 'src/entities/labcode-lab-session.entity';
 import { AssignLabSession } from 'src/entities/assign-lab-session.entity';
-import { PharmacyPatient } from 'src/entities/pharmacy-patient.entity';
 import { getExtensionFromMimeType } from 'src/utils/convertFileType';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
@@ -118,8 +117,6 @@ export class StaffService {
     private readonly fastqFilePairRepository: Repository<FastqFilePair>,
     @InjectRepository(CategoryGeneralFile)
     private readonly categoryGeneralFileRepository: Repository<CategoryGeneralFile>,
-    @InjectRepository(PharmacyPatient)
-    private readonly pharmacyRepository: Repository<PharmacyPatient>,
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
@@ -596,7 +593,21 @@ export class StaffService {
   async createPatient(createPatientDto: CreatePatientDto) {
     this.logger.log('Starting Patient create process');
     try {
-      const { fullName, citizenId } = createPatientDto;
+      const {
+        fullName,
+        citizenId,
+        ethnicity,
+        maritalStatus,
+        address1,
+        address2,
+        gender,
+        nation,
+        workAddress,
+        allergiesInfo,
+        appointment,
+        dateOfBirth,
+        phone,
+      } = createPatientDto;
 
       // Generate barcode with format YYMMDD + ascending order number
       const barcode = await this.generatePatientBarcode();
@@ -608,15 +619,25 @@ export class StaffService {
         return errorPatient.citizenIdExists;
       }
 
-      const patient = this.patientRepository.create({
+      const patientData = {
         fullName: fullName.trim(),
-        dateOfBirth: new Date('1995-07-05'),
-        phone: '081234567890',
-        address: 'Jl. Raya No. 123',
+        dateOfBirth: dateOfBirth,
+        phone: phone?.trim(),
         citizenId: citizenId.trim(),
         barcode: barcode,
+        ethnicity: ethnicity?.trim(),
+        maritalStatus: maritalStatus?.trim(),
+        address1: address1?.trim(),
+        address2: address2?.trim(),
+        gender: gender?.trim(),
+        nation: nation?.trim(),
+        workAddress: workAddress?.trim(),
+        allergiesInfo: allergiesInfo,
+        appointment: appointment,
         createdAt: new Date(),
-      });
+      };
+
+      const patient = this.patientRepository.create(patientData);
       await this.patientRepository.save(patient);
       return { message: 'Patient created successfully' };
     } catch (error) {
@@ -648,7 +669,13 @@ export class StaffService {
           'patient.fullName',
           'patient.dateOfBirth',
           'patient.phone',
-          'patient.address',
+          'patient.address1',
+          'patient.address2',
+          'patient.ethnicity',
+          'patient.maritalStatus',
+          'patient.gender',
+          'patient.nation',
+          'patient.workAddress',
           'patient.citizenId',
           'patient.barcode',
           'patient.createdAt',
@@ -753,7 +780,13 @@ export class StaffService {
           fullName: patient.fullName,
           dateOfBirth: patient.dateOfBirth,
           phone: patient.phone,
-          address: patient.address,
+          address1: patient.address1 || null,
+          address2: patient.address2 || null,
+          ethnicity: patient.ethnicity,
+          maritalStatus: patient.maritalStatus,
+          gender: patient.gender,
+          nation: patient.nation,
+          workAddress: patient.workAddress || null,
           citizenId: patient.citizenId,
           barcode: patient.barcode,
           createdAt: patient.createdAt,
@@ -834,6 +867,46 @@ export class StaffService {
     }
   }
 
+  async getPatientById(id: number) {
+    this.logger.log('Starting Patient get by ID process');
+    try {
+      const patient = await this.patientRepository.findOne({
+        where: { id },
+        select: {
+          id: true,
+          fullName: true,
+          dateOfBirth: true,
+          phone: true,
+          ethnicity: true,
+          maritalStatus: true,
+          address1: true,
+          address2: true,
+          gender: true,
+          nation: true,
+          workAddress: true,
+          citizenId: true,
+          barcode: true,
+          allergiesInfo: true,
+          medicalRecord: true,
+          appointment: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!patient) {
+        return errorPatient.patientNotFound;
+      }
+
+      return patient;
+    } catch (error) {
+      this.logger.error('Failed to get Patient by ID', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Patient get by ID process completed');
+    }
+  }
+
   async updatePatientById(id: number, updatePatientDto: UpdatePatientDto) {
     try {
       this.logger.log('Starting Patient update process');
@@ -869,9 +942,18 @@ export class StaffService {
           fullName: patient.fullName,
           dateOfBirth: patient.dateOfBirth,
           phone: patient.phone,
-          address: patient.address,
+          address1: patient.address1,
+          address2: patient.address2,
           barcode: patient.barcode,
           citizenId: patient.citizenId,
+          ethnicity: patient.ethnicity,
+          maritalStatus: patient.maritalStatus,
+          gender: patient.gender,
+          nation: patient.nation,
+          workAddress: patient.workAddress,
+          allergiesInfo: patient.allergiesInfo,
+          medicalRecord: patient.medicalRecord,
+          appointment: patient.appointment,
         },
       };
     } catch (error) {
@@ -920,7 +1002,13 @@ export class StaffService {
           fullName: true,
           dateOfBirth: true,
           phone: true,
-          address: true,
+          address1: true,
+          address2: true,
+          ethnicity: true,
+          maritalStatus: true,
+          gender: true,
+          nation: true,
+          workAddress: true,
           citizenId: true,
           createdAt: true,
           barcode: true,
@@ -938,9 +1026,15 @@ export class StaffService {
         fullName: patient.fullName,
         dateOfBirth: patient.dateOfBirth,
         phone: patient.phone,
-        address: patient.address,
+        address1: patient.address1,
+        address2: patient.address2,
         barcode: patient.barcode,
         citizenId: patient.citizenId,
+        ethnicity: patient.ethnicity,
+        maritalStatus: patient.maritalStatus,
+        gender: patient.gender,
+        nation: patient.nation,
+        workAddress: patient.workAddress,
       };
       const labSessions = patient.labSessions.flatMap(
         (labSession) => labSession.id,
@@ -1028,7 +1122,8 @@ export class StaffService {
             fullName: true,
             dateOfBirth: true,
             phone: true,
-            address: true,
+            address1: true,
+            address2: true,
             citizenId: true,
             barcode: true,
             createdAt: true,
@@ -2864,54 +2959,106 @@ export class StaffService {
         return errorPharmacyPatient.citizenIdRequired;
       }
 
-      // Check if pharmacy record exists for this citizen_id
-      let pharmacyRecord = await this.pharmacyRepository.findOne({
+      // Check if patient record exists for this citizen_id
+      let existingPatient = await this.patientRepository.findOne({
         where: { citizenId },
       });
 
-      if (pharmacyRecord) {
-        // Update existing record
+      if (existingPatient) {
+        // Update existing patient record
         this.logger.log(
-          `Updating existing pharmacy record for citizen ID: ${citizenId}`,
+          `Updating existing patient record for citizen ID: ${citizenId}`,
         );
-        pharmacyRecord.patient = patient;
-        pharmacyRecord.appointment = appointment;
-        pharmacyRecord.medicalRecord = medical_record;
-        pharmacyRecord.updatedAt = new Date();
 
-        await this.pharmacyRepository.save(pharmacyRecord);
+        // Update patient fields from queue data
+        existingPatient.fullName = patient.fullname || existingPatient.fullName;
+        existingPatient.dateOfBirth = patient.date_of_birth
+          ? new Date(patient.date_of_birth)
+          : existingPatient.dateOfBirth;
+        existingPatient.phone = patient.phone || existingPatient.phone;
+        existingPatient.ethnicity =
+          patient.ethnicity || existingPatient.ethnicity;
+        existingPatient.maritalStatus =
+          patient.marital_status || existingPatient.maritalStatus;
+        existingPatient.address1 = patient.address1 || existingPatient.address1;
+        existingPatient.address2 = patient.address2 || existingPatient.address2;
+        existingPatient.gender = patient.gender || existingPatient.gender;
+        existingPatient.nation = patient.nation || existingPatient.nation;
+        existingPatient.workAddress =
+          patient.work_address || existingPatient.workAddress;
+
+        // Update allergiesInfo with allergies, personal_history, family_history
+        const allergiesInfo = {
+          allergies: patient.allergies || null,
+          personal_history: patient.personal_history || null,
+          family_history: patient.family_history || null,
+        };
+        existingPatient.allergiesInfo = allergiesInfo;
+
+        // Update medical record and appointment
+        existingPatient.medicalRecord =
+          medical_record || existingPatient.medicalRecord;
+        existingPatient.appointment =
+          appointment || existingPatient.appointment;
+        existingPatient.updatedAt = new Date();
+
+        await this.patientRepository.save(existingPatient);
         this.logger.log(
-          `Successfully updated pharmacy record for citizen ID: ${citizenId}`,
+          `Successfully updated patient record for citizen ID: ${citizenId}`,
         );
 
         return {
-          message: 'Pharmacy patient data updated successfully',
-          recordId: pharmacyRecord.id,
+          message: 'Patient data updated successfully from pharmacy queue',
+          patientId: existingPatient.id,
           citizenId: citizenId,
+          barcode: existingPatient.barcode,
         };
       } else {
-        // Create new record
+        // Create new patient record
         this.logger.log(
-          `Creating new pharmacy record for citizen ID: ${citizenId}`,
+          `Creating new patient record for citizen ID: ${citizenId}`,
         );
-        pharmacyRecord = this.pharmacyRepository.create({
-          citizenId,
-          patient,
-          appointment,
-          medicalRecord: medical_record,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+
+        // Generate barcode for new patient
+        const barcode = await this.generatePatientBarcode();
+
+        // Prepare allergiesInfo
+        const allergiesInfo = {
+          allergies: patient.allergies || null,
+          personal_history: patient.personal_history || null,
+          family_history: patient.family_history || null,
+        };
+
+        const newPatient = this.patientRepository.create({
+          fullName: patient.fullname || 'Unknown',
+          dateOfBirth: patient.date_of_birth
+            ? new Date(patient.date_of_birth)
+            : null,
+          phone: patient.phone || undefined,
+          ethnicity: patient.ethnicity || undefined,
+          maritalStatus: patient.marital_status || undefined,
+          address1: patient.address1 || undefined,
+          address2: patient.address2 || undefined,
+          gender: patient.gender || undefined,
+          nation: patient.nation || undefined,
+          workAddress: patient.work_address || undefined,
+          citizenId: citizenId,
+          barcode: barcode,
+          allergiesInfo: allergiesInfo,
+          medicalRecord: medical_record || undefined,
+          appointment: appointment || undefined,
         });
 
-        const savedRecord = await this.pharmacyRepository.save(pharmacyRecord);
+        const savedPatient = await this.patientRepository.save(newPatient);
         this.logger.log(
-          `Successfully created pharmacy record for citizen ID: ${citizenId}`,
+          `Successfully created patient record for citizen ID: ${citizenId} with barcode: ${barcode}`,
         );
 
         return {
-          message: 'Pharmacy patient data created successfully',
-          recordId: savedRecord.id,
+          message: 'Patient data created successfully from pharmacy queue',
+          patientId: savedPatient.id,
           citizenId: citizenId,
+          barcode: barcode,
         };
       }
     } catch (error) {
@@ -2919,127 +3066,6 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     } finally {
       this.logger.log('Pharmacy patient data processing completed');
-    }
-  }
-
-  async getAllPharmacyPatient(query: PaginationQueryDto) {
-    this.logger.log('Starting pharmacy patient get all process');
-    try {
-      const {
-        page = 1,
-        limit = 100,
-        search,
-        sortBy = 'updatedAt',
-        sortOrder = 'DESC',
-      } = query;
-
-      const queryBuilder = this.pharmacyRepository
-        .createQueryBuilder('pharmacy')
-        .select([
-          'pharmacy.id',
-          'pharmacy.citizenId',
-          'pharmacy.patient',
-          'pharmacy.appointment',
-          'pharmacy.medicalRecord',
-          'pharmacy.createdAt',
-          'pharmacy.updatedAt',
-        ]);
-
-      // Global search functionality - search by patient fullname and citizen_id
-      if (search) {
-        const searchTerm = `%${search.trim().toLowerCase()}%`;
-        queryBuilder.andWhere(
-          "(LOWER(pharmacy.citizenId) LIKE :search OR LOWER(pharmacy.patient->>'fullname') LIKE :search)",
-          { search: searchTerm },
-        );
-      }
-
-      // Sorting
-      const validSortFields = ['id', 'citizenId', 'createdAt', 'updatedAt'];
-      const sortField = validSortFields.includes(sortBy) ? sortBy : 'updatedAt';
-
-      queryBuilder.orderBy(`pharmacy.${sortField}`, sortOrder);
-
-      // Get total count before applying pagination
-      const total = await queryBuilder.getCount();
-
-      // Apply pagination
-      const offset = (page - 1) * limit;
-      queryBuilder.skip(offset).take(limit);
-
-      // Execute query
-      const pharmacyRecords = await queryBuilder.getMany();
-
-      // Transform the data to include patient fullname for easier frontend handling
-      const transformedRecords = pharmacyRecords.map((record) => ({
-        id: record.id,
-        citizenId: record.citizenId,
-        patientFullname: record.patient?.['fullname'] || 'N/A',
-        appointment: record.appointment,
-        patient: record.patient,
-        medicalRecord: record.medicalRecord,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
-      }));
-
-      // Return paginated response
-      return new PaginatedResponseDto(
-        transformedRecords,
-        page,
-        limit,
-        total,
-        'Pharmacy patient records retrieved successfully',
-      );
-    } catch (error) {
-      this.logger.error('Failed to get all pharmacy patient records', error);
-      throw new InternalServerErrorException(error.message);
-    } finally {
-      this.logger.log('Pharmacy patient get all process completed');
-    }
-  }
-
-  async getPharmacyPatientById(id: number) {
-    this.logger.log('Starting pharmacy patient get by ID process');
-    try {
-      const pharmacyRecord = await this.pharmacyRepository.findOne({
-        where: { id },
-        select: {
-          id: true,
-          citizenId: true,
-          patient: true,
-          appointment: true,
-          medicalRecord: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-
-      if (!pharmacyRecord) {
-        this.logger.warn(`Pharmacy patient record not found for ID: ${id}`);
-        return errorPharmacyPatient.pharmacyPatientRecordNotFound;
-      }
-
-      // Transform the data to include patient fullname for easier frontend handling
-      const transformedRecord = {
-        id: pharmacyRecord.id,
-        citizenId: pharmacyRecord.citizenId,
-        patientFullname: pharmacyRecord.patient?.['fullname'] || 'N/A',
-        appointment: pharmacyRecord.appointment,
-        patient: pharmacyRecord.patient,
-        medicalRecord: pharmacyRecord.medicalRecord,
-        createdAt: pharmacyRecord.createdAt,
-        updatedAt: pharmacyRecord.updatedAt,
-      };
-
-      this.logger.log(
-        `Successfully retrieved pharmacy patient record for ID: ${id}`,
-      );
-      return transformedRecord;
-    } catch (error) {
-      this.logger.error('Failed to get pharmacy patient record by ID', error);
-      throw new InternalServerErrorException(error.message);
-    } finally {
-      this.logger.log('Pharmacy patient get by ID process completed');
     }
   }
 }

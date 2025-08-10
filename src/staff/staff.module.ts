@@ -18,7 +18,6 @@ import { FastqFilePair } from 'src/entities/fastq-file-pair.entity';
 import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
 import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
 import { StaffQueueController } from './staff.queue.controller';
-import { PharmacyPatient } from 'src/entities/pharmacy-patient.entity';
 
 @Module({
   imports: [
@@ -33,7 +32,6 @@ import { PharmacyPatient } from 'src/entities/pharmacy-patient.entity';
       AssignLabSession,
       FastqFilePair,
       CategoryGeneralFile,
-      PharmacyPatient,
     ]),
     NotificationModule,
     CategoryGeneralFileModule,

@@ -1,10 +1,12 @@
 export class PatientResponseDto {
   id: number;
   fullName: string;
-  dateOfBirth: Date;
+  dateOfBirth: Date | null;
   phone: string;
-  address: string;
+  address1: string;
+  address2: string;
   citizenId: string;
+  barcode: string;
   createdAt: Date;
 }
 

@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsDate, IsOptional, IsString } from 'class-validator';
+import { IsDate, IsOptional, IsString, IsObject } from 'class-validator';
 
 export class UpdatePatientDto {
   @IsOptional()
@@ -24,7 +24,49 @@ export class UpdatePatientDto {
   @IsOptional()
   @IsString()
   @Transform(({ value }) => value?.trim())
-  address?: string;
+  ethnicity?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  maritalStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  address1?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  address2?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  gender?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  nation?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value?.trim())
+  workAddress?: string;
+
+  @IsOptional()
+  @IsObject()
+  allergiesInfo?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
+  medicalRecord?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
+  appointment?: Record<string, any>;
 
   @IsOptional()
   @IsString()

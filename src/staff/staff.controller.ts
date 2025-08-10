@@ -368,10 +368,34 @@ export class StaffController {
   @ApiBody({
     type: CreatePatientDto,
     examples: {
-      'example 1': {
+      'basic example': {
+        summary: 'Basic patient creation with required fields only',
         value: {
           fullName: 'John Doe',
           citizenId: '1234567890',
+        },
+      },
+      'complete example': {
+        summary: 'Complete patient creation with all optional fields',
+        value: {
+          fullName: 'Nguyễn Văn An',
+          citizenId: '048196020166',
+          ethnicity: 'Kinh',
+          maritalStatus: 'Đã kết hôn',
+          address1: '123 Đường ABC',
+          address2: 'Quận 1, TP.HCM',
+          gender: 'Nam',
+          nation: 'Việt Nam',
+          workAddress: 'Công ty XYZ, Quận 3, TP.HCM',
+          allergiesInfo: {
+            allergies: 'Dị ứng tôm cua',
+            personal_history: 'Từng bị cao huyết áp',
+            family_history: 'Gia đình có tiền sử tiểu đường',
+          },
+          appointment: {
+            id: '142e8872-94ef-449c-9b7b-5bb0d2e37a25',
+            date: '2025-08-09T14:15:57.820Z',
+          },
         },
       },
     },
@@ -427,6 +451,20 @@ export class StaffController {
   }
 
   @ApiTags('Staff - Patients')
+  @Get('/patients/:patientId')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({ summary: 'Get patient information by ID' })
+  @ApiParam({
+    name: 'patientId',
+    required: true,
+    description: 'Patient ID',
+    type: Number,
+  })
+  async getPatientById(@Param('patientId') patientId: number) {
+    return this.staffService.getPatientById(patientId);
+  }
+
+  @ApiTags('Staff - Patients')
   @Put('patients/:patientId')
   @AuthZ([Role.STAFF])
   @ApiOperation({ summary: 'Update a folder patient' })
@@ -439,7 +477,8 @@ export class StaffController {
           fullName: 'Nguyễn Văn A',
           dateOfBirth: '1990-01-01T00:00:00.000Z',
           phone: '0912345678',
-          address: '123 Đường ABC, Quận 1, TP.HCM',
+          address1: '123 Đường ABC',
+          address2: 'Quận 1, TP.HCM',
           citizenId: '012345678901',
         },
       },
@@ -1181,61 +1220,5 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async generateLabcode(@Body() request: GenerateLabcodeRequestDto) {
     return this.staffService.generateLabcode(request);
-  }
-
-  @ApiTags('Staff - Pharmacy Patient')
-  @Get('pharmacy-patient')
-  @ApiOperation({ summary: 'Get all pharmacy patient records with pagination' })
-  @AuthZ([Role.STAFF])
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number (default: 1)',
-    type: Number,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page (default: 10, max: 100)',
-    type: Number,
-  })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    description: 'Search by patient fullname or citizen ID',
-    type: String,
-  })
-  @ApiQuery({
-    name: 'sortBy',
-    required: false,
-    description: 'Sort by field (default: updatedAt)',
-    type: String,
-  })
-  @ApiQuery({
-    name: 'sortOrder',
-    required: false,
-    description: 'Sort order (ASC or DESC, default: DESC)',
-    type: String,
-  })
-  @UseGuards(AuthGuard, RolesGuard)
-  @AuthZ([Role.STAFF])
-  @UsePipes(new ValidationPipe({ transform: true }))
-  async getAllPharmacyPatient(@Query() query: PaginationQueryDto) {
-    return this.staffService.getAllPharmacyPatient(query);
-  }
-
-  @ApiTags('Staff - Pharmacy Patient')
-  @Get('pharmacy-patient/:id')
-  @ApiOperation({ summary: 'Get pharmacy patient record by ID' })
-  @ApiParam({
-    name: 'id',
-    required: true,
-    description: 'Pharmacy patient record ID',
-    type: Number,
-  })
-  @UseGuards(AuthGuard, RolesGuard)
-  @AuthZ([Role.STAFF])
-  async getPharmacyPatientById(@Param('id') id: number) {
-    return this.staffService.getPharmacyPatientById(id);
   }
 }

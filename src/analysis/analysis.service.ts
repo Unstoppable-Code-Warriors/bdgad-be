@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, In, Not } from 'typeorm';
@@ -42,7 +43,6 @@ import { errorLabSession, errorValidation } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
-import e from 'express';
 
 @Injectable()
 export class AnalysisService {
@@ -742,7 +742,8 @@ export class AnalysisService {
     data: EtlResultQueueDto,
   ): Promise<EtlResultQueueResponseDto> {
     try {
-      const { etlResultId, resultS3Url, labcode, barcode } = data;
+      const { etlResultId, resultS3Url, labcode, barcode, complete_time } =
+        data;
 
       // Find the ETL result by ID
       const etlResult = await this.etlResultRepository.findOne({
@@ -766,6 +767,7 @@ export class AnalysisService {
       etlResult.status = EtlResultStatus.COMPLETED;
       etlResult.resultPath = resultS3Url;
       etlResult.etlCompletedAt = new Date();
+      etlResult.etlCompletedQueueAt = complete_time;
       await this.etlResultRepository.save(etlResult);
 
       // Create success notification

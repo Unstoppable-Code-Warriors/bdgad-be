@@ -39,6 +39,13 @@ export class EtlResult {
   etlCompletedAt: Date;
 
   @Column({
+    name: 'etl_completed_queue_at',
+    type: 'varchar',
+    nullable: true,
+  })
+  etlCompletedQueueAt: string | null;
+
+  @Column({
     type: 'enum',
     enum: EtlResultStatus,
     nullable: true,

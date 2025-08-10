@@ -12,7 +12,9 @@ import { S3Service } from '../utils/s3.service';
 import { User } from 'src/entities/user.entity';
 import { NotificationModule } from 'src/notification/notification.module';
 import { AnalysisQueueController } from './analysis.queue.controller';
-import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Env } from 'src/utils/constant';
 
 @Module({
   imports: [
@@ -26,7 +28,6 @@ import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
     ]),
     HttpModule,
     NotificationModule,
-    RabbitmqModule,
   ],
   controllers: [AnalysisController, AnalysisQueueController],
   providers: [AnalysisService, S3Service],

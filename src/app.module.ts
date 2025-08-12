@@ -12,6 +12,7 @@ import { ValidationModule } from './validation/validation.module';
 import { NotificationModule } from './notification/notification.module';
 import { CategoryGeneralFileModule } from './category-general-file/category-general-file.module';
 import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
+import { TaskModule } from './task/task.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { RabbitmqModule } from './rabbitmq/rabbitmq.module';
     NotificationModule,
     CategoryGeneralFileModule,
     RabbitmqModule,
+    TaskModule,
   ],
   controllers: [],
   providers: [],

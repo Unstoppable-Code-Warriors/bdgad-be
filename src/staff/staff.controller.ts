@@ -49,7 +49,6 @@ import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
 import { SendGeneralFileToEMRDto } from './dtos/send-general-file-to-emr.dto';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
-import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -1060,6 +1059,140 @@ export class StaffController {
     }
 
     return this.staffService.uploadCategorizedPatientFiles(
+      files.files,
+      processedData as UploadCategorizedFilesDto,
+      user,
+    );
+  }
+
+  // New API v2 - Categorized file upload
+  @ApiTags('Staff - Patient Result Test Files')
+  @Post('patient-files/upload-result-test')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({
+    summary: 'Upload categorized patient files with enhanced validation',
+    description:
+      'Upload patient files with category-specific OCR processing. Supports 3 special categories: prenatal_screening, hereditary_cancer, gene_mutation, plus general files.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Categorized patient files upload with enhanced validation',
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          description:
+            'Files to upload (must match fileCategories array order)',
+        },
+        patientId: {
+          type: 'number',
+          description: 'Patient ID',
+          example: 1,
+        },
+        typeLabSession: {
+          type: 'string',
+          enum: ['test', 'result_test'],
+          description: 'Type of lab session',
+          example: 'test',
+        },
+        fileCategories: {
+          type: 'string',
+          description: 'JSON array of file category mappings',
+          example: JSON.stringify([
+            {
+              category: 'hereditary_cancer',
+              fileName: 'hereditary_cancer_form.pdf',
+            },
+            {
+              category: 'gene_mutation',
+              fileName: 'gene_mutation_test.jpg',
+            },
+          ]),
+        },
+        ocrResults: {
+          type: 'string',
+          description: 'JSON array of OCR results mapped to specific files',
+          example: JSON.stringify([
+            {
+              fileIndex: 0,
+              category: 'hereditary_cancer',
+              confidence: 0.95,
+              ocrData: {
+                full_name: 'Nguyen Van A',
+                date_of_birth: '1990-01-01',
+                cancer_screening_package: 'bcare',
+              },
+            },
+          ]),
+        },
+        labcode: {
+          type: 'string',
+          description: 'Array of lab codes (optional)',
+          example: '["O5123A", "N5456B"]',
+        },
+      },
+      required: ['files', 'patientId', 'typeLabSession', 'fileCategories'],
+    },
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'files', maxCount: 20 }], {
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'application/pdf',
+          'text/plain',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+          'text/csv',
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new Error(
+              'Only images, PDF, text, csv, xls, xlsx, doc, docx files are allowed',
+            ),
+            false,
+          );
+        }
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+        files: 20, // Maximum 20 files
+      },
+      preservePath: true,
+    }),
+  )
+  @UsePipes(
+    new ValidationPipe({ transform: false, skipMissingProperties: true }),
+  )
+  async uploadResultTestPatientFiles(
+    @UploadedFiles() files: { files?: Express.Multer.File[] },
+    @Body() uploadData: any, // Use any to bypass validation initially
+    @User() user: AuthenticatedUser,
+  ) {
+    const processedData: any = {
+      patientId: uploadData.patientId,
+      typeLabSession: 'result_test',
+      fileCategories: [],
+      ocrResults: [],
+      labcode: [],
+    };
+
+    if (!files.files || files.files.length === 0) {
+      throw new BadRequestException('At least one file is required');
+    }
+
+    return this.staffService.uploadResultTestPatientFiles(
       files.files,
       processedData as UploadCategorizedFilesDto,
       user,

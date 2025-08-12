@@ -35,7 +35,7 @@ export enum Role {
 
 export enum TypeLabSession {
   TEST = 'test',
-  VALIDATION = 'validation',
+  RESULT_TEST = 'result_test',
 }
 
 // File categories for specialized OCR processing

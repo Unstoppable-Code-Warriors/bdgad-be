@@ -19,6 +19,7 @@ export enum FileCategory {
   HEREDITARY_CANCER = 'hereditary_cancer',
   GENE_MUTATION = 'gene_mutation',
   GENERAL = 'general',
+  RESULT_TEST = 'result_test',
 }
 
 export class FileCategoryDto {

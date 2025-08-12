@@ -36,7 +36,7 @@ export class LabSession {
   @Column({
     name: 'type_lab_session',
     type: 'varchar',
-    enum: ['test', 'validation'],
+    enum: ['test', 'result_test'],
   })
   typeLabSession: string;
 

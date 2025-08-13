@@ -79,6 +79,7 @@ export class AnalysisService {
     const {
       search,
       filter,
+      filterGroup,
       sortBy,
       sortOrder,
       page = 1,
@@ -183,6 +184,46 @@ export class AnalysisService {
         'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :fastqFilePairStatus)',
         { fastqFilePairStatus: filter.fastqFilePairStatus },
       );
+    }
+
+    // Apply filterGroup functionality
+    if (filterGroup) {
+      switch (filterGroup) {
+        case 'processing':
+          // Include records with EtlResultStatus: processing, failed, completed, wait_for_approval
+          // OR FastqFileStatus: wait_for_approval, rejected, approved
+          queryBuilder.andWhere(
+            '(EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status IN (:...processingStatuses)) OR EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status IN (:...fastqProcessingStatuses)))',
+            {
+              processingStatuses: [
+                EtlResultStatus.PROCESSING,
+                EtlResultStatus.FAILED,
+                EtlResultStatus.COMPLETED,
+                EtlResultStatus.WAIT_FOR_APPROVAL,
+              ],
+              fastqProcessingStatuses: [
+                FastqFileStatus.WAIT_FOR_APPROVAL,
+                FastqFileStatus.REJECTED,
+                FastqFileStatus.APPROVED,
+              ],
+            },
+          );
+          break;
+        case 'rejected':
+          // Include records with EtlResultStatus: rejected
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :rejectedStatus)',
+            { rejectedStatus: EtlResultStatus.REJECTED },
+          );
+          break;
+        case 'approved':
+          // Include records with EtlResultStatus: approved
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :approvedStatus)',
+            { approvedStatus: EtlResultStatus.APPROVED },
+          );
+          break;
+      }
     }
 
     // Apply pagination

@@ -68,6 +68,7 @@ export class ValidationService {
       page = 1,
       limit = 10,
       search = '',
+      filterGroup,
       sortBy = 'createdAt',
       sortOrder = 'DESC',
     } = query;
@@ -139,6 +140,33 @@ export class ValidationService {
         '(LOWER(labcode.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
+    }
+
+    // Apply filterGroup functionality
+    if (filterGroup) {
+      switch (filterGroup) {
+        case 'processing':
+          // Include records with EtlResultStatus.WAIT_FOR_APPROVAL
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :processingStatus)',
+            { processingStatus: EtlResultStatus.WAIT_FOR_APPROVAL },
+          );
+          break;
+        case 'rejected':
+          // Include records with EtlResultStatus.REJECTED
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :rejectedStatus)',
+            { rejectedStatus: EtlResultStatus.REJECTED },
+          );
+          break;
+        case 'approved':
+          // Include records with EtlResultStatus.APPROVED
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :approvedStatus)',
+            { approvedStatus: EtlResultStatus.APPROVED },
+          );
+          break;
+      }
     }
 
     // Apply pagination

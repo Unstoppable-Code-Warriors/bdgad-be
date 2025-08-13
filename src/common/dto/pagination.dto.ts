@@ -99,6 +99,11 @@ export class PaginationQueryDto {
   @IsDateString()
   dateTo?: string;
 
+  @IsOptional()
+  @IsString()
+  @IsIn(['processing', 'rejected', 'approved'])
+  filterGroup?: 'processing' | 'rejected' | 'approved';
+
   constructor() {
     this.page = this.page && this.page > 0 ? this.page : 1;
     this.limit =

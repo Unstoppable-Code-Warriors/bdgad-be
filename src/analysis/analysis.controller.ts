@@ -32,6 +32,7 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
@@ -47,6 +48,12 @@ export class AnalysisController {
   @Get('sessions')
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
+  @ApiQuery({
+    name: 'filterGroup',
+    required: false,
+    type: String,
+    description: 'Group by status (processing, rejected, approved)',
+  })
   async findAllAnalysisSessions(
     @Query() query: PaginationQueryDto,
     @User() user: AuthenticatedUser,

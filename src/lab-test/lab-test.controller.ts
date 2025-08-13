@@ -90,6 +90,12 @@ export class LabTestController {
     type: String,
     description: 'End date filter in YYYY-MM-DD format',
   })
+  @ApiQuery({
+    name: 'filterGroup',
+    required: false,
+    type: String,
+    description: 'Group by status (processing, rejected, approved)',
+  })
   async findAllSession(
     @Query() query: PaginationQueryDto,
     @User() user: AuthenticatedUser,

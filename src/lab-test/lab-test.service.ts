@@ -112,6 +112,7 @@ export class LabTestService {
     const {
       search,
       filter,
+      filterGroup,
       sortBy,
       sortOrder,
       page = 1,
@@ -199,6 +200,39 @@ export class LabTestService {
         'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :status)',
         { status: filter.status },
       );
+    }
+
+    // Apply filterGroup functionality
+    if (filterGroup) {
+      switch (filterGroup) {
+        case 'processing':
+          // Include records with FastqFileStatus: uploaded, wait_for_approval, not_uploaded
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status IN (:...processingStatuses))',
+            {
+              processingStatuses: [
+                FastqFileStatus.UPLOADED,
+                FastqFileStatus.WAIT_FOR_APPROVAL,
+                FastqFileStatus.NOT_UPLOADED,
+              ],
+            },
+          );
+          break;
+        case 'rejected':
+          // Include records with FastqFileStatus: rejected
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :rejectedStatus)',
+            { rejectedStatus: FastqFileStatus.REJECTED },
+          );
+          break;
+        case 'approved':
+          // Include records with FastqFileStatus: approved
+          queryBuilder.andWhere(
+            'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :approvedStatus)',
+            { approvedStatus: FastqFileStatus.APPROVED },
+          );
+          break;
+      }
     }
 
     // Apply pagination

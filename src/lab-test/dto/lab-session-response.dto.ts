@@ -41,8 +41,8 @@ export class FastqFilePairResponseDto {
   createdAt: Date;
   status: string;
   redoReason: string;
-  fastqFileR1: FastqFileResponseDto;
-  fastqFileR2: FastqFileResponseDto;
+  fastqFileR1: FastqFileResponseDto | null;
+  fastqFileR2: FastqFileResponseDto | null;
   creator: {
     id: number;
     name: string;

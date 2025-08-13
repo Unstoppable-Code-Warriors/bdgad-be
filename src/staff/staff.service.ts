@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
@@ -52,6 +53,7 @@ import { CreateNotificationReqDto } from 'src/notification/dto/create-notificati
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { PharmacyPatientDataDto } from './dtos/pharmacy-patient.dto';
 import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
+import { AssignResultTestDto } from './dtos/assign-result-test.dto';
 import { CategoryGeneralFileService } from 'src/category-general-file/category-general-file.service';
 import { FileValidationService } from './services/file-validation.service';
 import {
@@ -69,6 +71,7 @@ import {
   FastqFileStatus,
 } from 'src/entities/fastq-file-pair.entity';
 import { RabbitmqService } from 'src/rabbitmq/rabbitmq.service';
+import { ClientProxy } from '@nestjs/microservices';
 interface UploadedFiles {
   medicalTestRequisition: Express.Multer.File;
   salesInvoice: Express.Multer.File;
@@ -120,7 +123,9 @@ export class StaffService {
     private readonly notificationService: NotificationService,
     private readonly categoryGeneralFileService: CategoryGeneralFileService,
     private readonly fileValidationService: FileValidationService,
-    private readonly rabbitmqService: RabbitmqService, // Assuming this is the correct service to inject
+    private readonly rabbitmqService: RabbitmqService,
+    @Inject('RESULT_TEST_SERVICE')
+    private readonly clientResultTestDW: ClientProxy,
   ) {}
 
   async test(file: Express.Multer.File) {
@@ -2278,6 +2283,104 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     } finally {
       this.logger.log('Lab Session assignment process completed');
+    }
+  }
+
+  async assignResultTest(
+    assignResultTestDto: AssignResultTestDto,
+    user: AuthenticatedUser,
+  ) {
+    try {
+      this.logger.log('Starting Result Test assignment process');
+
+      const { doctorId, labcodeLabSessionId } = assignResultTestDto;
+
+      // Find the labcode lab session with related data
+      const labcodeSession = await this.labCodeLabSessionRepository.findOne({
+        where: { id: labcodeLabSessionId },
+        relations: {
+          labSession: {
+            patient: true,
+          },
+          assignment: true,
+        },
+      });
+
+      if (!labcodeSession) {
+        throw new NotFoundException(
+          `Labcode session with id ${labcodeLabSessionId} not found`,
+        );
+      }
+
+      // Validate doctorId is provided
+      if (!doctorId) {
+        throw new BadRequestException('Doctor ID is required');
+      }
+
+      // Update or create assignment for this labcode session
+      let assignmentRecord = labcodeSession.assignment;
+
+      if (!assignmentRecord) {
+        // Create new assignment
+        assignmentRecord = this.assignLabSessionRepository.create({
+          labcodeLabSessionId: labcodeSession.id,
+          createdAt: new Date(),
+        });
+      }
+
+      // Update the assignment with doctor ID
+      assignmentRecord.doctorId = doctorId;
+      assignmentRecord.updatedAt = new Date();
+
+      await this.assignLabSessionRepository.save(assignmentRecord);
+
+      this.logger.log(
+        `Successfully assigned doctor ${doctorId} to labcode session ${labcodeLabSessionId}`,
+      );
+
+      // Get the first patient file URL for the session to extract bio link
+      const patientFile = await this.patientFileRepository.findOne({
+        where: { sessionId: labcodeSession.labSessionId },
+        order: { uploadedAt: 'ASC' },
+        select: { filePath: true },
+      });
+
+      if (patientFile) {
+        // Extract bio link from S3 URL
+        const bioLink = this.extractBioLinkFromS3Url(patientFile.filePath);
+
+        // Emit result test info via RabbitMQ
+        const resultTestData = {
+          barcode: labcodeSession.labSession.patient.barcode,
+          doctorId: doctorId,
+          patientId: labcodeSession.labSession.patient.id,
+          citizenId: labcodeSession.labSession.patient.citizenId,
+          link_bio: bioLink,
+        };
+
+        this.clientResultTestDW.emit('result-test-info', resultTestData);
+        this.logger.log('Result test info emitted successfully via RabbitMQ');
+      } else {
+        this.logger.warn(
+          'No patient files found for session, skipping RabbitMQ emit',
+        );
+      }
+
+      return {
+        success: true,
+        message: 'Result test assignment completed successfully',
+        data: {
+          labcodeLabSessionId: labcodeSession.id,
+          labcode: labcodeSession.labcode,
+          doctorId: doctorId,
+          patientBarcode: labcodeSession.labSession.patient.barcode,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to assign result test:', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Result Test assignment process completed');
     }
   }
 

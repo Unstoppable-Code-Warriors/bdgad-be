@@ -1,5 +1,11 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsNumber, IsString, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 
 class AssignLabcodeItemDto {
   @IsString()
@@ -10,6 +16,7 @@ class AssignLabcodeItemDto {
 }
 
 export class AssignLabcodeDto {
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AssignLabcodeItemDto)

@@ -79,16 +79,20 @@ export class LabTestService {
       createdAt: fastqFilePair.createdAt,
       status: fastqFilePair.status || 'unknown',
       redoReason: fastqFilePair.redoReason || '',
-      fastqFileR1: {
-        id: fastqFilePair.fastqFileR1.id,
-        filePath: fastqFilePair.fastqFileR1.filePath,
-        createdAt: fastqFilePair.fastqFileR1.createdAt,
-      },
-      fastqFileR2: {
-        id: fastqFilePair.fastqFileR2.id,
-        filePath: fastqFilePair.fastqFileR2.filePath,
-        createdAt: fastqFilePair.fastqFileR2.createdAt,
-      },
+      fastqFileR1: fastqFilePair.fastqFileR1
+        ? {
+            id: fastqFilePair.fastqFileR1.id,
+            filePath: fastqFilePair.fastqFileR1.filePath,
+            createdAt: fastqFilePair.fastqFileR1.createdAt,
+          }
+        : null,
+      fastqFileR2: fastqFilePair.fastqFileR2
+        ? {
+            id: fastqFilePair.fastqFileR2.id,
+            filePath: fastqFilePair.fastqFileR2.filePath,
+            createdAt: fastqFilePair.fastqFileR2.createdAt,
+          }
+        : null,
       creator: {
         id: fastqFilePair.creator.id,
         name: fastqFilePair.creator.name,
@@ -434,6 +438,12 @@ export class LabTestService {
       throw new NotFoundException(`Labcode session with id ${id} not found`);
     }
 
+    // Check for existing FastQ pairs for this labcode session
+    const existingFastqPairs = await this.fastqFilePairRepository.find({
+      where: { labcodeLabSessionId: labcodeSession.id },
+      order: { createdAt: 'ASC' }, // Get the first (oldest) one
+    });
+
     try {
       const shortId = generateShortId();
 
@@ -459,21 +469,48 @@ export class LabTestService {
 
       const [fastqFileR1, fastqFileR2] = await Promise.all(uploadPromises);
 
-      // Create FastqFilePair to link the two files with the labcode session
-      const fastqFilePair = this.fastqFilePairRepository.create({
-        labcodeLabSessionId: labcodeSession.id, // Link to labcode session instead of lab session
-        fastqFileR1Id: fastqFileR1.id,
-        fastqFileR2Id: fastqFileR2.id,
-        createdBy: user.id,
-        status: FastqFileStatus.UPLOADED,
-      });
+      let savedPair: FastqFilePair;
 
-      const savedPair = await this.fastqFilePairRepository.save(fastqFilePair);
+      // Check if this is the first FastQ pair and it has NOT_UPLOADED status
+      const firstFastqPair = existingFastqPairs.find(
+        (pair) =>
+          pair.status === FastqFileStatus.NOT_UPLOADED &&
+          !pair.fastqFileR1Id &&
+          !pair.fastqFileR2Id,
+      );
 
-      return {
-        message: 'FastQ file pair uploaded successfully',
-        fastqFilePairId: savedPair.id,
-      };
+      if (firstFastqPair) {
+        // Update the existing FastQ pair with the uploaded files
+        firstFastqPair.fastqFileR1Id = fastqFileR1.id;
+        firstFastqPair.fastqFileR2Id = fastqFileR2.id;
+        firstFastqPair.status = FastqFileStatus.UPLOADED;
+        firstFastqPair.createdBy = user.id;
+        firstFastqPair.createdAt = new Date();
+
+        savedPair = await this.fastqFilePairRepository.save(firstFastqPair);
+
+        return {
+          message:
+            'FastQ file pair updated successfully (first upload for this labcode)',
+          fastqFilePairId: savedPair.id,
+        };
+      } else {
+        // Create a new FastqFilePair
+        const fastqFilePair = this.fastqFilePairRepository.create({
+          labcodeLabSessionId: labcodeSession.id,
+          fastqFileR1Id: fastqFileR1.id,
+          fastqFileR2Id: fastqFileR2.id,
+          createdBy: user.id,
+          status: FastqFileStatus.UPLOADED,
+        });
+
+        savedPair = await this.fastqFilePairRepository.save(fastqFilePair);
+
+        return {
+          message: 'FastQ file pair uploaded successfully (new upload)',
+          fastqFilePairId: savedPair.id,
+        };
+      }
     } catch (error) {
       throw new InternalServerErrorException(
         `Failed to upload FastQ file pair: ${error.message}`,

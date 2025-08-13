@@ -1847,6 +1847,183 @@ export class StaffService {
     }
   }
 
+  /**
+   * Upload categorized patient files with enhanced metadata and validation
+   */
+  /**
+   * Upload categorized patient files with enhanced metadata and validation
+   */
+  async uploadResultTestPatientFiles(
+    files: Express.Multer.File[],
+    uploadData: UploadCategorizedFilesDto,
+    user: AuthenticatedUser,
+  ) {
+    this.logger.log('Starting Categorized Patient Files upload process');
+
+    try {
+      const { patientId, typeLabSession } = uploadData;
+
+      // Verify patient exists
+      const patient = await this.patientRepository.findOne({
+        where: { id: patientId },
+      });
+      if (!patient) {
+        return errorPatient.patientNotFound;
+      }
+
+      // Generate labcodes automatically from OCR results and file categories
+      const sessionLabcodes: string[] = [];
+      const labcodeResponsesMap: Map<
+        string,
+        { packageType?: string; sampleType?: string }
+      > = new Map();
+
+      // Ensure we have at least one labcode
+
+      const defaultLabcode = '9999999';
+      sessionLabcodes.push(defaultLabcode);
+
+      // Store default labcode in the map without packageType and sampleType
+      labcodeResponsesMap.set(defaultLabcode, {});
+
+      // Start database transaction for all database operations
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        // Create lab session using transaction manager
+        const labSession = queryRunner.manager.create(LabSession, {
+          patientId,
+          createdAt: new Date(),
+          typeLabSession,
+        });
+        await queryRunner.manager.save(labSession);
+        this.logger.log(
+          `Created new categorized lab session with ID: ${labSession.id}`,
+        );
+
+        // Create labcode entries
+        const labcodeEntities: LabCodeLabSession[] = [];
+        for (const labcodeItem of sessionLabcodes) {
+          const labcodeMetadata = labcodeResponsesMap.get(labcodeItem);
+          const labcodeEntity = new LabCodeLabSession();
+          labcodeEntity.labSessionId = labSession.id;
+          labcodeEntity.labcode = labcodeItem;
+          labcodeEntity.packageType = labcodeMetadata?.packageType;
+          labcodeEntity.sampleType = labcodeMetadata?.sampleType;
+          labcodeEntity.createdAt = new Date();
+          labcodeEntities.push(labcodeEntity);
+        }
+        await queryRunner.manager.save(labcodeEntities);
+        this.logger.log(`Created ${labcodeEntities.length} labcode entries`);
+
+        // Create assignment records for each labcode (initially empty)
+        const assignments: AssignLabSession[] = [];
+        for (const labcodeEntity of labcodeEntities) {
+          const assignment = queryRunner.manager.create(AssignLabSession, {
+            labcodeLabSessionId: labcodeEntity.id,
+            createdAt: new Date(),
+          });
+          assignments.push(assignment);
+        }
+        await queryRunner.manager.save(assignments);
+        this.logger.log(`Created ${assignments.length} assignment records`);
+
+        // Upload files in processing order
+        const uploadedFiles: Array<{
+          id: number;
+          fileName: string;
+          category: string;
+          fileSize: number;
+          s3Url: string;
+        }> = [];
+
+        for (const file of files) {
+          const originalFileName = Buffer.from(
+            file.originalname,
+            'binary',
+          ).toString('utf8');
+          const originalFileNameWithoutSpace = originalFileName.replace(
+            /\s+/g,
+            '-',
+          );
+          const originalFileNameWithoutDot = originalFileName
+            .split('.')
+            .slice(0, -1)
+            .join('.');
+
+          // Create enhanced S3 key with category
+          const safeFileName = `${originalFileNameWithoutSpace}`;
+          const s3Key = `session-${labSession.id}/result-test/${safeFileName}`;
+
+          // Upload to S3
+          const s3Url = await this.s3Service.uploadFile(
+            S3Bucket.PATIENT_FILES,
+            s3Key,
+            file.buffer,
+            file.mimetype,
+          );
+
+          // Create patient file record with enhanced metadata using transaction manager
+          const patientFile = queryRunner.manager.create(PatientFile, {
+            sessionId: labSession.id,
+            fileName: originalFileNameWithoutDot,
+            filePath: s3Url,
+            fileType: getExtensionFromMimeType(file.mimetype) || file.mimetype,
+            fileSize: file.size,
+            ocrResult: {},
+            uploadedBy: user.id,
+            uploadedAt: new Date(),
+            fileCategory: 'result-test',
+          });
+
+          const savedFile = await queryRunner.manager.save(patientFile);
+          uploadedFiles.push({
+            id: savedFile.id,
+            fileName: file.originalname,
+            category: 'result-test',
+            fileSize: file.size,
+            s3Url,
+          });
+        }
+
+        // Commit the transaction
+        await queryRunner.commitTransaction();
+        this.logger.log('Transaction committed successfully');
+
+        return {
+          success: true,
+          message: 'Categorized patient files uploaded successfully',
+          data: {
+            sessionId: labSession.id,
+            uploadedFilesCount: files.length,
+            uploadedFiles,
+            sessionLabcodes,
+          },
+        };
+      } catch (transactionError) {
+        // Rollback the transaction on any error
+        await queryRunner.rollbackTransaction();
+        this.logger.error(
+          'Transaction rolled back due to error:',
+          transactionError,
+        );
+        throw new InternalServerErrorException(
+          'Database transaction failed and was rolled back',
+        );
+      } finally {
+        // Release the query runner
+        await queryRunner.release();
+      }
+    } catch (error) {
+      this.logger.error('Failed to upload categorized patient files', error);
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Categorized patient files upload process completed');
+    }
+  }
+
   async assignDoctorAndLabTestingLabSession(
     id: number,
     assignLabcodeDto: AssignLabcodeDto,

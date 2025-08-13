@@ -18,6 +18,9 @@ import { FastqFilePair } from 'src/entities/fastq-file-pair.entity';
 import { CategoryGeneralFile } from 'src/entities/category-general-file.entity';
 import { RabbitmqModule } from 'src/rabbitmq/rabbitmq.module';
 import { StaffQueueController } from './staff.queue.controller';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Env } from 'src/utils/constant';
 
 @Module({
   imports: [
@@ -36,6 +39,26 @@ import { StaffQueueController } from './staff.queue.controller';
     NotificationModule,
     CategoryGeneralFileModule,
     RabbitmqModule,
+    ClientsModule.registerAsync([
+      {
+        name: 'RESULT_TEST_SERVICE',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [
+              configService.get<string>(Env.RABBITMQ_URL) ||
+                'amqp://localhost:5672',
+            ],
+            queue: 'result_test_dw',
+            queueOptions: {
+              durable: true,
+            },
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
   ],
   controllers: [StaffController, StaffQueueController],
   providers: [StaffService, S3Service, FileValidationService],

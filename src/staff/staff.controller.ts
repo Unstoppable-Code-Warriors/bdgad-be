@@ -36,6 +36,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiParam,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { CreatePatientDto } from './dtos/create-patient-dto.req';
@@ -46,6 +47,7 @@ import { GeneralFilesQueryDto } from './dtos/general-files-query.dto';
 import { errorUploadFile } from 'src/utils/errorRespones';
 import { UpdatePatientDto } from './dtos/update-patient-dto.req';
 import { AssignLabcodeDto } from './dtos/assign-lab-session.dto.req';
+import { AssignResultTestDto } from './dtos/assign-result-test.dto';
 import { SendGeneralFileToEMRDto } from './dtos/send-general-file-to-emr.dto';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
@@ -558,6 +560,47 @@ export class StaffController {
       assignLabcodeDto,
       user,
     );
+  }
+
+  @ApiTags('Staff - Lab Sessions')
+  @Post('assign-result-test')
+  @UseGuards(AuthGuard, RolesGuard)
+  @AuthZ([Role.STAFF])
+  @UsePipes(new ValidationPipe({ transform: true }))
+  @ApiOperation({
+    summary: 'Assign doctor to result test',
+    description:
+      'Assign a doctor to a result test for a specific labcode lab session',
+  })
+  @ApiBody({
+    type: AssignResultTestDto,
+    description: 'Assignment data for result test',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Result test assignment successful',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            labcodeLabSessionId: { type: 'number' },
+            labcode: { type: 'string' },
+            doctorId: { type: 'number' },
+            patientBarcode: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  async assignResultTest(
+    @Body() assignResultTestDto: AssignResultTestDto,
+    @User() user: AuthenticatedUser,
+  ) {
+    return this.staffService.assignResultTest(assignResultTestDto, user);
   }
 
   // Patient File api

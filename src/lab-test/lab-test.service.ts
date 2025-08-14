@@ -395,6 +395,9 @@ export class LabTestService {
           labTestingId: true,
           analysisId: true,
           validationId: true,
+          requestDateLabTesting: true,
+          requestDateAnalysis: true,
+          requestDateValidation: true,
           doctor: {
             id: true,
             name: true,
@@ -456,6 +459,7 @@ export class LabTestService {
       labcode: [labcodeSession.labcode], // Array containing this specific labcode
       barcode: session.patient.barcode,
       createdAt: session.createdAt,
+      requestDateLabTesting: labcodeSession.assignment?.requestDateLabTesting || null,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
       doctor: labcodeSession.assignment?.doctor || null,

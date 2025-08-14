@@ -53,6 +53,7 @@ export class ValidationSessionResponseDto {
   labcode: string[];
   barcode: string;
   createdAt: Date;
+  requestDateValidation: Date | null;
   metadata: Record<string, any>;
   patient: PatientResponseDto;
   doctor: DoctorResponseDto | null;

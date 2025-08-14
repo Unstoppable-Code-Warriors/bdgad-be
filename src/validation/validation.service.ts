@@ -320,6 +320,7 @@ export class ValidationService {
       labcode: [labcode.labcode], // Single labcode as array for consistency
       barcode: session.patient.barcode,
       createdAt: session.createdAt,
+      requestDateValidation: labcode.assignment?.requestDateValidation || null,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,
       doctor: labcode.assignment?.doctor || null,

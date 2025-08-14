@@ -759,33 +759,35 @@ export class StaffService {
 
         // Apply the same filtering logic as below
         const filteredForCount = allPatientsForCountResult.filter((patient) => {
-          const latestLabSession = patient.labSessions?.sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          )[0];
-
-          if (!latestLabSession) {
+          if (!patient.labSessions || patient.labSessions.length === 0) {
             return false; // Exclude patients without lab sessions when date filtering
           }
 
-          const latestSessionDate = new Date(latestLabSession.createdAt);
+          // Check if ANY lab session falls within the date range
+          const hasSessionInRange = patient.labSessions.some((session) => {
+            const sessionDate = new Date(session.createdAt);
 
-          if (dateFrom) {
-            const fromDate = new Date(dateFrom);
-            if (latestSessionDate < fromDate) {
-              return false;
+            // Check if session date is within the specified range
+            if (dateFrom) {
+              const fromDate = new Date(dateFrom);
+              fromDate.setHours(0, 0, 0, 0); // Start of the day
+              if (sessionDate < fromDate) {
+                return false;
+              }
             }
-          }
 
-          if (dateTo) {
-            const toDate = new Date(dateTo);
-            toDate.setHours(23, 59, 59, 999); // Include the entire day
-            if (latestSessionDate > toDate) {
-              return false;
+            if (dateTo) {
+              const toDate = new Date(dateTo);
+              toDate.setHours(23, 59, 59, 999); // Include the entire day
+              if (sessionDate > toDate) {
+                return false;
+              }
             }
-          }
 
-          return true;
+            return true;
+          });
+
+          return hasSessionInRange;
         });
 
         totalCount = filteredForCount.length;
@@ -856,33 +858,48 @@ export class StaffService {
         };
       });
 
-      // Apply date filtering based on latest lab session
+      // Apply date filtering based on any lab session within the date range
       if (dateFrom || dateTo) {
         processedPatients = processedPatients.filter((patient) => {
-          if (!patient.latestLabSession) {
+          // Get all lab sessions for this patient from the original query result
+          const originalPatient = patientsWithSessions.find(
+            (p) => p.id === patient.id,
+          );
+          if (
+            !originalPatient ||
+            !originalPatient.labSessions ||
+            originalPatient.labSessions.length === 0
+          ) {
             return false; // Exclude patients without lab sessions when date filtering
           }
 
-          const latestSessionDate = new Date(
-            patient.latestLabSession.createdAt,
+          // Check if ANY lab session falls within the date range
+          const hasSessionInRange = originalPatient.labSessions.some(
+            (session) => {
+              const sessionDate = new Date(session.createdAt);
+
+              // Check if session date is within the specified range
+              if (dateFrom) {
+                const fromDate = new Date(dateFrom);
+                fromDate.setHours(0, 0, 0, 0); // Start of the day
+                if (sessionDate < fromDate) {
+                  return false;
+                }
+              }
+
+              if (dateTo) {
+                const toDate = new Date(dateTo);
+                toDate.setHours(23, 59, 59, 999); // Include the entire day
+                if (sessionDate > toDate) {
+                  return false;
+                }
+              }
+
+              return true;
+            },
           );
 
-          if (dateFrom) {
-            const fromDate = new Date(dateFrom);
-            if (latestSessionDate < fromDate) {
-              return false;
-            }
-          }
-
-          if (dateTo) {
-            const toDate = new Date(dateTo);
-            toDate.setHours(23, 59, 59, 999); // Include the entire day
-            if (latestSessionDate > toDate) {
-              return false;
-            }
-          }
-
-          return true;
+          return hasSessionInRange;
         });
       }
 

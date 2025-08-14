@@ -438,13 +438,15 @@ export class StaffController {
     name: 'dateFrom',
     required: false,
     type: String,
-    description: 'Start date filter (ISO format)',
+    description:
+      'Start date filter (ISO format) - filters patients who have at least one lab session on or after this date',
   })
   @ApiQuery({
     name: 'dateTo',
     required: false,
     type: String,
-    description: 'End date filter (ISO format)',
+    description:
+      'End date filter (ISO format) - filters patients who have at least one lab session on or before this date',
   })
   @ApiQuery({
     name: 'yearPatientFolder',

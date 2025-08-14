@@ -446,9 +446,65 @@ export class StaffController {
     type: String,
     description: 'End date filter (ISO format)',
   })
+  @ApiQuery({
+    name: 'yearPatientFolder',
+    required: false,
+    type: Number,
+    description: 'Filter by patient creation year (1900-2100)',
+  })
+  @ApiQuery({
+    name: 'monthPatientFolder',
+    required: false,
+    type: Number,
+    description: 'Filter by patient creation month (1-12)',
+  })
   @UsePipes(new ValidationPipe({ transform: true }))
   async getAllPatients(@Query() query: PaginationQueryDto) {
     return this.staffService.getAllPatients(query);
+  }
+
+  @ApiTags('Staff - Patients')
+  @Get('/patients/folders-by-created-date')
+  @AuthZ([Role.STAFF])
+  @ApiOperation({
+    summary: 'Get patient folders organized by creation date',
+    description:
+      'Returns years and months with patient counts based on patient creation date. Each year contains 12 months with total patient counts for each month.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient folders retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              year: { type: 'number', example: 2024 },
+              total: { type: 'number', example: 125 },
+              months: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    month: { type: 'number', example: 1 },
+                    total: { type: 'number', example: 10 },
+                  },
+                },
+              },
+            },
+          },
+        },
+        timestamp: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  async getPatientsbyCreatedAtFolder() {
+    return this.staffService.getPatientsbyCreatedAtFolder();
   }
 
   @ApiTags('Staff - Patients')

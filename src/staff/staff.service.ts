@@ -664,6 +664,8 @@ export class StaffService {
         dateFrom,
         dateTo,
         sortOrder = 'ASC',
+        yearPatientFolder,
+        monthPatientFolder,
       } = query;
 
       const queryBuilder = this.patientRepository
@@ -700,6 +702,22 @@ export class StaffService {
         );
       }
 
+      // Add year and month filtering for patient creation date
+      if (yearPatientFolder) {
+        queryBuilder.andWhere('EXTRACT(YEAR FROM patient.createdAt) = :year', {
+          year: yearPatientFolder,
+        });
+      }
+
+      if (monthPatientFolder) {
+        queryBuilder.andWhere(
+          'EXTRACT(MONTH FROM patient.createdAt) = :month',
+          {
+            month: monthPatientFolder,
+          },
+        );
+      }
+
       // Note: Date filtering will be handled in JavaScript after processing the results
       // This is more reliable than complex SQL subqueries
 
@@ -716,38 +734,60 @@ export class StaffService {
               ? '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)'
               : '1=1',
             search ? { search: `%${search.trim().toLowerCase()}%` } : {},
-          )
-          .getMany();
+          );
+
+        // Add year and month filtering for count query when date filtering is applied
+        if (yearPatientFolder) {
+          allPatientsForCount.andWhere(
+            'EXTRACT(YEAR FROM patient.createdAt) = :year',
+            {
+              year: yearPatientFolder,
+            },
+          );
+        }
+
+        if (monthPatientFolder) {
+          allPatientsForCount.andWhere(
+            'EXTRACT(MONTH FROM patient.createdAt) = :month',
+            {
+              month: monthPatientFolder,
+            },
+          );
+        }
+
+        const allPatientsForCountResult = await allPatientsForCount.getMany();
 
         // Apply the same filtering logic as below
-        const filteredForCount = allPatientsForCount.filter((patient) => {
-          const latestLabSession = patient.labSessions?.sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          )[0];
-
-          if (!latestLabSession) {
+        const filteredForCount = allPatientsForCountResult.filter((patient) => {
+          if (!patient.labSessions || patient.labSessions.length === 0) {
             return false; // Exclude patients without lab sessions when date filtering
           }
 
-          const latestSessionDate = new Date(latestLabSession.createdAt);
+          // Check if ANY lab session falls within the date range
+          const hasSessionInRange = patient.labSessions.some((session) => {
+            const sessionDate = new Date(session.createdAt);
 
-          if (dateFrom) {
-            const fromDate = new Date(dateFrom);
-            if (latestSessionDate < fromDate) {
-              return false;
+            // Check if session date is within the specified range
+            if (dateFrom) {
+              const fromDate = new Date(dateFrom);
+              fromDate.setHours(0, 0, 0, 0); // Start of the day
+              if (sessionDate < fromDate) {
+                return false;
+              }
             }
-          }
 
-          if (dateTo) {
-            const toDate = new Date(dateTo);
-            toDate.setHours(23, 59, 59, 999); // Include the entire day
-            if (latestSessionDate > toDate) {
-              return false;
+            if (dateTo) {
+              const toDate = new Date(dateTo);
+              toDate.setHours(23, 59, 59, 999); // Include the entire day
+              if (sessionDate > toDate) {
+                return false;
+              }
             }
-          }
 
-          return true;
+            return true;
+          });
+
+          return hasSessionInRange;
         });
 
         totalCount = filteredForCount.length;
@@ -761,6 +801,25 @@ export class StaffService {
           countQueryBuilder.andWhere(
             '(LOWER(patient.citizenId) LIKE :search OR LOWER(patient.fullName) LIKE :search)',
             { search: searchTerm },
+          );
+        }
+
+        // Add year and month filtering for count query
+        if (yearPatientFolder) {
+          countQueryBuilder.andWhere(
+            'EXTRACT(YEAR FROM patient.createdAt) = :year',
+            {
+              year: yearPatientFolder,
+            },
+          );
+        }
+
+        if (monthPatientFolder) {
+          countQueryBuilder.andWhere(
+            'EXTRACT(MONTH FROM patient.createdAt) = :month',
+            {
+              month: monthPatientFolder,
+            },
           );
         }
 
@@ -799,33 +858,48 @@ export class StaffService {
         };
       });
 
-      // Apply date filtering based on latest lab session
+      // Apply date filtering based on any lab session within the date range
       if (dateFrom || dateTo) {
         processedPatients = processedPatients.filter((patient) => {
-          if (!patient.latestLabSession) {
+          // Get all lab sessions for this patient from the original query result
+          const originalPatient = patientsWithSessions.find(
+            (p) => p.id === patient.id,
+          );
+          if (
+            !originalPatient ||
+            !originalPatient.labSessions ||
+            originalPatient.labSessions.length === 0
+          ) {
             return false; // Exclude patients without lab sessions when date filtering
           }
 
-          const latestSessionDate = new Date(
-            patient.latestLabSession.createdAt,
+          // Check if ANY lab session falls within the date range
+          const hasSessionInRange = originalPatient.labSessions.some(
+            (session) => {
+              const sessionDate = new Date(session.createdAt);
+
+              // Check if session date is within the specified range
+              if (dateFrom) {
+                const fromDate = new Date(dateFrom);
+                fromDate.setHours(0, 0, 0, 0); // Start of the day
+                if (sessionDate < fromDate) {
+                  return false;
+                }
+              }
+
+              if (dateTo) {
+                const toDate = new Date(dateTo);
+                toDate.setHours(23, 59, 59, 999); // Include the entire day
+                if (sessionDate > toDate) {
+                  return false;
+                }
+              }
+
+              return true;
+            },
           );
 
-          if (dateFrom) {
-            const fromDate = new Date(dateFrom);
-            if (latestSessionDate < fromDate) {
-              return false;
-            }
-          }
-
-          if (dateTo) {
-            const toDate = new Date(dateTo);
-            toDate.setHours(23, 59, 59, 999); // Include the entire day
-            if (latestSessionDate > toDate) {
-              return false;
-            }
-          }
-
-          return true;
+          return hasSessionInRange;
         });
       }
 
@@ -869,6 +943,109 @@ export class StaffService {
       throw new InternalServerErrorException(error.message);
     } finally {
       this.logger.log('Patient get all process completed');
+    }
+  }
+
+  async getPatientsbyCreatedAtFolder() {
+    this.logger.log('Starting Patient folder by createdAt process');
+    try {
+      // Get all patients with their creation years and months
+      const patientsGroupedByDate = await this.patientRepository
+        .createQueryBuilder('patient')
+        .select([
+          'EXTRACT(YEAR FROM patient.createdAt) as year',
+          'EXTRACT(MONTH FROM patient.createdAt) as month',
+          'COUNT(patient.id) as total',
+        ])
+        .groupBy(
+          'EXTRACT(YEAR FROM patient.createdAt), EXTRACT(MONTH FROM patient.createdAt)',
+        )
+        .orderBy('year, month')
+        .getRawMany();
+
+      // Group by year and organize into the desired structure
+      const yearData: Record<string, any> = {};
+
+      // Initialize all months with 0 for each year
+      const currentYear = new Date().getFullYear();
+      const startYear = 2020; // You can adjust this based on your data
+
+      for (let year = startYear; year <= currentYear; year++) {
+        yearData[year] = {
+          year,
+          months: {},
+        };
+
+        // Initialize all 12 months with 0
+        for (let month = 1; month <= 12; month++) {
+          yearData[year].months[month] = {
+            month,
+            total: 0,
+          };
+        }
+      }
+
+      // Fill in actual data
+      patientsGroupedByDate.forEach((item) => {
+        const year = item.year;
+        const month = item.month;
+        const total = parseInt(item.total, 10);
+
+        if (!yearData[year]) {
+          yearData[year] = {
+            year,
+            months: {},
+          };
+
+          // Initialize all 12 months for this year
+          for (let m = 1; m <= 12; m++) {
+            yearData[year].months[m] = {
+              month: m,
+              total: 0,
+            };
+          }
+        }
+
+        yearData[year].months[month] = {
+          month,
+          total,
+        };
+      });
+
+      // Convert to array format and calculate year totals
+      const result = Object.values(yearData).map((yearInfo: any) => {
+        const monthsArray = Object.values(yearInfo.months);
+        const yearTotal = monthsArray.reduce(
+          (sum: number, monthData: any) => sum + monthData.total,
+          0,
+        );
+
+        return {
+          year: yearInfo.year,
+          total: yearTotal,
+          months: monthsArray,
+        };
+      });
+
+      // Filter out years with no patients
+      const filteredResult = result.filter(
+        (yearData: any) => yearData.total > 0,
+      );
+
+      return {
+        success: true,
+        message: 'Patient folders by creation date retrieved successfully',
+        data: filteredResult,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(
+        'Failed to get patient folders by creation date',
+        error,
+      );
+      throw new InternalServerErrorException(error.message);
+    } finally {
+      this.logger.log('Patient folder by createdAt process completed');
     }
   }
 

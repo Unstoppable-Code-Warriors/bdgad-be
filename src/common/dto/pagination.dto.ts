@@ -122,6 +122,20 @@ export class PaginationQueryDto {
     | 'rejected'
     | 'approved';
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1900)
+  @Max(2100)
+  yearPatientFolder?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  monthPatientFolder?: number;
+
   constructor() {
     this.page = this.page && this.page > 0 ? this.page : 1;
     this.limit =

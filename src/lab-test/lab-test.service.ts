@@ -206,9 +206,18 @@ export class LabTestService {
     if (filterGroup) {
       switch (filterGroup) {
         case 'processing':
-          // Include records with FastqFileStatus: uploaded, wait_for_approval, not_uploaded
+          // Include records where the latest FastqFilePair has status: uploaded, wait_for_approval, not_uploaded
           queryBuilder.andWhere(
-            'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status IN (:...processingStatuses))',
+            `EXISTS (
+              SELECT 1 FROM fastq_file_pairs fp 
+              WHERE fp.labcode_lab_session_id = labcode.id 
+              AND fp.id = (
+                SELECT MAX(fp2.id) 
+                FROM fastq_file_pairs fp2 
+                WHERE fp2.labcode_lab_session_id = labcode.id
+              )
+              AND fp.status IN (:...processingStatuses)
+            )`,
             {
               processingStatuses: [
                 FastqFileStatus.UPLOADED,
@@ -219,16 +228,34 @@ export class LabTestService {
           );
           break;
         case 'rejected':
-          // Include records with FastqFileStatus: rejected
+          // Include records where the latest FastqFilePair has status: rejected
           queryBuilder.andWhere(
-            'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :rejectedStatus)',
+            `EXISTS (
+              SELECT 1 FROM fastq_file_pairs fp 
+              WHERE fp.labcode_lab_session_id = labcode.id 
+              AND fp.id = (
+                SELECT MAX(fp2.id) 
+                FROM fastq_file_pairs fp2 
+                WHERE fp2.labcode_lab_session_id = labcode.id
+              )
+              AND fp.status = :rejectedStatus
+            )`,
             { rejectedStatus: FastqFileStatus.REJECTED },
           );
           break;
         case 'approved':
-          // Include records with FastqFileStatus: approved
+          // Include records where the latest FastqFilePair has status: approved
           queryBuilder.andWhere(
-            'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :approvedStatus)',
+            `EXISTS (
+              SELECT 1 FROM fastq_file_pairs fp 
+              WHERE fp.labcode_lab_session_id = labcode.id 
+              AND fp.id = (
+                SELECT MAX(fp2.id) 
+                FROM fastq_file_pairs fp2 
+                WHERE fp2.labcode_lab_session_id = labcode.id
+              )
+              AND fp.status = :approvedStatus
+            )`,
             { approvedStatus: FastqFileStatus.APPROVED },
           );
           break;

@@ -49,10 +49,18 @@ export class AnalysisController {
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
   @ApiQuery({
-    name: 'filterGroup',
+    name: 'filterFastq',
     required: false,
     type: String,
-    description: 'Group by status (processing, rejected, approved)',
+    description:
+      'Filter by latest FastQ file pair status (wait_for_approval, approved, rejected)',
+  })
+  @ApiQuery({
+    name: 'filterEtl',
+    required: false,
+    type: String,
+    description:
+      'Filter by latest ETL result status (processing, completed, failed, wait_for_approval, rejected, approved)',
   })
   async findAllAnalysisSessions(
     @Query() query: PaginationQueryDto,

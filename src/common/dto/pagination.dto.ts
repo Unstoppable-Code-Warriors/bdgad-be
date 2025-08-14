@@ -101,9 +101,91 @@ export class PaginationQueryDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['wait_for_approval', 'approved', 'rejected'])
+  filterFastq?: 'wait_for_approval' | 'approved' | 'rejected';
+
+  @IsOptional()
+  @IsString()
+  @IsIn([
+    'processing',
+    'completed',
+    'failed',
+    'wait_for_approval',
+    'rejected',
+    'approved',
+  ])
+  filterEtl?:
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'wait_for_approval'
+    | 'rejected'
+    | 'approved';
+
+  constructor() {
+    this.page = this.page && this.page > 0 ? this.page : 1;
+    this.limit =
+      this.limit && this.limit > 0 && this.limit <= 100 ? this.limit : 10;
+  }
+}
+
+export class PaginationQueryFilterGroupDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 10;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsIn(['ASC', 'DESC', 'asc', 'desc'])
+  @Transform(({ value }) => value?.toUpperCase())
+  sortOrder?: 'ASC' | 'DESC' = 'DESC';
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  searchField?: string = 'fullName';
+
+  @IsOptional()
+  @IsObject()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return {};
+      }
+    }
+    return value || {};
+  })
+  filter?: Record<string, any>;
+
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
+  @IsOptional()
+  @IsString()
   @IsIn(['processing', 'rejected', 'approved'])
   filterGroup?: 'processing' | 'rejected' | 'approved';
-
   constructor() {
     this.page = this.page && this.page > 0 ? this.page : 1;
     this.limit =

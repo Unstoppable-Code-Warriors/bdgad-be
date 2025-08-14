@@ -23,6 +23,7 @@ import {
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
+  PaginationQueryFilterGroupDto,
 } from '../common/dto/pagination.dto';
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/types/user.types';
@@ -108,7 +109,10 @@ export class LabTestService {
     };
   }
 
-  async findAllSession(query: PaginationQueryDto, user: AuthenticatedUser) {
+  async findAllSession(
+    query: PaginationQueryFilterGroupDto,
+    user: AuthenticatedUser,
+  ) {
     const {
       search,
       filter,

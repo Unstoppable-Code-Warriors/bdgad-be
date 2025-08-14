@@ -18,6 +18,7 @@ import { AuthenticatedUser } from '../auth/types/user.types';
 import {
   PaginationQueryDto,
   PaginatedResponseDto,
+  PaginationQueryFilterGroupDto,
 } from '../common/dto/pagination.dto';
 import {
   ValidationSessionWithLatestEtlResponseDto,
@@ -61,7 +62,7 @@ export class ValidationService {
   }
 
   async findAllPatientsWithLatestEtlResults(
-    query: PaginationQueryDto,
+    query: PaginationQueryFilterGroupDto,
     user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<ValidationSessionWithLatestEtlResponseDto>> {
     const {

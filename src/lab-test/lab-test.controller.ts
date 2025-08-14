@@ -23,6 +23,7 @@ import {
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
+  PaginationQueryFilterGroupDto,
 } from '../common/dto/pagination.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -97,7 +98,7 @@ export class LabTestController {
     description: 'Group by status (processing, rejected, approved)',
   })
   async findAllSession(
-    @Query() query: PaginationQueryDto,
+    @Query() query: PaginationQueryFilterGroupDto,
     @User() user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<LabSessionWithFastqResponseDto>> {
     console.log(user);

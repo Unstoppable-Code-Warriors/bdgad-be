@@ -24,6 +24,7 @@ import {
 import {
   PaginatedResponseDto,
   PaginationQueryDto,
+  PaginationQueryFilterGroupDto,
 } from '../common/dto/pagination.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -50,7 +51,7 @@ export class ValidationController {
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
   async findAllPatientsWithLatestEtlResults(
-    @Query() query: PaginationQueryDto,
+    @Query() query: PaginationQueryFilterGroupDto,
     @User() user: AuthenticatedUser,
   ): Promise<PaginatedResponseDto<ValidationSessionWithLatestEtlResponseDto>> {
     return this.validationService.findAllPatientsWithLatestEtlResults(

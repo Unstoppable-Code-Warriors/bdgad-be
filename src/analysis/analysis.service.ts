@@ -191,9 +191,32 @@ export class AnalysisService {
       switch (filterGroup) {
         case 'processing':
           // Include records where the latest ETL result has processing status OR latest FastQ pair has processing status
+          // BUT exclude records where the latest ETL result is rejected (those should go to rejected tab)
           queryBuilder.andWhere(
             `(
-              EXISTS (
+              (
+                EXISTS (
+                  SELECT 1 FROM etl_results er 
+                  WHERE er.labcode_lab_session_id = labcode.id 
+                  AND er.id = (
+                    SELECT MAX(er2.id) 
+                    FROM etl_results er2 
+                    WHERE er2.labcode_lab_session_id = labcode.id
+                  )
+                  AND er.status IN (:...processingStatuses)
+                ) OR 
+                EXISTS (
+                  SELECT 1 FROM fastq_file_pairs fp 
+                  WHERE fp.labcode_lab_session_id = labcode.id 
+                  AND fp.id = (
+                    SELECT MAX(fp2.id) 
+                    FROM fastq_file_pairs fp2 
+                    WHERE fp2.labcode_lab_session_id = labcode.id
+                  )
+                  AND fp.status IN (:...fastqProcessingStatuses)
+                )
+              )
+              AND NOT EXISTS (
                 SELECT 1 FROM etl_results er 
                 WHERE er.labcode_lab_session_id = labcode.id 
                 AND er.id = (
@@ -201,17 +224,7 @@ export class AnalysisService {
                   FROM etl_results er2 
                   WHERE er2.labcode_lab_session_id = labcode.id
                 )
-                AND er.status IN (:...processingStatuses)
-              ) OR 
-              EXISTS (
-                SELECT 1 FROM fastq_file_pairs fp 
-                WHERE fp.labcode_lab_session_id = labcode.id 
-                AND fp.id = (
-                  SELECT MAX(fp2.id) 
-                  FROM fastq_file_pairs fp2 
-                  WHERE fp2.labcode_lab_session_id = labcode.id
-                )
-                AND fp.status IN (:...fastqProcessingStatuses)
+                AND er.status = :excludeRejectedStatus
               )
             )`,
             {
@@ -225,6 +238,7 @@ export class AnalysisService {
                 FastqFileStatus.WAIT_FOR_APPROVAL,
                 FastqFileStatus.REJECTED,
               ],
+              excludeRejectedStatus: EtlResultStatus.REJECTED,
             },
           );
           break;
@@ -241,21 +255,11 @@ export class AnalysisService {
                   WHERE er2.labcode_lab_session_id = labcode.id
                 )
                 AND er.status = :rejectedStatus
-              ) OR 
-              EXISTS (
-                SELECT 1 FROM fastq_file_pairs fp 
-                WHERE fp.labcode_lab_session_id = labcode.id 
-                AND fp.id = (
-                  SELECT MAX(fp2.id) 
-                  FROM fastq_file_pairs fp2 
-                  WHERE fp2.labcode_lab_session_id = labcode.id
-                )
-                AND fp.status = :rejectedFastqStatus
               )
             )`,
             {
               rejectedStatus: EtlResultStatus.REJECTED,
-              rejectedFastqStatus: FastqFileStatus.REJECTED,
+              // rejectedFastqStatus: FastqFileStatus.REJECTED,
             },
           );
           break;

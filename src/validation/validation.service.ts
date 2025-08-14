@@ -146,23 +146,50 @@ export class ValidationService {
     if (filterGroup) {
       switch (filterGroup) {
         case 'processing':
-          // Include records with EtlResultStatus.WAIT_FOR_APPROVAL
+          // Include records where the latest ETL result has WAIT_FOR_APPROVAL status
           queryBuilder.andWhere(
-            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :processingStatus)',
+            `EXISTS (
+              SELECT 1 FROM etl_results er 
+              WHERE er.labcode_lab_session_id = labcode.id 
+              AND er.id = (
+                SELECT MAX(er2.id) 
+                FROM etl_results er2 
+                WHERE er2.labcode_lab_session_id = labcode.id
+              )
+              AND er.status = :processingStatus
+            )`,
             { processingStatus: EtlResultStatus.WAIT_FOR_APPROVAL },
           );
           break;
         case 'rejected':
-          // Include records with EtlResultStatus.REJECTED
+          // Include records where the latest ETL result has REJECTED status
           queryBuilder.andWhere(
-            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :rejectedStatus)',
+            `EXISTS (
+              SELECT 1 FROM etl_results er 
+              WHERE er.labcode_lab_session_id = labcode.id 
+              AND er.id = (
+                SELECT MAX(er2.id) 
+                FROM etl_results er2 
+                WHERE er2.labcode_lab_session_id = labcode.id
+              )
+              AND er.status = :rejectedStatus
+            )`,
             { rejectedStatus: EtlResultStatus.REJECTED },
           );
           break;
         case 'approved':
-          // Include records with EtlResultStatus.APPROVED
+          // Include records where the latest ETL result has APPROVED status
           queryBuilder.andWhere(
-            'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status = :approvedStatus)',
+            `EXISTS (
+              SELECT 1 FROM etl_results er 
+              WHERE er.labcode_lab_session_id = labcode.id 
+              AND er.id = (
+                SELECT MAX(er2.id) 
+                FROM etl_results er2 
+                WHERE er2.labcode_lab_session_id = labcode.id
+              )
+              AND er.status = :approvedStatus
+            )`,
             { approvedStatus: EtlResultStatus.APPROVED },
           );
           break;

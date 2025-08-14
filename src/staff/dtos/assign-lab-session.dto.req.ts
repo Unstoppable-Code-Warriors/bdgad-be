@@ -16,7 +16,6 @@ class AssignLabcodeItemDto {
 }
 
 export class AssignLabcodeDto {
-  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AssignLabcodeItemDto)

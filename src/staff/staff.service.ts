@@ -3451,13 +3451,27 @@ export class StaffService {
   /**
    * Extract bio link from S3 URL (patient-files/session-{id} part only)
    */
-  private extractBioLinkFromS3Url(s3Url: string): string {
+  async extractBioLinkFromS3Url(s3Url: string) {
     try {
-      // Example: https://d46919b3b31b61ac349836b18c9ac671.r2.cloudflarestorage.com/patient-files/session-84/gene_mutation/Mutt-bien.png
-      // Should return: patient-files/session-84
+      // Handle both s3:// and https:// URL formats
+      // Example s3://: s3://patient-files/session-106/hereditary_cancer/di-truyen-gen.png
+      // Example https://: https://d46919b3b31b61ac349836b18c9ac671.r2.cloudflarestorage.com/patient-files/session-84/gene_mutation/Mutt-bien.png
+      // Should return: patient-files/session-{id}
 
-      const url = new URL(s3Url);
-      const pathParts = url.pathname.split('/').filter((part) => part !== ''); // Remove empty parts
+      let pathParts: string[];
+
+      if (s3Url.startsWith('s3://')) {
+        // Handle s3:// URLs - extract path after s3://
+        const s3Path = s3Url.substring(5); // Remove 's3://' prefix
+        pathParts = s3Path.split('/').filter((part) => part !== ''); // Remove empty parts
+      } else if (s3Url.startsWith('http')) {
+        // Handle https:// URLs - extract path from URL
+        const url = new URL(s3Url);
+        pathParts = url.pathname.split('/').filter((part) => part !== ''); // Remove empty parts
+      } else {
+        // Handle plain path (fallback)
+        pathParts = s3Url.split('/').filter((part) => part !== '');
+      }
 
       // Find the patient-files index
       const patientFilesIndex = pathParts.findIndex(

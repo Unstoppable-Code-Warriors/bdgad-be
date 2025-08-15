@@ -141,7 +141,7 @@ export class StaffService {
     // Create a safe S3 key
     const s3Key = `${originalFileNameWithoutSpace}_${shortId}`;
 
-    const s3Url = await this.s3Service.uploadFile(
+    const s3Url = await this.s3Service.uploadFileWithHttpsUrl(
       S3Bucket.OCR_FILE_TEMP,
       s3Key,
       file.buffer,
@@ -190,7 +190,7 @@ export class StaffService {
     // Create a safe S3 key
     const s3Key = `${originalFileNameWithoutSpace}_${shortId}`;
 
-    const s3Url = await this.s3Service.uploadFile(
+    const s3Url = await this.s3Service.uploadFileWithHttpsUrl(
       S3Bucket.OCR_FILE_TEMP,
       s3Key,
       file.buffer,

@@ -63,9 +63,8 @@ export class S3Service {
 
     await this.s3Client.send(command);
 
-    // Return the S3 URL
-    const endpoint = this.configService.get<string>(Env.S3_ENDPOINT);
-    return `${endpoint}/${bucket}/${key}`;
+    // Return the S3 URL with s3:// protocol
+    return `s3://${bucket}/${key}`;
   }
 
   /**
@@ -86,6 +85,34 @@ export class S3Service {
     const key = `session-${sessionId}/${timestamp}_${fileName}`;
 
     return this.uploadFile(S3Bucket.FASTQ_FILE, key, fileBuffer, contentType);
+  }
+
+  /**
+   * Upload a file to S3 and return HTTPS URL (for OCR service compatibility)
+   * @param bucket - S3 bucket name
+   * @param key - File key/path in S3
+   * @param fileBuffer - File buffer to upload
+   * @param contentType - File content type
+   * @returns Promise<string> - The HTTPS URL of the uploaded file
+   */
+  async uploadFileWithHttpsUrl(
+    bucket: string,
+    key: string,
+    fileBuffer: Buffer,
+    contentType?: string,
+  ): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: fileBuffer,
+      ContentType: contentType,
+    });
+
+    await this.s3Client.send(command);
+
+    // Return the HTTPS URL for OCR service compatibility
+    const endpoint = this.configService.get<string>(Env.S3_ENDPOINT);
+    return `${endpoint}/${bucket}/${key}`;
   }
 
   /**
@@ -125,16 +152,24 @@ export class S3Service {
 
   /**
    * Extract key from S3 URL
-   * @param s3Url - S3 URL
+   * @param s3Url - S3 URL (either s3:// or https://)
    * @param bucket - S3 bucket name
    * @returns string - File key
    */
   extractKeyFromUrl(s3Url: string, bucket: string): string {
-    const endpoint = this.configService.get<string>(Env.S3_ENDPOINT);
-    const prefix = `${endpoint}/${bucket}/`;
+    // Handle s3:// protocol URLs
+    if (s3Url.startsWith('s3://')) {
+      const s3Prefix = `s3://${bucket}/`;
+      if (s3Url.startsWith(s3Prefix)) {
+        return s3Url.substring(s3Prefix.length);
+      }
+    }
 
-    if (s3Url.startsWith(prefix)) {
-      return s3Url.substring(prefix.length);
+    // Handle https:// protocol URLs (legacy support)
+    const endpoint = this.configService.get<string>(Env.S3_ENDPOINT);
+    const httpsPrefix = `${endpoint}/${bucket}/`;
+    if (s3Url.startsWith(httpsPrefix)) {
+      return s3Url.substring(httpsPrefix.length);
     }
 
     throw new InternalServerErrorException(`Invalid S3 URL format: ${s3Url}`);

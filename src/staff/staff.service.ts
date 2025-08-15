@@ -3453,37 +3453,27 @@ export class StaffService {
    */
   async extractBioLinkFromS3Url(s3Url: string) {
     try {
-      // Handle both s3:// and https:// URL formats
-      // Example s3://: s3://patient-files/session-106/hereditary_cancer/di-truyen-gen.png
-      // Example https://: https://d46919b3b31b61ac349836b18c9ac671.r2.cloudflarestorage.com/patient-files/session-84/gene_mutation/Mutt-bien.png
-      // Should return: patient-files/session-{id}
-
       let pathParts: string[];
 
       if (s3Url.startsWith('s3://')) {
-        // Handle s3:// URLs - extract path after s3://
-        const s3Path = s3Url.substring(5); // Remove 's3://' prefix
-        pathParts = s3Path.split('/').filter((part) => part !== ''); // Remove empty parts
+        const s3Path = s3Url.substring(5);
+        pathParts = s3Path.split('/').filter((part) => part !== '');
       } else if (s3Url.startsWith('http')) {
-        // Handle https:// URLs - extract path from URL
         const url = new URL(s3Url);
-        pathParts = url.pathname.split('/').filter((part) => part !== ''); // Remove empty parts
+        pathParts = url.pathname.split('/').filter((part) => part !== '');
       } else {
-        // Handle plain path (fallback)
         pathParts = s3Url.split('/').filter((part) => part !== '');
       }
 
-      // Find the patient-files index
       const patientFilesIndex = pathParts.findIndex(
         (part) => part === 'patient-files',
       );
 
       if (patientFilesIndex === -1) {
         this.logger.warn(`No patient-files part found in S3 URL: ${s3Url}`);
-        return s3Url; // Return original URL if no patient-files part found
+        return s3Url;
       }
 
-      // Find the session part (session-{id}) after patient-files
       const sessionIndex = pathParts.findIndex(
         (part, index) =>
           index > patientFilesIndex && part.startsWith('session-'),
@@ -3491,10 +3481,9 @@ export class StaffService {
 
       if (sessionIndex === -1) {
         this.logger.warn(`No session part found in S3 URL: ${s3Url}`);
-        return s3Url; // Return original URL if no session part found
+        return s3Url;
       }
 
-      // Extract only patient-files/session-{id}
       const bioLink = `${pathParts[patientFilesIndex]}/${pathParts[sessionIndex]}`;
 
       this.logger.log(`Extracted bio link: ${bioLink} from S3 URL: ${s3Url}`);
@@ -3504,7 +3493,7 @@ export class StaffService {
         `Failed to extract bio link from S3 URL: ${s3Url}`,
         error,
       );
-      return s3Url; // Return original URL as fallback
+      return s3Url;
     }
   }
 

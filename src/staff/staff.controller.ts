@@ -1455,4 +1455,21 @@ export class StaffController {
   async generateLabcode(@Body() request: GenerateLabcodeRequestDto) {
     return this.staffService.generateLabcode(request);
   }
+
+  @Post('test/extract-bio-link-from-s3-url')
+  @ApiTags('Staff - test linh tinh')
+  @ApiBody({
+    type: Object,
+    examples: {
+      example: {
+        summary: 'Extract BioLink from S3 URL',
+        value: {
+          s3url: 'https://example-bucket.s3.amazonaws.com/path/to/file.jpg',
+        },
+      },
+    },
+  })
+  async extractBioLinkFromS3Url(@Body() extractBioLinkDto: { s3url: string }) {
+    return this.staffService.extractBioLinkFromS3Url(extractBioLinkDto.s3url);
+  }
 }

@@ -210,19 +210,30 @@ export class AnalysisService {
 
     // Apply filterEtl functionality (filter by latest ETL result status)
     if (filterEtl) {
-      queryBuilder.andWhere(
-        `EXISTS (
-          SELECT 1 FROM etl_results er 
-          WHERE er.labcode_lab_session_id = labcode.id 
-          AND er.id = (
-            SELECT MAX(er2.id) 
-            FROM etl_results er2 
-            WHERE er2.labcode_lab_session_id = labcode.id
-          )
-          AND er.status = :filterEtlStatus
-        )`,
-        { filterEtlStatus: filterEtl },
-      );
+      if (filterEtl === 'not_yet_processing') {
+        // Filter records that have no ETL results (etlResults.length = 0)
+        queryBuilder.andWhere(
+          `NOT EXISTS (
+            SELECT 1 FROM etl_results er 
+            WHERE er.labcode_lab_session_id = labcode.id
+          )`,
+        );
+      } else {
+        // Filter by latest ETL result status
+        queryBuilder.andWhere(
+          `EXISTS (
+            SELECT 1 FROM etl_results er 
+            WHERE er.labcode_lab_session_id = labcode.id 
+            AND er.id = (
+              SELECT MAX(er2.id) 
+              FROM etl_results er2 
+              WHERE er2.labcode_lab_session_id = labcode.id
+            )
+            AND er.status = :filterEtlStatus
+          )`,
+          { filterEtlStatus: filterEtl },
+        );
+      }
     }
 
     // Apply pagination

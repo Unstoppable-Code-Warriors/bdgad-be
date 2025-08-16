@@ -74,7 +74,7 @@ export class AnalysisController {
     required: false,
     type: String,
     description:
-      'Filter by latest ETL result status (processing, completed, failed, wait_for_approval, rejected, approved)',
+      'Filter by latest ETL result status (not_yet_processing,processing, completed, failed, wait_for_approval, rejected, approved)',
   })
   async findAllAnalysisSessions(
     @Query() query: PaginationQueryDto,

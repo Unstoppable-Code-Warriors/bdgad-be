@@ -72,6 +72,8 @@ export class ValidationService {
       filterGroup,
       sortBy = 'createdAt',
       sortOrder = 'DESC',
+      dateFrom,
+      dateTo,
     } = query;
 
     // Create query builder to find labcodes where the user is assigned as validation
@@ -141,6 +143,23 @@ export class ValidationService {
         '(LOWER(labcode.labcode) LIKE :search OR LOWER(patient.barcode) LIKE :search)',
         { search: searchTerm },
       );
+    }
+
+    // Apply date range filtering on assignment request date for validation
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      queryBuilder.andWhere('assignment.requestDateValidation >= :dateFrom', {
+        dateFrom: fromDate,
+      });
+    }
+
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      queryBuilder.andWhere('assignment.requestDateValidation <= :dateTo', {
+        dateTo: toDate,
+      });
     }
 
     // Apply filterGroup functionality

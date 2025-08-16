@@ -113,6 +113,7 @@ export class PaginationQueryDto {
     'wait_for_approval',
     'rejected',
     'approved',
+    'not_yet_processing',
   ])
   filterEtl?:
     | 'processing'
@@ -120,7 +121,8 @@ export class PaginationQueryDto {
     | 'failed'
     | 'wait_for_approval'
     | 'rejected'
-    | 'approved';
+    | 'approved'
+    | 'not_yet_processing';
 
   @IsOptional()
   @Type(() => Number)

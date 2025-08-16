@@ -36,6 +36,7 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
@@ -47,6 +48,56 @@ export class ValidationController {
   constructor(private readonly validationService: ValidationService) {}
 
   @ApiTags('Validation - Sessions')
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10, max: 100)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term for labcode or patient barcode',
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description:
+      'Start date filter in YYYY-MM-DD format (filters by requestDateValidation)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description:
+      'End date filter in YYYY-MM-DD format (filters by requestDateValidation)',
+  })
+  @ApiQuery({
+    name: 'filterGroup',
+    required: false,
+    type: String,
+    description: 'Filter by ETL status (processing, rejected, approved)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    description: 'Field to sort by (default: createdAt)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    type: String,
+    description: 'Sort order: ASC or DESC (default: DESC)',
+  })
   @Get('patients')
   @AuthZ([Role.VALIDATION_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))

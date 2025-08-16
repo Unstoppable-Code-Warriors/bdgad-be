@@ -159,16 +159,20 @@ export class AnalysisService {
       );
     }
 
-    // Apply date range filtering on labcode creation date
+    // Apply date range filtering on assignment request date for analysis
     if (dateFrom) {
-      queryBuilder.andWhere('labcode.createdAt >= :dateFrom', {
-        dateFrom: new Date(dateFrom),
+      const fromDate = new Date(dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      queryBuilder.andWhere('assignment.requestDateAnalysis >= :dateFrom', {
+        dateFrom: fromDate,
       });
     }
 
     if (dateTo) {
-      queryBuilder.andWhere('labcode.createdAt <= :dateTo', {
-        dateTo: new Date(dateTo),
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      queryBuilder.andWhere('assignment.requestDateAnalysis <= :dateTo', {
+        dateTo: toDate,
       });
     }
 
@@ -462,7 +466,8 @@ export class AnalysisService {
       id: labcodeSession.id,
       labcode: [labcodeSession.labcode], // Array containing this specific labcode
       barcode: session.patient.barcode,
-      requestDateAnalysis: labcodeSession.assignment?.requestDateAnalysis || null,
+      requestDateAnalysis:
+        labcodeSession.assignment?.requestDateAnalysis || null,
       createdAt: session.createdAt,
       metadata: {}, // Empty object for backward compatibility
       patient: session.patient,

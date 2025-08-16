@@ -83,13 +83,15 @@ export class LabTestController {
     name: 'dateFrom',
     required: false,
     type: String,
-    description: 'Start date filter in YYYY-MM-DD format',
+    description:
+      'Start date filter in YYYY-MM-DD format (filters by requestDateLabTesting)',
   })
   @ApiQuery({
     name: 'dateTo',
     required: false,
     type: String,
-    description: 'End date filter in YYYY-MM-DD format',
+    description:
+      'End date filter in YYYY-MM-DD format (filters by requestDateLabTesting)',
   })
   @ApiQuery({
     name: 'filterGroup',

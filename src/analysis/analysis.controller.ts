@@ -49,6 +49,20 @@ export class AnalysisController {
   @AuthZ([Role.ANALYSIS_TECHNICIAN])
   @UsePipes(new ValidationPipe({ transform: true }))
   @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    type: String,
+    description:
+      'Start date filter in YYYY-MM-DD format (filters by requestDateAnalysis)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    type: String,
+    description:
+      'End date filter in YYYY-MM-DD format (filters by requestDateAnalysis)',
+  })
+  @ApiQuery({
     name: 'filterFastq',
     required: false,
     type: String,

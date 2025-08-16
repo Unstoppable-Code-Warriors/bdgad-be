@@ -23,14 +23,25 @@ async function bootstrap() {
   //   credentials: true,
   // });
 
+  // app.enableCors({
+  //   origin: [
+  //     /^http:\/\/localhost(:\d+)?$/,
+  //     /^https?:\/\/.*\.bdgad\.bio$/,
+  //     /^https?:\/\/bdgad\.bio$/,
+  //   ],
+  //   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  //   allowedHeaders: 'Content-Type, Authorization',
+  // });
+
   app.enableCors({
     origin: [
       /^http:\/\/localhost(:\d+)?$/,
       /^https?:\/\/.*\.bdgad\.bio$/,
       /^https?:\/\/bdgad\.bio$/,
     ],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS', // Add OPTIONS
     allowedHeaders: 'Content-Type, Authorization',
+    credentials: true, // If you're sending cookies/auth
   });
 
   app.setGlobalPrefix('api/v1');

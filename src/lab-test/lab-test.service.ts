@@ -185,21 +185,32 @@ export class LabTestService {
       );
     }
 
-    // Apply date range filtering on assignment request date for lab testing
+    const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    const zMidnightToVNStartUtc = (z: string) =>
+      new Date(new Date(z).getTime() - VN_OFFSET_MS).toISOString();
+    const zMidnightToVNEndUtc = (z: string) =>
+      new Date(
+        new Date(z).getTime() - VN_OFFSET_MS + (DAY_MS - 1),
+      ).toISOString();
+
     if (dateFrom) {
-      const fromDate = new Date(dateFrom);
-      fromDate.setHours(0, 0, 0, 0);
-      queryBuilder.andWhere('assignment.requestDateLabTesting >= :dateFrom', {
-        dateFrom: fromDate,
-      });
+      const fromUtc = zMidnightToVNStartUtc(dateFrom);
+      console.log('filter.fromUtc(Z):', fromUtc);
+      queryBuilder.andWhere(
+        `assignment.requestDateLabTesting >= (:fromUtc::timestamptz AT TIME ZONE 'UTC')`,
+        { fromUtc },
+      );
     }
 
     if (dateTo) {
-      const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      queryBuilder.andWhere('assignment.requestDateLabTesting <= :dateTo', {
-        dateTo: toDate,
-      });
+      const toUtc = zMidnightToVNEndUtc(dateTo);
+      console.log('filter.toUtc(Z):', toUtc);
+      queryBuilder.andWhere(
+        `assignment.requestDateLabTesting <= (:toUtc::timestamptz AT TIME ZONE 'UTC')`,
+        { toUtc },
+      );
     }
 
     // Apply filter functionality (filter by FastqFile status)

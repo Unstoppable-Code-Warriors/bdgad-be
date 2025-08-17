@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AnalysisService } from './analysis.service';
 import { AnalysisController } from './analysis.controller';
+import { AnalysisCronService } from './analysis.cron.service';
 import { LabSession } from '../entities/lab-session.entity';
 import { LabCodeLabSession } from '../entities/labcode-lab-session.entity';
 import { AssignLabSession } from '../entities/assign-lab-session.entity';
@@ -28,9 +30,10 @@ import { Env } from 'src/utils/constant';
     ]),
     HttpModule,
     NotificationModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AnalysisController, AnalysisQueueController],
-  providers: [AnalysisService, S3Service],
+  providers: [AnalysisService, AnalysisCronService, S3Service],
   exports: [AnalysisService],
 })
 export class AnalysisModule {}

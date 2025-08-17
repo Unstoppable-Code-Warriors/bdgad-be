@@ -238,7 +238,9 @@ export class ValidationService {
           select: {
             id: true,
             fastqFilePairId: true,
-            resultPath: true,
+            htmlResult: true,
+            excelResult: true,
+            startTime: true,
             etlCompletedAt: true,
             status: true,
             reasonReject: true,
@@ -268,7 +270,9 @@ export class ValidationService {
           latestEtlResult: latestEtlResult
             ? {
                 id: latestEtlResult.id,
-                resultPath: latestEtlResult.resultPath,
+                htmlResult: latestEtlResult.htmlResult,
+                excelResult: latestEtlResult.excelResult,
+                startTime: latestEtlResult.startTime,
                 etlCompletedAt: latestEtlResult.etlCompletedAt,
                 status: latestEtlResult.status,
                 reasonReject: latestEtlResult.reasonReject,
@@ -347,7 +351,9 @@ export class ValidationService {
       etlResults: validEtlResults.map((result) => ({
         id: result.id,
         fastqFilePairId: result.fastqFilePairId,
-        resultPath: result.resultPath,
+        htmlResult: result.htmlResult,
+        excelResult: result.excelResult,
+        startTime: result.startTime,
         etlCompletedAt: result.etlCompletedAt,
         status: result.status,
         reasonReject: result.reasonReject,
@@ -375,36 +381,6 @@ export class ValidationService {
           : null,
       })),
     };
-  }
-
-  async downloadEtlResult(etlResultId: number): Promise<string> {
-    const etlResult = await this.etlResultRepository.findOne({
-      where: { id: etlResultId },
-    });
-
-    if (!etlResult) {
-      throw new NotFoundException('ETL result not found');
-    }
-
-    // Check if ETL result is in a valid status for download
-    const validStatuses = [
-      EtlResultStatus.COMPLETED,
-      EtlResultStatus.WAIT_FOR_APPROVAL,
-      EtlResultStatus.REJECTED,
-      EtlResultStatus.APPROVED,
-    ];
-
-    if (!validStatuses.includes(etlResult.status)) {
-      throw new ForbiddenException(
-        'ETL result cannot be downloaded in current status',
-      );
-    }
-
-    // Use resultPath directly as the key (it's already stored as a key, not a full URL)
-    return this.s3Service.generatePresigned(
-      S3Bucket.ANALYSIS_RESULTS,
-      etlResult.resultPath,
-    );
   }
 
   async rejectEtlResult(
@@ -571,7 +547,8 @@ export class ValidationService {
       const alfData = {
         labcode: labcode[0] || 'unknown',
         barcode: barcode,
-        resultPath: etlResult.resultPath,
+        htmlResult: etlResult.htmlResult,
+        excelResult: etlResult.excelResult,
         fastqR1Path: etlResult.fastqPair.fastqFileR1.filePath
           ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR1.filePath, S3Bucket.FASTQ_FILE)}`
           : '',

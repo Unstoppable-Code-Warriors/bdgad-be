@@ -29,12 +29,23 @@ export class EtlResult {
   @Column({ name: 'fastq_file_pair_id', nullable: true })
   fastqFilePairId: number;
 
-  @Column({ name: 'result_path' })
-  resultPath: string;
+  @Column({ name: 'html_result', type: 'text', nullable: true })
+  htmlResult: string;
+
+  @Column({ name: 'excel_result', type: 'text', nullable: true })
+  excelResult: string;
+
+  @Column({
+    name: 'start_time',
+    type: 'timestamp',
+    nullable: true,
+  })
+  startTime: Date;
 
   @Column({
     name: 'etl_completed_at',
     type: 'timestamp',
+    nullable: true,
   })
   etlCompletedAt: Date;
 

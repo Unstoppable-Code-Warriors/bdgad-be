@@ -15,7 +15,6 @@ import { ValidationService } from './validation.service';
 import {
   ValidationSessionWithLatestEtlResponseDto,
   ValidationSessionDetailResponseDto,
-  EtlResultDownloadResponseDto,
 } from './dto/validation-response.dto';
 import {
   RejectEtlResultDto,
@@ -120,26 +119,6 @@ export class ValidationController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ValidationSessionDetailResponseDto> {
     return this.validationService.findOne(id);
-  }
-
-  @ApiTags('Validation - ETL Results')
-  @ApiOperation({ summary: 'Download an ETL result' })
-  @ApiParam({ name: 'etlResultId', type: Number })
-  @Get('etl-result/:etlResultId/download')
-  @AuthZ([Role.VALIDATION_TECHNICIAN])
-  async downloadEtlResult(
-    @Param('etlResultId', ParseIntPipe) etlResultId: number,
-  ): Promise<EtlResultDownloadResponseDto> {
-    const downloadUrl =
-      await this.validationService.downloadEtlResult(etlResultId);
-    const expiresIn = 3600; // 1 hour in seconds
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-    return {
-      downloadUrl,
-      expiresIn,
-      expiresAt,
-    };
   }
 
   @ApiTags('Validation - ETL Results')

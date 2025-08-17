@@ -26,7 +26,9 @@ export class AnalysisResponseDto {
 export class EtlResultResponseDto {
   id: number;
   fastqFilePairId?: number;
-  resultPath: string;
+  htmlResult?: string | null;
+  excelResult?: string | null;
+  startTime?: Date | null;
   etlCompletedAt: Date;
   status: string | null;
   reasonReject: string | null;
@@ -66,10 +68,4 @@ export class ValidationSessionWithLatestEtlResponseDto extends ValidationSession
 
 export class ValidationSessionDetailResponseDto extends ValidationSessionResponseDto {
   etlResults: EtlResultResponseDto[];
-}
-
-export class EtlResultDownloadResponseDto {
-  downloadUrl: string;
-  expiresIn: number;
-  expiresAt: Date;
 }

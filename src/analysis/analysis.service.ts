@@ -279,7 +279,8 @@ export class AnalysisService {
             select: {
               id: true,
               fastqFilePairId: true,
-              resultPath: true,
+              htmlResult: true,
+              excelResult: true,
               etlCompletedAt: true,
               status: true,
               reasonReject: true,
@@ -416,7 +417,9 @@ export class AnalysisService {
         etlResults: {
           id: true,
           fastqFilePairId: true,
-          resultPath: true,
+          htmlResult: true,
+          excelResult: true,
+          startTime: true,
           etlCompletedAt: true,
           status: true,
           reasonReject: true,
@@ -555,31 +558,18 @@ export class AnalysisService {
       );
     }
 
-    // Create ETL result entry with pending status
+    // Create ETL result entry with start time
     const etlResult = this.etlResultRepository.create({
       labcodeLabSessionId: fastqFilePair.labcodeLabSessionId,
       fastqFilePairId: fastqFilePair.id,
-      resultPath: '',
-      etlCompletedAt: new Date(),
+      startTime: new Date(),
+      status: EtlResultStatus.PROCESSING,
     });
 
     await this.etlResultRepository.save(etlResult);
 
-    // Start real ETL pipeline (async)
-    this.runEtlPipeline(
-      etlResult,
-      labcode,
-      barcode,
-      user.id,
-      fastqFilePair,
-    ).catch(async (error) => {
-      // Mark as failed if pipeline fails
-      etlResult.status = EtlResultStatus.FAILED;
-      etlResult.reasonReject = `Processing failed: ${error.message}`;
-      await this.etlResultRepository.save(etlResult);
-    });
     return {
-      message: 'Analysis pipeline started successfully',
+      message: 'Analysis ETL result created successfully with start time',
     };
   }
 
@@ -616,15 +606,8 @@ export class AnalysisService {
         'text/plain',
       );
 
-      // Extract key from URL for storage
-      const resultPath = this.s3Service.extractKeyFromUrl(
-        uploadUrl,
-        S3Bucket.ANALYSIS_RESULTS,
-      );
-
       // Update ETL result with success
       etlResult.status = EtlResultStatus.COMPLETED;
-      etlResult.resultPath = resultPath;
       etlResult.etlCompletedAt = new Date();
       await this.etlResultRepository.save(etlResult);
       notificaitonReqs.push({
@@ -662,7 +645,7 @@ export class AnalysisService {
     }
   }
 
-  private async runEtlPipeline(
+  async runEtlPipeline(
     etlResult: EtlResult,
     labcode: string[],
     barcode: string,
@@ -798,8 +781,14 @@ export class AnalysisService {
     data: EtlResultQueueDto,
   ): Promise<EtlResultQueueResponseDto> {
     try {
-      const { etlResultId, resultS3Url, labcode, barcode, complete_time } =
-        data;
+      const {
+        etlResultId,
+        htmlResult,
+        excelResult,
+        labcode,
+        barcode,
+        complete_time,
+      } = data;
 
       // Find the ETL result by ID
       const etlResult = await this.etlResultRepository.findOne({
@@ -821,7 +810,8 @@ export class AnalysisService {
 
       // Update ETL result with completion data
       etlResult.status = EtlResultStatus.COMPLETED;
-      etlResult.resultPath = resultS3Url;
+      etlResult.htmlResult = htmlResult;
+      etlResult.excelResult = excelResult;
       etlResult.etlCompletedAt = new Date();
       etlResult.etlCompletedQueueAt = complete_time;
       await this.etlResultRepository.save(etlResult);
@@ -892,34 +882,6 @@ Analysis completed by automated ETL pipeline
 Pipeline version: 2.1.0
 Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
 `;
-  }
-
-  async downloadEtlResult(etlResultId: number): Promise<string> {
-    const etlResult = await this.etlResultRepository.findOne({
-      where: {
-        id: etlResultId,
-        status: Not(In([EtlResultStatus.FAILED, EtlResultStatus.PROCESSING])),
-      },
-    });
-
-    if (!etlResult) {
-      throw new NotFoundException(
-        `ETL result with ID ${etlResultId} not found or not available for download`,
-      );
-    }
-
-    if (!etlResult.resultPath) {
-      throw new BadRequestException('ETL result file path not available');
-    }
-
-    // Generate presigned URL for download
-    const downloadUrl = await this.s3Service.generatePresigned(
-      S3Bucket.ANALYSIS_RESULTS,
-      etlResult.resultPath,
-      3600, // 1 hour expiry
-    );
-
-    return downloadUrl;
   }
 
   async rejectFastq(
@@ -1159,40 +1121,15 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
         });
     }
 
-    // Create a new ETL result for retry instead of updating the existing one
+    // Create a new ETL result for retry
     const newEtlResult = this.etlResultRepository.create({
       labcodeLabSessionId: etlResult.labcodeLabSessionId,
-      fastqFilePairId: latestFastqFilePair?.id || etlResult.fastqFilePairId,
-      resultPath: '',
-      etlCompletedAt: new Date(),
+      fastqFilePairId: etlResult.fastqFilePairId,
+      startTime: new Date(),
       status: EtlResultStatus.PROCESSING,
     });
 
     await this.etlResultRepository.save(newEtlResult);
-
-    // Start real ETL pipeline (async) for retry
-    if (latestFastqFilePair) {
-      this.runEtlPipeline(
-        newEtlResult,
-        labcode,
-        barcode,
-        user.id,
-        latestFastqFilePair,
-      ).catch(async (error) => {
-        // Mark as failed if pipeline fails again
-        newEtlResult.status = EtlResultStatus.FAILED;
-        newEtlResult.reasonReject = `Retry failed: ${error.message}`;
-        newEtlResult.rejectBy = user.id;
-        await this.etlResultRepository.save(newEtlResult);
-      });
-    } else {
-      // If no FastQ file pair found, mark ETL as failed
-      newEtlResult.status = EtlResultStatus.FAILED;
-      newEtlResult.reasonReject = 'No FastQ file pair found for retry';
-      newEtlResult.rejectBy = user.id;
-      await this.etlResultRepository.save(newEtlResult);
-      throw new BadRequestException('No FastQ file pair found for retry');
-    }
 
     return {
       message: 'ETL process retry started successfully with new ETL result',

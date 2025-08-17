@@ -52,7 +52,9 @@ export class FastqFilePairResponseDto {
 export class EtlResultResponseDto {
   id: number;
   fastqFilePairId?: number;
-  resultPath: string;
+  htmlResult: string;
+  excelResult: string;
+  startTime: Date;
   etlCompletedAt: Date;
   status: string | null;
   reasonReject: string | null;
@@ -94,10 +96,4 @@ export class AnalysisSessionWithLatestResponseDto extends AnalysisSessionRespons
 export class AnalysisSessionDetailResponseDto extends AnalysisSessionResponseDto {
   fastqFilePairs: FastqFilePairResponseDto[];
   etlResults: EtlResultResponseDto[];
-}
-
-export class EtlResultDownloadResponseDto {
-  downloadUrl: string;
-  expiresIn: number;
-  expiresAt: Date;
 }

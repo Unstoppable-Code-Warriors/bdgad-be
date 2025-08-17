@@ -6,7 +6,8 @@ export interface EtlResultQueueDto {
   fastq_1_url: string;
   fastq_2_url: string;
   genome: string;
-  resultS3Url: string;
+  htmlResult: string;
+  excelResult: string;
   complete_time: string | null;
 }
 

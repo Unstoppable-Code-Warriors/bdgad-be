@@ -15,7 +15,6 @@ import { AnalysisService } from './analysis.service';
 import {
   AnalysisSessionWithLatestResponseDto,
   AnalysisSessionDetailResponseDto,
-  EtlResultDownloadResponseDto,
 } from './dto/analysis-response.dto';
 import { RejectFastqDto } from './dto/analysis-request.dto';
 import {
@@ -130,25 +129,6 @@ export class AnalysisController {
       rejectDto.redoReason,
       user,
     );
-  }
-
-  @ApiTags('Analysis - ETL Results')
-  @ApiOperation({ summary: 'Download ETL Result' })
-  @Get('etl-result/:etlResultId/download')
-  @AuthZ([Role.ANALYSIS_TECHNICIAN])
-  async downloadEtlResult(
-    @Param('etlResultId', ParseIntPipe) etlResultId: number,
-  ): Promise<EtlResultDownloadResponseDto> {
-    const downloadUrl =
-      await this.analysisService.downloadEtlResult(etlResultId);
-    const expiresIn = 3600; // 1 hour in seconds
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-    return {
-      downloadUrl,
-      expiresIn,
-      expiresAt,
-    };
   }
 
   @ApiTags('Analysis - ETL Results')

@@ -204,33 +204,49 @@ export class LabTestService {
 
     // Apply filter functionality (filter by FastqFile status)
     if (filter && filter.status) {
-      queryBuilder.andWhere(
-        'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :status)',
-        { status: filter.status },
-      );
+      if (filter.status === 'not_uploaded') {
+        // Filter for labcodes that have no FastQ pairs (fastqFilePairs.length = 0)
+        queryBuilder.andWhere(
+          'NOT EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id)',
+        );
+      } else {
+        // Filter for labcodes that have FastQ pairs with the specified status
+        queryBuilder.andWhere(
+          'EXISTS (SELECT 1 FROM fastq_file_pairs fp WHERE fp.labcode_lab_session_id = labcode.id AND fp.status = :status)',
+          { status: filter.status },
+        );
+      }
     }
 
     // Apply filterGroup functionality
     if (filterGroup) {
       switch (filterGroup) {
         case 'processing':
-          // Include records where the latest FastqFilePair has status: uploaded, wait_for_approval, not_uploaded
+          // Include records where:
+          // 1. Latest FastqFilePair has status: uploaded, wait_for_approval
+          // 2. OR no FastQ pairs exist (equivalent to not_uploaded)
           queryBuilder.andWhere(
-            `EXISTS (
-              SELECT 1 FROM fastq_file_pairs fp 
-              WHERE fp.labcode_lab_session_id = labcode.id 
-              AND fp.id = (
-                SELECT MAX(fp2.id) 
-                FROM fastq_file_pairs fp2 
-                WHERE fp2.labcode_lab_session_id = labcode.id
+            `(
+              EXISTS (
+                SELECT 1 FROM fastq_file_pairs fp 
+                WHERE fp.labcode_lab_session_id = labcode.id 
+                AND fp.id = (
+                  SELECT MAX(fp2.id) 
+                  FROM fastq_file_pairs fp2 
+                  WHERE fp2.labcode_lab_session_id = labcode.id
+                )
+                AND fp.status IN (:...processingStatuses)
               )
-              AND fp.status IN (:...processingStatuses)
+              OR 
+              NOT EXISTS (
+                SELECT 1 FROM fastq_file_pairs fp 
+                WHERE fp.labcode_lab_session_id = labcode.id
+              )
             )`,
             {
               processingStatuses: [
                 FastqFileStatus.UPLOADED,
                 FastqFileStatus.WAIT_FOR_APPROVAL,
-                FastqFileStatus.NOT_UPLOADED,
               ],
             },
           );
@@ -512,12 +528,6 @@ export class LabTestService {
       throw new NotFoundException(`Labcode session with id ${id} not found`);
     }
 
-    // Check for existing FastQ pairs for this labcode session
-    const existingFastqPairs = await this.fastqFilePairRepository.find({
-      where: { labcodeLabSessionId: labcodeSession.id },
-      order: { createdAt: 'ASC' }, // Get the first (oldest) one
-    });
-
     try {
       const shortId = generateShortId();
 
@@ -543,48 +553,21 @@ export class LabTestService {
 
       const [fastqFileR1, fastqFileR2] = await Promise.all(uploadPromises);
 
-      let savedPair: FastqFilePair;
+      // Always create a new FastqFilePair (no more updating existing ones)
+      const fastqFilePair = this.fastqFilePairRepository.create({
+        labcodeLabSessionId: labcodeSession.id,
+        fastqFileR1Id: fastqFileR1.id,
+        fastqFileR2Id: fastqFileR2.id,
+        createdBy: user.id,
+        status: FastqFileStatus.UPLOADED,
+      });
 
-      // Check if this is the first FastQ pair and it has NOT_UPLOADED status
-      const firstFastqPair = existingFastqPairs.find(
-        (pair) =>
-          pair.status === FastqFileStatus.NOT_UPLOADED &&
-          !pair.fastqFileR1Id &&
-          !pair.fastqFileR2Id,
-      );
+      const savedPair = await this.fastqFilePairRepository.save(fastqFilePair);
 
-      if (firstFastqPair) {
-        // Update the existing FastQ pair with the uploaded files
-        firstFastqPair.fastqFileR1Id = fastqFileR1.id;
-        firstFastqPair.fastqFileR2Id = fastqFileR2.id;
-        firstFastqPair.status = FastqFileStatus.UPLOADED;
-        firstFastqPair.createdBy = user.id;
-        firstFastqPair.createdAt = new Date();
-
-        savedPair = await this.fastqFilePairRepository.save(firstFastqPair);
-
-        return {
-          message:
-            'FastQ file pair updated successfully (first upload for this labcode)',
-          fastqFilePairId: savedPair.id,
-        };
-      } else {
-        // Create a new FastqFilePair
-        const fastqFilePair = this.fastqFilePairRepository.create({
-          labcodeLabSessionId: labcodeSession.id,
-          fastqFileR1Id: fastqFileR1.id,
-          fastqFileR2Id: fastqFileR2.id,
-          createdBy: user.id,
-          status: FastqFileStatus.UPLOADED,
-        });
-
-        savedPair = await this.fastqFilePairRepository.save(fastqFilePair);
-
-        return {
-          message: 'FastQ file pair uploaded successfully (new upload)',
-          fastqFilePairId: savedPair.id,
-        };
-      }
+      return {
+        message: 'FastQ file pair uploaded successfully',
+        fastqFilePairId: savedPair.id,
+      };
     } catch (error) {
       throw new InternalServerErrorException(
         `Failed to upload FastQ file pair: ${error.message}`,

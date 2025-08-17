@@ -125,18 +125,7 @@ export class ValidationService {
         'analysis.metadata',
       ])
       .where('assignment.validationId = :userId', { userId: user.id })
-      .andWhere('labSession.typeLabSession = :type', { type: 'test' })
-      // Include labcodes that have ETL results with specific statuses
-      .andWhere(
-        'EXISTS (SELECT 1 FROM etl_results er WHERE er.labcode_lab_session_id = labcode.id AND er.status IN (:...allowedStatuses))',
-        {
-          allowedStatuses: [
-            EtlResultStatus.WAIT_FOR_APPROVAL,
-            EtlResultStatus.REJECTED,
-            EtlResultStatus.APPROVED,
-          ],
-        },
-      );
+      .andWhere('labSession.typeLabSession = :type', { type: 'test' });
 
     queryBuilder.orderBy('labcode.createdAt', 'DESC');
 
@@ -169,7 +158,7 @@ export class ValidationService {
     if (filterGroup) {
       switch (filterGroup) {
         case 'processing':
-          // Include records where the latest ETL result has WAIT_FOR_APPROVAL status
+          // Include records where the latest ETL result has PROCESSING or WAIT_FOR_APPROVAL status
           queryBuilder.andWhere(
             `EXISTS (
               SELECT 1 FROM etl_results er 
@@ -179,9 +168,9 @@ export class ValidationService {
                 FROM etl_results er2 
                 WHERE er2.labcode_lab_session_id = labcode.id
               )
-              AND er.status = :processingStatus
+              AND er.status = :processingStatuses
             )`,
-            { processingStatus: EtlResultStatus.WAIT_FOR_APPROVAL },
+            { processingStatuses: EtlResultStatus.WAIT_FOR_APPROVAL },
           );
           break;
         case 'rejected':

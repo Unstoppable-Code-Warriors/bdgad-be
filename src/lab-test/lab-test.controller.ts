@@ -74,6 +74,13 @@ export class LabTestController {
     description: 'Search term (applies to patient fields)',
   })
   @ApiQuery({
+    name: 'filter',
+    required: false,
+    type: Object,
+    description:
+      'Filter object with status property. For not_uploaded: filters labcodes with no FastQ pairs',
+  })
+  @ApiQuery({
     name: 'searchField',
     required: false,
     type: String,
@@ -97,7 +104,8 @@ export class LabTestController {
     name: 'filterGroup',
     required: false,
     type: String,
-    description: 'Group by status (processing, rejected, approved)',
+    description:
+      'Group by status (processing: includes uploaded, wait_for_approval, and labcodes with no FastQ pairs; rejected, approved)',
   })
   async findAllSession(
     @Query() query: PaginationQueryFilterGroupDto,

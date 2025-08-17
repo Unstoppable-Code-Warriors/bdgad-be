@@ -1601,22 +1601,6 @@ export class StaffService {
       await this.assignLabSessionRepository.save(assignments);
       this.logger.log(`Created ${assignments.length} assignment records`);
 
-      // Create FastQ file pairs with NOT_UPLOADED status for each labcode
-      const fastqPairs: FastqFilePair[] = [];
-      for (const labcodeEntity of labcodeEntities) {
-        const fastqPair = this.fastqFilePairRepository.create({
-          labcodeLabSessionId: labcodeEntity.id,
-          status: FastqFileStatus.NOT_UPLOADED,
-          createdBy: user.id,
-          createdAt: new Date(),
-        });
-        fastqPairs.push(fastqPair);
-      }
-      await this.fastqFilePairRepository.save(fastqPairs);
-      this.logger.log(
-        `Created ${fastqPairs.length} FastQ file pairs with NOT_UPLOADED status`,
-      );
-
       // Upload files and create patient file records
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -1900,22 +1884,6 @@ export class StaffService {
         await queryRunner.manager.save(assignments);
         this.logger.log(`Created ${assignments.length} assignment records`);
 
-        // Create FastQ file pairs with NOT_UPLOADED status for each labcode
-        const fastqPairs: FastqFilePair[] = [];
-        for (const labcodeEntity of labcodeEntities) {
-          const fastqPair = queryRunner.manager.create(FastqFilePair, {
-            labcodeLabSessionId: labcodeEntity.id,
-            status: FastqFileStatus.NOT_UPLOADED,
-            createdBy: user.id,
-            createdAt: new Date(),
-          });
-          fastqPairs.push(fastqPair);
-        }
-        await queryRunner.manager.save(fastqPairs);
-        this.logger.log(
-          `Created ${fastqPairs.length} FastQ file pairs with NOT_UPLOADED status`,
-        );
-
         // Get processing order
         const processingOrder =
           this.fileValidationService.getProcessingOrder(fileCategories);
@@ -2160,22 +2128,6 @@ export class StaffService {
           assignments.push(assignment);
         }
         await queryRunner.manager.save(assignments);
-
-        // Create FastQ file pairs with NOT_UPLOADED status for each labcode
-        const fastqPairs: FastqFilePair[] = [];
-        for (const labcodeEntity of labcodeEntities) {
-          const fastqPair = queryRunner.manager.create(FastqFilePair, {
-            labcodeLabSessionId: labcodeEntity.id,
-            status: FastqFileStatus.NOT_UPLOADED,
-            createdBy: user.id,
-            createdAt: new Date(),
-          });
-          fastqPairs.push(fastqPair);
-        }
-        await queryRunner.manager.save(fastqPairs);
-        this.logger.log(
-          `Created ${fastqPairs.length} FastQ file pairs with NOT_UPLOADED status`,
-        );
 
         // Upload files in processing order
         const uploadedFiles: Array<{

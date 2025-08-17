@@ -35,6 +35,10 @@ import { In } from 'typeorm';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
 import { ClientProxy } from '@nestjs/microservices';
+import {
+  zMidnightToVNEndUtc,
+  zMidnightToVNStartUtc,
+} from 'src/utils/helperDate';
 
 @Injectable()
 export class ValidationService {
@@ -145,21 +149,20 @@ export class ValidationService {
       );
     }
 
-    // Apply date range filtering on assignment request date for validation
     if (dateFrom) {
-      const fromDate = new Date(dateFrom);
-      fromDate.setHours(0, 0, 0, 0);
-      queryBuilder.andWhere('assignment.requestDateValidation >= :dateFrom', {
-        dateFrom: fromDate,
-      });
+      const fromUtc = zMidnightToVNStartUtc(dateFrom);
+      queryBuilder.andWhere(
+        `assignment.requestDateValidation >= (:fromUtc::timestamptz AT TIME ZONE 'UTC')`,
+        { fromUtc },
+      );
     }
 
     if (dateTo) {
-      const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      queryBuilder.andWhere('assignment.requestDateValidation <= :dateTo', {
-        dateTo: toDate,
-      });
+      const toUtc = zMidnightToVNEndUtc(dateTo);
+      queryBuilder.andWhere(
+        `assignment.requestDateValidation <= (:toUtc::timestamptz AT TIME ZONE 'UTC')`,
+        { toUtc },
+      );
     }
 
     // Apply filterGroup functionality

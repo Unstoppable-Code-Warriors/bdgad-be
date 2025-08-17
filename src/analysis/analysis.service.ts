@@ -43,6 +43,10 @@ import { errorLabSession, errorValidation } from 'src/utils/errorRespones';
 import { User } from 'src/entities/user.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { CreateNotificationReqDto } from 'src/notification/dto/create-notification.req.dto';
+import {
+  zMidnightToVNEndUtc,
+  zMidnightToVNStartUtc,
+} from 'src/utils/helperDate';
 
 @Injectable()
 export class AnalysisService {
@@ -159,21 +163,20 @@ export class AnalysisService {
       );
     }
 
-    // Apply date range filtering on assignment request date for analysis
     if (dateFrom) {
-      const fromDate = new Date(dateFrom);
-      fromDate.setHours(0, 0, 0, 0);
-      queryBuilder.andWhere('assignment.requestDateAnalysis >= :dateFrom', {
-        dateFrom: fromDate,
-      });
+      const fromUtc = zMidnightToVNStartUtc(dateFrom);
+      queryBuilder.andWhere(
+        `assignment.requestDateAnalysis >= (:fromUtc::timestamptz AT TIME ZONE 'UTC')`,
+        { fromUtc },
+      );
     }
 
     if (dateTo) {
-      const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      queryBuilder.andWhere('assignment.requestDateAnalysis <= :dateTo', {
-        dateTo: toDate,
-      });
+      const toUtc = zMidnightToVNEndUtc(dateTo);
+      queryBuilder.andWhere(
+        `assignment.requestDateAnalysis <= (:toUtc::timestamptz AT TIME ZONE 'UTC')`,
+        { toUtc },
+      );
     }
 
     // Apply filter functionality (filter by ETL status)

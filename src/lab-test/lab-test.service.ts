@@ -41,6 +41,7 @@ import { CreateNotificationReqDto } from 'src/notification/dto/create-notificati
 import { Notifications } from 'src/entities/notification.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { generateShortId } from 'src/utils/generateShortId';
+import { zMidnightToVNStartUtc, zMidnightToVNEndUtc } from '../utils/helperDate';
 
 @Injectable()
 export class LabTestService {
@@ -185,19 +186,8 @@ export class LabTestService {
       );
     }
 
-    const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-    const DAY_MS = 24 * 60 * 60 * 1000;
-
-    const zMidnightToVNStartUtc = (z: string) =>
-      new Date(new Date(z).getTime() - VN_OFFSET_MS).toISOString();
-    const zMidnightToVNEndUtc = (z: string) =>
-      new Date(
-        new Date(z).getTime() - VN_OFFSET_MS + (DAY_MS - 1),
-      ).toISOString();
-
     if (dateFrom) {
       const fromUtc = zMidnightToVNStartUtc(dateFrom);
-      console.log('filter.fromUtc(Z):', fromUtc);
       queryBuilder.andWhere(
         `assignment.requestDateLabTesting >= (:fromUtc::timestamptz AT TIME ZONE 'UTC')`,
         { fromUtc },
@@ -206,7 +196,6 @@ export class LabTestService {
 
     if (dateTo) {
       const toUtc = zMidnightToVNEndUtc(dateTo);
-      console.log('filter.toUtc(Z):', toUtc);
       queryBuilder.andWhere(
         `assignment.requestDateLabTesting <= (:toUtc::timestamptz AT TIME ZONE 'UTC')`,
         { toUtc },

@@ -949,95 +949,76 @@ export class StaffService {
   async getPatientsbyCreatedAtFolder() {
     this.logger.log('Starting Patient folder by createdAt process');
     try {
-      // Get all patients with their creation years and months
-      const patientsGroupedByDate = await this.patientRepository
-        .createQueryBuilder('patient')
-        .select([
-          'EXTRACT(YEAR FROM patient.createdAt) as year',
-          'EXTRACT(MONTH FROM patient.createdAt) as month',
-          'COUNT(patient.id) as total',
-        ])
-        .groupBy(
-          'EXTRACT(YEAR FROM patient.createdAt), EXTRACT(MONTH FROM patient.createdAt)',
-        )
-        .orderBy('year, month')
-        .getRawMany();
+    const patientsGroupedByDate = await this.patientRepository
+      .createQueryBuilder('patient')
+      .select([
+        'EXTRACT(YEAR FROM patient.createdAt) as year',
+        'EXTRACT(MONTH FROM patient.createdAt) as month',
+        'COUNT(patient.id) as total',
+      ])
+      .groupBy('EXTRACT(YEAR FROM patient.createdAt), EXTRACT(MONTH FROM patient.createdAt)')
+      .orderBy('year', 'DESC')   
+      .addOrderBy('month', 'DESC') 
+      .getRawMany();
 
-      // Group by year and organize into the desired structure
-      const yearData: Record<string, any> = {};
+    const yearData: Record<string, any> = {};
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // JS month 0-11
+    const startYear = 2020;
 
-      // Initialize all months with 0 for each year
-      const currentYear = new Date().getFullYear();
-      const startYear = 2020; // You can adjust this based on your data
+    for (let year = startYear; year <= currentYear; year++) {
+      yearData[year] = {
+        year,
+        months: {},
+      };
 
-      for (let year = startYear; year <= currentYear; year++) {
-        yearData[year] = {
-          year,
-          months: {},
-        };
+      const maxMonth = year === currentYear ? currentMonth : 12;
 
-        // Initialize all 12 months with 0
-        for (let month = 1; month <= 12; month++) {
-          yearData[year].months[month] = {
-            month,
-            total: 0,
-          };
-        }
-      }
-
-      // Fill in actual data
-      patientsGroupedByDate.forEach((item) => {
-        const year = item.year;
-        const month = item.month;
-        const total = parseInt(item.total, 10);
-
-        if (!yearData[year]) {
-          yearData[year] = {
-            year,
-            months: {},
-          };
-
-          // Initialize all 12 months for this year
-          for (let m = 1; m <= 12; m++) {
-            yearData[year].months[m] = {
-              month: m,
-              total: 0,
-            };
-          }
-        }
-
+      for (let month = 1; month <= maxMonth; month++) {
         yearData[year].months[month] = {
           month,
-          total,
+          total: 0,
         };
-      });
+      }
+    }
 
-      // Convert to array format and calculate year totals
-      const result = Object.values(yearData).map((yearInfo: any) => {
-        const monthsArray = Object.values(yearInfo.months);
-        const yearTotal = monthsArray.reduce(
-          (sum: number, monthData: any) => sum + monthData.total,
-          0,
-        );
+    patientsGroupedByDate.forEach((item) => {
+      const year = item.year;
+      const month = item.month;
+      const total = parseInt(item.total, 10);
 
-        return {
-          year: yearInfo.year,
-          total: yearTotal,
-          months: monthsArray,
-        };
-      });
+      if (yearData[year] && yearData[year].months[month]) {
+        yearData[year].months[month].total = total;
+      }
+    });
 
-      // Filter out years with no patients
-      const filteredResult = result.filter(
-        (yearData: any) => yearData.total > 0,
+    const result = Object.values(yearData).map((yearInfo: any) => {
+      const monthsArray = Object.values(yearInfo.months)
+        .sort((a: any, b: any) => b.month - a.month); 
+
+      const yearTotal = monthsArray.reduce(
+        (sum: number, monthData: any) => sum + monthData.total,
+        0,
       );
 
       return {
-        success: true,
-        message: 'Patient folders by creation date retrieved successfully',
-        data: filteredResult,
-        timestamp: new Date().toISOString(),
+        year: yearInfo.year,
+        total: yearTotal,
+        months: monthsArray,
       };
+    });
+
+    const filteredResult = result
+      .filter((yearData: any) => yearData.total > 0)
+      .sort((a, b) => b.year - a.year);
+
+    return {
+      success: true,
+      message: 'Patient folders by creation date retrieved successfully',
+      data: filteredResult,
+      timestamp: new Date().toISOString(),
+    };
+
     } catch (error) {
       this.logger.error(
         'Failed to get patient folders by creation date',

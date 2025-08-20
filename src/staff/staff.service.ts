@@ -2450,16 +2450,16 @@ export class StaffService {
         `Successfully assigned doctor ${doctorId} to labcode session ${labcodeLabSessionId}`,
       );
 
-      // Get the first patient file URL for the session to extract bio link
-      const patientFile = await this.patientFileRepository.findOne({
+      // Get all patient files for the session to create bio links array
+      const patientFiles = await this.patientFileRepository.find({
         where: { sessionId: labcodeSession.labSessionId },
         order: { uploadedAt: 'ASC' },
         select: { filePath: true },
       });
 
-      if (patientFile) {
-        // Extract bio link from S3 URL
-        const bioLink = this.extractBioLinkFromS3Url(patientFile.filePath);
+      if (patientFiles && patientFiles.length > 0) {
+        // Extract bio links from all S3 URLs and create array
+        const bioLinksArray = patientFiles.map((file) => file.filePath);
 
         // Emit result test info via RabbitMQ
         const resultTestData = {
@@ -2467,7 +2467,7 @@ export class StaffService {
           doctorId: doctorId,
           patientId: labcodeSession.labSession.patient.id,
           citizenId: labcodeSession.labSession.patient.citizenId,
-          link_bio: bioLink,
+          link_bio: bioLinksArray,
         };
 
         this.clientResultTestDW.emit('result-test-info', resultTestData);

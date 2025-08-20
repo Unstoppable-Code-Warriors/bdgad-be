@@ -949,76 +949,78 @@ export class StaffService {
   async getPatientsbyCreatedAtFolder() {
     this.logger.log('Starting Patient folder by createdAt process');
     try {
-    const patientsGroupedByDate = await this.patientRepository
-      .createQueryBuilder('patient')
-      .select([
-        'EXTRACT(YEAR FROM patient.createdAt) as year',
-        'EXTRACT(MONTH FROM patient.createdAt) as month',
-        'COUNT(patient.id) as total',
-      ])
-      .groupBy('EXTRACT(YEAR FROM patient.createdAt), EXTRACT(MONTH FROM patient.createdAt)')
-      .orderBy('year', 'DESC')   
-      .addOrderBy('month', 'DESC') 
-      .getRawMany();
+      const patientsGroupedByDate = await this.patientRepository
+        .createQueryBuilder('patient')
+        .select([
+          'EXTRACT(YEAR FROM patient.createdAt) as year',
+          'EXTRACT(MONTH FROM patient.createdAt) as month',
+          'COUNT(patient.id) as total',
+        ])
+        .groupBy(
+          'EXTRACT(YEAR FROM patient.createdAt), EXTRACT(MONTH FROM patient.createdAt)',
+        )
+        .orderBy('year', 'DESC')
+        .addOrderBy('month', 'ASC')
+        .getRawMany();
 
-    const yearData: Record<string, any> = {};
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1; // JS month 0-11
-    const startYear = 2020;
+      const yearData: Record<string, any> = {};
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1; // JS month 0-11
+      const startYear = 2020;
 
-    for (let year = startYear; year <= currentYear; year++) {
-      yearData[year] = {
-        year,
-        months: {},
-      };
-
-      const maxMonth = year === currentYear ? currentMonth : 12;
-
-      for (let month = 1; month <= maxMonth; month++) {
-        yearData[year].months[month] = {
-          month,
-          total: 0,
+      for (let year = startYear; year <= currentYear; year++) {
+        yearData[year] = {
+          year,
+          months: {},
         };
+
+        const maxMonth = year === currentYear ? currentMonth : 12;
+
+        for (let month = 1; month <= maxMonth; month++) {
+          yearData[year].months[month] = {
+            month,
+            total: 0,
+          };
+        }
       }
-    }
 
-    patientsGroupedByDate.forEach((item) => {
-      const year = item.year;
-      const month = item.month;
-      const total = parseInt(item.total, 10);
+      patientsGroupedByDate.forEach((item) => {
+        const year = item.year;
+        const month = item.month;
+        const total = parseInt(item.total, 10);
 
-      if (yearData[year] && yearData[year].months[month]) {
-        yearData[year].months[month].total = total;
-      }
-    });
+        if (yearData[year] && yearData[year].months[month]) {
+          yearData[year].months[month].total = total;
+        }
+      });
 
-    const result = Object.values(yearData).map((yearInfo: any) => {
-      const monthsArray = Object.values(yearInfo.months)
-        .sort((a: any, b: any) => b.month - a.month); 
+      const result = Object.values(yearData).map((yearInfo: any) => {
+        const monthsArray = Object.values(yearInfo.months).sort(
+          (a: any, b: any) => a.month - b.month,
+        );
 
-      const yearTotal = monthsArray.reduce(
-        (sum: number, monthData: any) => sum + monthData.total,
-        0,
-      );
+        const yearTotal = monthsArray.reduce(
+          (sum: number, monthData: any) => sum + monthData.total,
+          0,
+        );
+
+        return {
+          year: yearInfo.year,
+          total: yearTotal,
+          months: monthsArray,
+        };
+      });
+
+      const filteredResult = result
+        .filter((yearData: any) => yearData.total > 0)
+        .sort((a, b) => b.year - a.year);
 
       return {
-        year: yearInfo.year,
-        total: yearTotal,
-        months: monthsArray,
+        success: true,
+        message: 'Patient folders by creation date retrieved successfully',
+        data: filteredResult,
+        timestamp: new Date().toISOString(),
       };
-    });
-
-    const filteredResult = result
-      .filter((yearData: any) => yearData.total > 0)
-      .sort((a, b) => b.year - a.year);
-
-    return {
-      success: true,
-      message: 'Patient folders by creation date retrieved successfully',
-      data: filteredResult,
-      timestamp: new Date().toISOString(),
-    };
-
     } catch (error) {
       this.logger.error(
         'Failed to get patient folders by creation date',

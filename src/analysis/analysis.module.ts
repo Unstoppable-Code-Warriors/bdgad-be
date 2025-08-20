@@ -14,9 +14,7 @@ import { S3Service } from '../utils/s3.service';
 import { User } from 'src/entities/user.entity';
 import { NotificationModule } from 'src/notification/notification.module';
 import { AnalysisQueueController } from './analysis.queue.controller';
-import { ClientsModule, Transport } from '@nestjs/microservices';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Env } from 'src/utils/constant';
+import { ScheduledEtlTask } from 'src/entities/scheduled-etl-task.entity';
 
 @Module({
   imports: [
@@ -27,6 +25,7 @@ import { Env } from 'src/utils/constant';
       FastqFilePair,
       EtlResult,
       User,
+      ScheduledEtlTask,
     ]),
     HttpModule,
     NotificationModule,

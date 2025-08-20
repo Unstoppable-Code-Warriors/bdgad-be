@@ -88,8 +88,8 @@ export class AnalysisCronService {
     }
   }
 
-  // Run every 2 minutes
-  @Cron('0 */2 * * * *')
+  // Run every 3 minutes
+  @Cron('0 */3 * * * *')
   async checkStaleEtlResults() {
     this.logger.log('Checking for stale ETL results...');
 

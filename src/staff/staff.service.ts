@@ -2343,20 +2343,22 @@ export class StaffService {
       // Trigger Airflow DAG after successful assignments
       if (successCount > 0) {
         try {
-          // Get the first patient file URL for the session to use as s3Url parameter
-          const patientFile = await this.patientFileRepository.findOne({
+          // Get all patient files for the session to use as file paths array
+          const patientFiles = await this.patientFileRepository.find({
             where: { sessionId: id },
             order: { uploadedAt: 'ASC' },
             select: { filePath: true },
           });
 
-          if (patientFile) {
+          if (patientFiles && patientFiles.length > 0) {
             const successfulLabcodes = assignmentResults
               .filter((r) => r.success)
               .map((r) => r.labcode);
 
+            const filePaths = patientFiles.map((file) => file.filePath);
+
             await this.triggerAirflowDAG(
-              patientFile.filePath,
+              filePaths,
               doctorId,
               successfulLabcodes,
               labSession.patient.barcode,
@@ -3255,7 +3257,7 @@ export class StaffService {
    * Trigger Airflow DAG for processing uploaded patient files using curl command
    */
   private async triggerAirflowDAG(
-    s3Url: string,
+    filePaths: string[],
     doctorId: number,
     labcodes: string[],
     barcode: string,
@@ -3265,9 +3267,6 @@ export class StaffService {
     const execAsync = promisify(exec);
 
     try {
-      // Extract bio link from S3 URL (from beginning to session-{id} part)
-      const bioLink = this.extractBioLinkFromS3Url(s3Url);
-
       const airflowUrl = this.configService.get<string>('AIRFLOW_URL');
       const airflowUsername =
         this.configService.get<string>('AIRFLOW_USERNAME');
@@ -3284,7 +3283,7 @@ export class StaffService {
 
       const dagRunPayload = {
         conf: {
-          link_bio: bioLink,
+          link_bio: filePaths,
           doctor_id: doctorId.toString(),
           labcode: labcodes.join(','),
           barcode: barcode,

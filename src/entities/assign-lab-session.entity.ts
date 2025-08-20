@@ -11,7 +11,7 @@ import {
 } from 'typeorm';
 import { LabCodeLabSession } from './labcode-lab-session.entity';
 import { User } from './user.entity';
-import { AssignmentHistory } from './assignment-history.entity';
+
 
 @Entity('assign_lab_sessions')
 export class AssignLabSession {
@@ -70,8 +70,4 @@ export class AssignLabSession {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-
-  // One-to-many relationship with AssignmentHistory
-  @OneToMany(() => AssignmentHistory, (history) => history.assignLabSession)
-  histories: AssignmentHistory[];
 }

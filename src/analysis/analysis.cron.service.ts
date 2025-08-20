@@ -4,6 +4,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { EtlResult, EtlResultStatus } from '../entities/etl-result.entity';
 import { AnalysisService } from './analysis.service';
+import {
+  ScheduledEtlTask,
+  ScheduledTaskStatus,
+} from 'src/entities/scheduled-etl-task.entity';
 
 @Injectable()
 export class AnalysisCronService {
@@ -12,11 +16,80 @@ export class AnalysisCronService {
   constructor(
     @InjectRepository(EtlResult)
     private readonly etlResultRepository: Repository<EtlResult>,
+    @InjectRepository(ScheduledEtlTask)
+    private readonly scheduledTaskRepository: Repository<ScheduledEtlTask>,
     private readonly analysisService: AnalysisService,
   ) {}
 
-  // Run every 5 minutes
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  // Run every minute to check for scheduled ETL tasks
+  @Cron(CronExpression.EVERY_MINUTE)
+  async processScheduledEtlTasks() {
+    this.logger.log('Checking for scheduled ETL tasks...');
+
+    try {
+      // Find tasks that are ready to be processed
+      const now = new Date();
+      const readyTasks = await this.scheduledTaskRepository.find({
+        where: {
+          status: ScheduledTaskStatus.PENDING,
+          scheduledAt: LessThan(now),
+        },
+      });
+
+      if (readyTasks.length === 0) {
+        this.logger.log('No scheduled ETL tasks ready for processing');
+        return;
+      }
+
+      this.logger.log(
+        `Found ${readyTasks.length} scheduled ETL task(s) ready for processing`,
+      );
+
+      for (const task of readyTasks) {
+        try {
+          this.logger.log(`Processing scheduled ETL task ID: ${task.id}`);
+
+          // Process the ETL result
+          const result = await this.analysisService.processEtlResultFromQueue(
+            task.etlData,
+          );
+
+          if (result.success) {
+            // Mark task as completed
+            task.status = ScheduledTaskStatus.COMPLETED;
+            task.processedAt = new Date();
+          } else {
+            // Mark task as failed
+            task.status = ScheduledTaskStatus.FAILED;
+            task.errorMessage = result.message;
+            task.processedAt = new Date();
+          }
+
+          await this.scheduledTaskRepository.save(task);
+
+          this.logger.log(
+            `Successfully processed scheduled ETL task ID: ${task.id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to process scheduled ETL task ID: ${task.id}`,
+            error.stack,
+          );
+
+          // Mark task as failed
+          task.status = ScheduledTaskStatus.FAILED;
+          task.errorMessage = error.message;
+          task.processedAt = new Date();
+          await this.scheduledTaskRepository.save(task);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error processing scheduled ETL tasks:', error.stack);
+    }
+  }
+
+  // Run every 2 minutes
+  @Cron('0 */2 * * * *')
   async checkStaleEtlResults() {
     this.logger.log('Checking for stale ETL results...');
 

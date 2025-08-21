@@ -3723,4 +3723,54 @@ export class StaffService {
       this.logger.log('Pharmacy patient data processing completed');
     }
   }
+
+  /**
+   * Generate pre-signed URL for doctor access to patient files
+   * @param filePath - Patient file path (S3 URL or key path)
+   * @param expiresIn - URL expiration time in seconds (default: 3600)
+   * @returns Pre-signed download URL with expiration info
+   */
+  async getPatientFilePresignedUrl(filePath: string, expiresIn: number = 3600) {
+    try {
+      this.logger.log(
+        `Generating pre-signed URL for doctor access to file: ${filePath}`,
+      );
+
+      // Extract the S3 key from the file path
+      const s3Key = this.s3Service.extractKeyFromUrl(
+        filePath,
+        S3Bucket.PATIENT_FILES,
+      );
+
+      // Generate pre-signed URL for patient files bucket
+      const presignedUrl = await this.s3Service.generatePresigned(
+        S3Bucket.PATIENT_FILES,
+        s3Key,
+        expiresIn,
+      );
+
+      const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+      this.logger.log(
+        `Successfully generated pre-signed URL for file: ${filePath}, expires at: ${expiresAt}`,
+      );
+
+      return presignedUrl;
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate pre-signed URL for file: ${filePath}`,
+        error,
+      );
+
+      if (error.message.includes('Invalid S3 URL format')) {
+        throw new BadRequestException(
+          `Invalid file path format. Expected S3 URL or key path for patient files bucket.`,
+        );
+      }
+
+      throw new InternalServerErrorException(
+        `Failed to generate pre-signed URL: ${error.message}`,
+      );
+    }
+  }
 }

@@ -51,6 +51,7 @@ import { AssignResultTestDto } from './dtos/assign-result-test.dto';
 import { SendGeneralFileToEMRDto } from './dtos/send-general-file-to-emr.dto';
 import * as path from 'path';
 import { GenerateLabcodeRequestDto } from './dtos/generate-labcode.dto';
+import { PatientFilePresignedDto } from './dtos/patient-file-presigned.dto';
 
 @Controller('staff')
 @UseGuards(AuthGuard, RolesGuard)
@@ -1454,6 +1455,108 @@ export class StaffController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async generateLabcode(@Body() request: GenerateLabcodeRequestDto) {
     return this.staffService.generateLabcode(request);
+  }
+
+  @ApiTags('Doctor - Patient Files')
+  @Post('/patient-files/get-presigned-url')
+  @ApiOperation({
+    summary: 'Get pre-signed URL for patient file access (Doctor only)',
+    description:
+      'Generate a pre-signed URL for doctors to access patient files. Accepts patient file path and returns a temporary download URL.',
+  })
+  @ApiBody({
+    type: PatientFilePresignedDto,
+    examples: {
+      s3_url_example: {
+        summary: 'S3 URL Example',
+        value: {
+          filePath:
+            's3://patient-files/session-123/1752308785301_medical_report.pdf',
+          expiresIn: 3600,
+        },
+      },
+      https_url_example: {
+        summary: 'HTTPS URL Example',
+        value: {
+          filePath:
+            'https://example-bucket.s3.amazonaws.com/patient-files/session-456/medical_image.jpg',
+          expiresIn: 7200,
+        },
+      },
+      key_path_example: {
+        summary: 'Key Path Example',
+        value: {
+          filePath: 'patient-files/session-789/lab_results.pdf',
+          expiresIn: 1800,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pre-signed URL generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: {
+          type: 'string',
+          example: 'Pre-signed URL generated successfully',
+        },
+        data: {
+          type: 'object',
+          properties: {
+            downloadUrl: {
+              type: 'string',
+              example:
+                'https://example-bucket.s3.amazonaws.com/patient-files/session-123/file.pdf?X-Amz-Algorithm=...',
+            },
+            expiresIn: { type: 'number', example: 3600 },
+            expiresAt: { type: 'string', format: 'date-time' },
+            originalFilePath: { type: 'string' },
+            s3Key: {
+              type: 'string',
+              example: 'session-123/1752308785301_medical_report.pdf',
+            },
+          },
+        },
+        timestamp: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid file path format',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example:
+            'Invalid file path format. Expected S3 URL or key path for patient files bucket.',
+        },
+        error: { type: 'string', example: 'Bad Request' },
+        statusCode: { type: 'number', example: 400 },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only doctors can access this endpoint',
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getPatientFilePresignedUrl(
+    @Body() presignedDto: PatientFilePresignedDto,
+    @User() user: AuthenticatedUser,
+  ) {
+    this.logger.log(
+      `Doctor ${user.id} requesting pre-signed URL for file: ${presignedDto.filePath}`,
+    );
+
+    return this.staffService.getPatientFilePresignedUrl(
+      presignedDto.filePath,
+      presignedDto.expiresIn,
+    );
   }
 
   @Post('test/extract-bio-link-from-s3-url')

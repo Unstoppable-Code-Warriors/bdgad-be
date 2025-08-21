@@ -3267,6 +3267,11 @@ export class StaffService {
     const execAsync = promisify(exec);
 
     try {
+      const bioLinkKeyPath =
+        filePaths.length > 0
+          ? await this.extractBioLinkFromS3Url(filePaths[0])
+          : '';
+
       const airflowUrl = this.configService.get<string>('AIRFLOW_URL');
       const airflowUsername =
         this.configService.get<string>('AIRFLOW_USERNAME');
@@ -3283,12 +3288,13 @@ export class StaffService {
 
       const dagRunPayload = {
         conf: {
-          link_bio: filePaths,
+          link_bio: bioLinkKeyPath,
           doctor_id: doctorId.toString(),
           labcode: labcodes.join(','),
           barcode: barcode,
           patient_id: patientId.toString(),
           citizen_id: citizenId,
+          patient_files: filePaths,
         },
         logical_date: new Date().toISOString(),
       };

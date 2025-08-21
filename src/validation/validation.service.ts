@@ -536,22 +536,45 @@ export class ValidationService {
 
     // Emit message to ALF system with ETL result data
     if (etlResult.fastqPair?.fastqFileR1 && etlResult.fastqPair?.fastqFileR2) {
-      const alfData = {
-        labcode: labcode[0] || 'unknown',
-        barcode: barcode,
-        htmlResult: etlResult.htmlResult,
-        excelResult: etlResult.excelResult,
-        fastqR1Path: etlResult.fastqPair.fastqFileR1.filePath
-          ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR1.filePath, S3Bucket.FASTQ_FILE)}`
-          : '',
-        fastqR2Path: etlResult.fastqPair.fastqFileR2.filePath
-          ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR2.filePath, S3Bucket.FASTQ_FILE)}`
-          : '',
-        etlCompletedAt: etlResult.etlCompletedQueueAt,
-        comment: etlResult.reasonApprove,
-      };
+      try {
+        const alfData = {
+          labcode: labcode[0] || 'unknown',
+          barcode: barcode,
+          htmlResult: etlResult.htmlResult,
+          excelResult: etlResult.excelResult,
+          fastqR1Path: etlResult.fastqPair.fastqFileR1.filePath
+            ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR1.filePath, S3Bucket.FASTQ_FILE)}`
+            : '',
+          fastqR2Path: etlResult.fastqPair.fastqFileR2.filePath
+            ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR2.filePath, S3Bucket.FASTQ_FILE)}`
+            : '',
+          etlCompletedAt: etlResult.etlCompletedQueueAt,
+          comment: etlResult.reasonApprove,
+        };
 
-      this.client.emit('etl-result', alfData);
+        console.log(
+          `[ValidationService] Attempting to emit ETL result data for labcode: ${labcode[0]}, barcode: ${barcode}`,
+        );
+        console.log(
+          `[ValidationService] ETL data payload:`,
+          JSON.stringify(alfData, null, 2),
+        );
+
+        this.client.emit('etl-result', alfData);
+
+        console.log(
+          `[ValidationService] ETL result data emitted successfully for labcode: ${labcode[0]}, barcode: ${barcode}`,
+        );
+      } catch (error) {
+        console.error(
+          `[ValidationService] Failed to emit ETL result data for labcode: ${labcode[0]}, barcode: ${barcode}`,
+          error,
+        );
+      }
+    } else {
+      console.warn(
+        `[ValidationService] Cannot emit ETL result data - missing fastq files for labcode: ${labcode[0]}, barcode: ${barcode}`,
+      );
     }
 
     return { message: 'ETL result accepted successfully' };

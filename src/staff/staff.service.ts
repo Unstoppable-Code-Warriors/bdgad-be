@@ -66,6 +66,7 @@ import {
   GenerateLabcodeResponseDto,
 } from './dtos/generate-labcode.dto';
 import { generateShortId } from 'src/utils/generateShortId';
+import { removeAccents } from 'src/utils/removeAccents';
 import {
   FastqFilePair,
   FastqFileStatus,
@@ -1884,10 +1885,14 @@ export class StaffService {
           const file = files[fileIndex];
           const category = fileCategories[fileIndex];
 
-          const originalFileName = Buffer.from(
+          let originalFileName = Buffer.from(
             file.originalname,
             'binary',
           ).toString('utf8');
+
+          // Remove Vietnamese accents and convert to English-friendly string
+          originalFileName = removeAccents(originalFileName);
+
           const originalFileNameWithoutSpace = originalFileName.replace(
             /\s+/g,
             '-',
@@ -2364,6 +2369,7 @@ export class StaffService {
               labSession.patient.barcode,
               labSession.patient.id,
               labSession.patient.citizenId,
+              id, // lab session ID
             );
 
             this.logger.log('Airflow DAG triggered successfully');
@@ -3263,6 +3269,7 @@ export class StaffService {
     barcode: string,
     patientId: number,
     citizenId: string,
+    labSessionId: number,
   ): Promise<void> {
     const execAsync = promisify(exec);
 
@@ -3271,6 +3278,20 @@ export class StaffService {
         filePaths.length > 0
           ? await this.extractBioLinkFromS3Url(filePaths[0])
           : '';
+
+      // Get lab session with labcodes to map files to test types
+      const labSession = await this.labSessionRepository.findOne({
+        where: { id: labSessionId },
+        relations: {
+          labcodes: true,
+        },
+      });
+
+      // Create test_entries array by analyzing file paths and mapping to labcodes
+      const testEntries = await this.createTestEntriesFromFiles(
+        filePaths,
+        labSession?.labcodes || [],
+      );
 
       const airflowUrl = this.configService.get<string>('AIRFLOW_URL');
       const airflowUsername =
@@ -3289,12 +3310,12 @@ export class StaffService {
       const dagRunPayload = {
         conf: {
           link_bio: bioLinkKeyPath,
-          doctor_id: doctorId.toString(),
-          labcode: labcodes.join(','),
           barcode: barcode,
-          patient_id: patientId.toString(),
           citizen_id: citizenId,
-          patient_files: filePaths,
+          patient_id: patientId.toString(),
+          doctor_id: doctorId.toString(),
+          lab_session_id: labSessionId.toString(),
+          test_entries: testEntries,
         },
         logical_date: new Date().toISOString(),
       };
@@ -3386,6 +3407,149 @@ export class StaffService {
         'Continuing with upload process despite Airflow DAG trigger failure',
       );
     }
+  }
+
+  /**
+   * Create test entries array from file paths and labcodes
+   */
+  private async createTestEntriesFromFiles(
+    filePaths: string[],
+    labcodes: LabCodeLabSession[],
+  ): Promise<any[]> {
+    const testEntries: any[] = [];
+    const generalFiles: string[] = [];
+
+    // Group files by category from their S3 paths
+    const filesByCategory: { [key: string]: string[] } = {
+      gene_mutation: [],
+      prenatal_screening: [],
+      hereditary_cancer: [],
+      general: [],
+    };
+
+    // Analyze each file path to determine its category
+    for (const filePath of filePaths) {
+      const category = this.extractCategoryFromFilePath(filePath);
+      if (category && filesByCategory[category]) {
+        filesByCategory[category].push(filePath);
+      } else {
+        filesByCategory.general.push(filePath);
+      }
+    }
+
+    // Create entries for each test type with associated labcodes
+    for (const labcode of labcodes) {
+      const testType = this.inferTestTypeFromLabcode(labcode.labcode);
+
+      if (
+        testType &&
+        filesByCategory[testType] &&
+        filesByCategory[testType].length > 0
+      ) {
+        if (filesByCategory[testType].length === 1) {
+          // Single file for this test type
+          testEntries.push({
+            labcode: labcode.labcode,
+            type: testType,
+            file_url: filesByCategory[testType][0],
+          });
+        } else {
+          // Multiple files for this test type
+          testEntries.push({
+            labcode: labcode.labcode,
+            type: testType,
+            file_urls: filesByCategory[testType],
+          });
+        }
+
+        // Remove processed files from the category
+        filesByCategory[testType] = [];
+      }
+    }
+
+    // Add general files (files that don't match specific test types)
+    const allGeneralFiles = [
+      ...filesByCategory.general,
+      ...filesByCategory.gene_mutation,
+      ...filesByCategory.prenatal_screening,
+      ...filesByCategory.hereditary_cancer,
+    ].filter((file) => file); // Remove empty entries
+
+    if (allGeneralFiles.length > 0) {
+      testEntries.push({
+        type: 'general',
+        file_urls: allGeneralFiles,
+      });
+    }
+
+    return testEntries;
+  }
+
+  /**
+   * Extract category from file path based on S3 structure
+   */
+  private extractCategoryFromFilePath(filePath: string): string | null {
+    try {
+      // Extract path from S3 URL
+      let pathParts: string[];
+
+      if (filePath.startsWith('s3://')) {
+        const s3Path = filePath.substring(5);
+        pathParts = s3Path.split('/').filter((part) => part !== '');
+      } else if (filePath.startsWith('http')) {
+        const url = new URL(filePath);
+        pathParts = url.pathname.split('/').filter((part) => part !== '');
+      } else {
+        pathParts = filePath.split('/').filter((part) => part !== '');
+      }
+
+      // Look for category folders in the path
+      for (const part of pathParts) {
+        if (
+          [
+            'gene_mutation',
+            'prenatal_screening',
+            'hereditary_cancer',
+            'general',
+          ].includes(part)
+        ) {
+          return part;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.warn(
+        `Could not extract category from file path: ${filePath}`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Infer test type from labcode pattern
+   */
+  private inferTestTypeFromLabcode(labcode: string): string | null {
+    if (!labcode) return null;
+
+    // NIPT patterns (N3A, N4A, N5A, N24A, NCNVA)
+    if (/^N(3|4|5|24|CNV)A/.test(labcode)) {
+      return 'prenatal_screening';
+    }
+
+    // Hereditary cancer patterns (G2, G15, G20)
+    if (/^G(2|15|20)/.test(labcode)) {
+      return 'hereditary_cancer';
+    }
+
+    // Gene mutation patterns (O5, L8, LA, F8, FA, P8, PA)
+    if (/^(O5|L8|LA|F8|FA|P8|PA)/.test(labcode)) {
+      return 'gene_mutation';
+    }
+
+    // Default to gene_mutation for unknown patterns
+    return 'gene_mutation';
   }
 
   /**

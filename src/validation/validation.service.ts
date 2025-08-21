@@ -537,46 +537,79 @@ export class ValidationService {
     // Emit message to ALF system with ETL result data
     if (etlResult.fastqPair?.fastqFileR1 && etlResult.fastqPair?.fastqFileR2) {
       try {
+        // Determine test type from labcode
+        const testType = this.inferTestTypeFromLabcode(labcode[0]);
+
         const alfData = {
-          labcode: labcode[0] || 'unknown',
-          barcode: barcode,
-          htmlResult: etlResult.htmlResult,
-          excelResult: etlResult.excelResult,
-          fastqR1Path: etlResult.fastqPair.fastqFileR1.filePath
-            ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR1.filePath, S3Bucket.FASTQ_FILE)}`
-            : '',
-          fastqR2Path: etlResult.fastqPair.fastqFileR2.filePath
-            ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR2.filePath, S3Bucket.FASTQ_FILE)}`
-            : '',
-          etlCompletedAt: etlResult.etlCompletedQueueAt,
-          commentResult: reasonApprove,
+          lab_session_id: labcodeSession?.labSessionId?.toString() || 'unknown',
+          citizenId:
+            labcodeSession?.labSession?.patient?.citizenId || 'unknown',
+          info: {
+            type: testType,
+            commentResult: reasonApprove || '',
+            etlCompletedAt: etlResult.etlCompletedQueueAt,
+            excelResult: etlResult.excelResult,
+            fastqR1Path: etlResult.fastqPair.fastqFileR1.filePath
+              ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR1.filePath, S3Bucket.FASTQ_FILE)}`
+              : '',
+            fastqR2Path: etlResult.fastqPair.fastqFileR2.filePath
+              ? `s3://${this.s3Service.extractKeyFromUrl(etlResult.fastqPair.fastqFileR2.filePath, S3Bucket.FASTQ_FILE)}`
+              : '',
+            htmlResult: etlResult.htmlResult,
+            labcode: labcode[0] || 'unknown',
+          },
         };
 
         console.log(
-          `Attempting to emit ETL result data for labcode: ${labcode[0]}, barcode: ${barcode}`,
+          `[ValidationService] Attempting to emit ETL result data for labcode: ${labcode[0]}, barcode: ${barcode}`,
         );
         console.log(
-          `ETL data payload:`,
+          `[ValidationService] ETL data payload:`,
           JSON.stringify(alfData, null, 2),
         );
 
         this.client.emit('etl-result', alfData);
 
         console.log(
-          `ETL result data emitted successfully for labcode: ${labcode[0]}, barcode: ${barcode}`,
+          `[ValidationService] ETL result data emitted successfully for labcode: ${labcode[0]}, barcode: ${barcode}`,
         );
       } catch (error) {
         console.error(
-          `Failed to emit ETL result data for labcode: ${labcode[0]}, barcode: ${barcode}`,
+          `[ValidationService] Failed to emit ETL result data for labcode: ${labcode[0]}, barcode: ${barcode}`,
           error,
         );
       }
     } else {
       console.warn(
-        `Cannot emit ETL result data - missing fastq files for labcode: ${labcode[0]}, barcode: ${barcode}`,
+        `[ValidationService] Cannot emit ETL result data - missing fastq files for labcode: ${labcode[0]}, barcode: ${barcode}`,
       );
     }
 
     return { message: 'ETL result accepted successfully' };
+  }
+
+  /**
+   * Infer test type from labcode pattern
+   */
+  private inferTestTypeFromLabcode(labcode: string): string {
+    if (!labcode) return 'gene_mutation';
+
+    // NIPT patterns (N3A, N4A, N5A, N24A, NCNVA)
+    if (/^N(3|4|5|24|CNV)A/.test(labcode)) {
+      return 'prenatal_screening';
+    }
+
+    // Hereditary cancer patterns (G2, G15, G20)
+    if (/^G(2|15|20)/.test(labcode)) {
+      return 'hereditary_cancer';
+    }
+
+    // Gene mutation patterns (O5, L8, LA, F8, FA, P8, PA)
+    if (/^(O5|L8|LA|F8|FA|P8|PA)/.test(labcode)) {
+      return 'gene_mutation';
+    }
+
+    // Default to gene_mutation for unknown patterns
+    return 'gene_mutation';
   }
 }

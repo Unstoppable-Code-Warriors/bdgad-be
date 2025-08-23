@@ -2370,7 +2370,43 @@ export class StaffService {
             receiverId: labTestingId,
           };
 
-          await this.notificationService.createNotification(notificationReq);
+          this.logger.log(
+            `Creating notification for lab testing ID ${labTestingId}:`,
+            {
+              title: notificationReq.title,
+              receiverId: notificationReq.receiverId,
+              senderId: notificationReq.senderId,
+              labcode: notificationReq.labcode,
+            },
+          );
+
+          try {
+            const notificationResult =
+              await this.notificationService.createNotification(
+                notificationReq,
+              );
+
+            if (notificationResult && 'id' in notificationResult) {
+              this.logger.log(
+                `Notification created successfully for lab testing ID ${labTestingId}:`,
+                {
+                  notificationId: notificationResult.id,
+                  status: 'success',
+                },
+              );
+            } else {
+              this.logger.warn(
+                `Notification creation returned unexpected result for lab testing ID ${labTestingId}:`,
+                notificationResult,
+              );
+            }
+          } catch (notificationError) {
+            this.logger.error(
+              `Failed to create notification for lab testing ID ${labTestingId}:`,
+              notificationError,
+            );
+            // Don't fail the assignment if notification fails
+          }
 
           this.logger.log(
             `Successfully assigned labcode ${labcode} to lab testing ID ${labTestingId}`,

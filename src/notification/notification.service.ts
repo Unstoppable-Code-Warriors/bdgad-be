@@ -256,6 +256,48 @@ export class NotificationService {
       const savedNotifications =
         await this.notificationRepository.save(newNotifications);
 
+      // Emit SSE for each notification after successful batch creation
+      for (const savedNotification of savedNotifications) {
+        try {
+          // Get full notification with relations for SSE
+          const fullNotification = await this.notificationRepository
+            .createQueryBuilder('notification')
+            .leftJoinAndSelect('notification.sender', 'sender')
+            .leftJoinAndSelect('notification.receiver', 'receiver')
+            .where('notification.id = :id', { id: savedNotification.id })
+            .select([
+              'notification.id',
+              'notification.title',
+              'notification.message',
+              'notification.taskType',
+              'notification.type',
+              'notification.subType',
+              'notification.labcode',
+              'notification.barcode',
+              'sender.id',
+              'sender.name',
+              'sender.email',
+              'receiver.id',
+              'receiver.name',
+              'receiver.email',
+              'notification.isRead',
+              'notification.createdAt',
+            ])
+            .getOne();
+
+          if (fullNotification) {
+            this.sseService.emitNotificationCreated(
+              savedNotification.receiverId,
+              fullNotification,
+            );
+          }
+        } catch (e) {
+          this.logger.warn(
+            `Failed to emit SSE for notification ${savedNotification.id}: ${(e as Error).message}`,
+          );
+        }
+      }
+
       return savedNotifications;
     } catch (error) {
       this.logger.error('Failed to batch create notifications', error);

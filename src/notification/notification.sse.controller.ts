@@ -23,4 +23,14 @@ export class NotificationSseController {
     this.logger.log(`SSE stream subscribed for user ${userId}`);
     return this.sseService.subscribeToUser(userId);
   }
+
+  // Debug endpoint: GET /api/v1/notification/sse-debug
+  @Get('sse-debug')
+  getSseDebugInfo() {
+    return {
+      activeStreamsCount: this.sseService.getActiveStreamsCount(),
+      activeUserIds: this.sseService.getActiveUserIds(),
+      timestamp: new Date().toISOString(),
+    };
+  }
 }

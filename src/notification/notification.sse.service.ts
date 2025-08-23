@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { interval, map, merge, Observable, Subject } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 
 export interface SseMessage<T = unknown> {
   data: T;
@@ -18,12 +19,16 @@ export class NotificationSseService {
     if (!subject) {
       subject = new Subject<SseMessage>();
       this.userStreams.set(userId, subject);
+      this.logger.log(`Created new SSE stream for user ${userId}`);
     }
     return subject;
   }
 
   subscribeToUser(userId: number): Observable<SseMessage> {
     const subject = this.getOrCreateUserSubject(userId);
+    this.logger.log(
+      `Creating SSE subscription for user ${userId}. Total active streams: ${this.userStreams.size}`,
+    );
 
     // Heartbeat to keep Cloudflare/Nginx connection alive
     const heartbeat$ = interval(25000).pipe(
@@ -36,29 +41,72 @@ export class NotificationSseService {
       ),
     );
 
-    return merge(subject.asObservable(), heartbeat$);
+    return merge(subject.asObservable(), heartbeat$).pipe(
+      finalize(() => {
+        // Cleanup when client disconnects
+        this.cleanupUserStream(userId);
+      }),
+    );
+  }
+
+  private cleanupUserStream(userId: number): void {
+    const subject = this.userStreams.get(userId);
+    if (subject) {
+      if (!subject.closed) {
+        subject.complete();
+      }
+      this.userStreams.delete(userId);
+      this.logger.log(
+        `Cleaned up SSE stream for user ${userId}. Remaining streams: ${this.userStreams.size}`,
+      );
+    }
   }
 
   emitNotificationCreated<T = unknown>(userId: number, payload: T): void {
-    this.logger.log(`SSE emit notification_created to user ${userId}`);
-    this.getOrCreateUserSubject(userId).next({
+    this.logger.log(
+      `SSE emit notification_created to user ${userId}. Stream exists: ${this.userStreams.has(userId)}`,
+    );
+    const subject = this.getOrCreateUserSubject(userId);
+    subject.next({
       event: 'notification_created',
       data: payload,
     });
+    this.logger.log(
+      `SSE notification_created emitted successfully to user ${userId}`,
+    );
   }
 
   emitNotificationUpdated<T = unknown>(userId: number, payload: T): void {
-    this.logger.log(`SSE emit notification_updated to user ${userId}`);
-    this.getOrCreateUserSubject(userId).next({
+    this.logger.log(
+      `SSE emit notification_updated to user ${userId}. Stream exists: ${this.userStreams.has(userId)}`,
+    );
+    const subject = this.getOrCreateUserSubject(userId);
+    subject.next({
       event: 'notification_updated',
       data: payload,
     });
+    this.logger.log(
+      `SSE notification_updated emitted successfully to user ${userId}`,
+    );
   }
 
   emitSystem<T = unknown>(payload: T): void {
-    this.logger.log('SSE broadcast system_notification');
-    for (const [, subject] of this.userStreams) {
+    this.logger.log(
+      `SSE broadcast system_notification to ${this.userStreams.size} active streams`,
+    );
+    for (const [userId, subject] of this.userStreams) {
       subject.next({ event: 'system_notification', data: payload });
+      this.logger.log(`SSE system_notification sent to user ${userId}`);
     }
+  }
+
+  // Method to get active streams count for monitoring
+  getActiveStreamsCount(): number {
+    return this.userStreams.size;
+  }
+
+  // Method to get list of active user IDs for debugging
+  getActiveUserIds(): number[] {
+    return Array.from(this.userStreams.keys());
   }
 }

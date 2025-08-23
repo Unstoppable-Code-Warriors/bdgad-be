@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { interval, map, merge, Observable, Subject } from 'rxjs';
+import { interval, map, merge, Observable, Subject, timer } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 export interface SseMessage<T = unknown> {
@@ -9,18 +9,64 @@ export interface SseMessage<T = unknown> {
   retry?: number;
 }
 
+interface UserStreamInfo {
+  subject: Subject<SseMessage>;
+  lastActivity: Date;
+  isActive: boolean;
+}
+
 @Injectable()
 export class NotificationSseService {
   private readonly logger = new Logger(NotificationSseService.name);
-  private readonly userStreams = new Map<number, Subject<SseMessage>>();
+  private readonly userStreams = new Map<number, UserStreamInfo>();
   private readonly notificationBuffer = new Map<number, SseMessage[]>();
   private readonly maxBufferSize = 10; // Keep last 10 notifications
+  private readonly connectionTimeout = 60000; // 60 seconds timeout
+  private readonly cleanupInterval = 30000; // Check every 30 seconds
 
-  private getOrCreateUserSubject(userId: number): Subject<SseMessage> {
-    let subject = this.userStreams.get(userId);
-    if (!subject) {
-      subject = new Subject<SseMessage>();
-      this.userStreams.set(userId, subject);
+  constructor() {
+    // Start cleanup timer
+    this.startCleanupTimer();
+  }
+
+  private startCleanupTimer(): void {
+    timer(this.cleanupInterval, this.cleanupInterval).subscribe(() => {
+      this.cleanupInactiveStreams();
+    });
+  }
+
+  private cleanupInactiveStreams(): void {
+    const now = new Date();
+    const inactiveUsers: number[] = [];
+
+    for (const [userId, streamInfo] of this.userStreams.entries()) {
+      const timeSinceLastActivity =
+        now.getTime() - streamInfo.lastActivity.getTime();
+
+      if (timeSinceLastActivity > this.connectionTimeout) {
+        inactiveUsers.push(userId);
+        this.logger.log(
+          `Marking user ${userId} as inactive (${timeSinceLastActivity}ms since last activity)`,
+        );
+      }
+    }
+
+    // Clean up inactive streams
+    inactiveUsers.forEach((userId) => {
+      this.cleanupUserStream(userId);
+    });
+  }
+
+  private getOrCreateUserSubject(userId: number): UserStreamInfo {
+    let streamInfo = this.userStreams.get(userId);
+    if (!streamInfo) {
+      const subject = new Subject<SseMessage>();
+      streamInfo = {
+        subject,
+        lastActivity: new Date(),
+        isActive: true,
+      };
+      this.userStreams.set(userId, streamInfo);
       this.logger.log(`Created new SSE stream for user ${userId}`);
 
       // Send buffered notifications when user connects
@@ -30,19 +76,21 @@ export class NotificationSseService {
           `Sending ${bufferedNotifications.length} buffered notifications to user ${userId}`,
         );
         bufferedNotifications.forEach((notification) => {
-          if (subject) {
-            subject.next(notification);
-          }
+          subject.next(notification);
         });
         // Clear buffer after sending
         this.notificationBuffer.delete(userId);
       }
+    } else {
+      // Update last activity
+      streamInfo.lastActivity = new Date();
+      streamInfo.isActive = true;
     }
-    return subject;
+    return streamInfo;
   }
 
   subscribeToUser(userId: number): Observable<SseMessage> {
-    const subject = this.getOrCreateUserSubject(userId);
+    const streamInfo = this.getOrCreateUserSubject(userId);
     this.logger.log(
       `Creating SSE subscription for user ${userId}. Total active streams: ${this.userStreams.size}`,
     );
@@ -58,19 +106,38 @@ export class NotificationSseService {
       ),
     );
 
-    return merge(subject.asObservable(), heartbeat$).pipe(
+    // Activity tracker - update last activity on each message
+    const activityTracker$ = streamInfo.subject.asObservable().pipe(
+      map((message) => {
+        // Update last activity when user receives any message
+        const userStream = this.userStreams.get(userId);
+        if (userStream) {
+          userStream.lastActivity = new Date();
+        }
+        return message;
+      }),
+    );
+
+    // Merge heartbeat and user messages
+    const userMessages$ = merge(activityTracker$, heartbeat$);
+
+    return userMessages$.pipe(
       finalize(() => {
-        // Cleanup when client disconnects
-        this.cleanupUserStream(userId);
+        // Only cleanup if the stream is actually closed
+        const currentStream = this.userStreams.get(userId);
+        if (currentStream && currentStream.subject.closed) {
+          this.logger.log(`Stream closed for user ${userId}, cleaning up`);
+          this.cleanupUserStream(userId);
+        }
       }),
     );
   }
 
   private cleanupUserStream(userId: number): void {
-    const subject = this.userStreams.get(userId);
-    if (subject) {
-      if (!subject.closed) {
-        subject.complete();
+    const streamInfo = this.userStreams.get(userId);
+    if (streamInfo) {
+      if (!streamInfo.subject.closed) {
+        streamInfo.subject.complete();
       }
       this.userStreams.delete(userId);
       this.logger.log(
@@ -80,23 +147,30 @@ export class NotificationSseService {
   }
 
   emitNotificationCreated<T = unknown>(userId: number, payload: T): void {
-    const streamExists = this.userStreams.has(userId);
+    const streamInfo = this.userStreams.get(userId);
+    const streamExists = !!streamInfo && streamInfo.isActive;
+
     this.logger.log(
-      `SSE emit notification_created to user ${userId}. Stream exists: ${streamExists}`,
+      `SSE emit notification_created to user ${userId}. Stream exists: ${streamExists}, Stream info: ${JSON.stringify(
+        {
+          hasStream: !!streamInfo,
+          isActive: streamInfo?.isActive,
+          lastActivity: streamInfo?.lastActivity?.toISOString(),
+          subjectClosed: streamInfo?.subject.closed,
+        },
+      )}`,
     );
 
-    if (streamExists) {
+    if (streamExists && streamInfo) {
       // User is connected, emit directly
-      const subject = this.userStreams.get(userId);
-      if (subject) {
-        subject.next({
-          event: 'notification_created',
-          data: payload,
-        });
-        this.logger.log(
-          `SSE notification_created emitted successfully to user ${userId}`,
-        );
-      }
+      streamInfo.lastActivity = new Date(); // Update activity
+      streamInfo.subject.next({
+        event: 'notification_created',
+        data: payload,
+      });
+      this.logger.log(
+        `SSE notification_created emitted successfully to user ${userId}`,
+      );
     } else {
       // User not connected, buffer the notification
       const notification: SseMessage = {
@@ -123,23 +197,23 @@ export class NotificationSseService {
   }
 
   emitNotificationUpdated<T = unknown>(userId: number, payload: T): void {
-    const streamExists = this.userStreams.has(userId);
+    const streamInfo = this.userStreams.get(userId);
+    const streamExists = !!streamInfo && streamInfo.isActive;
+
     this.logger.log(
       `SSE emit notification_updated to user ${userId}. Stream exists: ${streamExists}`,
     );
 
-    if (streamExists) {
+    if (streamExists && streamInfo) {
       // User is connected, emit directly
-      const subject = this.userStreams.get(userId);
-      if (subject) {
-        subject.next({
-          event: 'notification_updated',
-          data: payload,
-        });
-        this.logger.log(
-          `SSE notification_updated emitted successfully to user ${userId}`,
-        );
-      }
+      streamInfo.lastActivity = new Date(); // Update activity
+      streamInfo.subject.next({
+        event: 'notification_updated',
+        data: payload,
+      });
+      this.logger.log(
+        `SSE notification_updated emitted successfully to user ${userId}`,
+      );
     } else {
       // User not connected, buffer the notification
       const notification: SseMessage = {
@@ -169,19 +243,44 @@ export class NotificationSseService {
     this.logger.log(
       `SSE broadcast system_notification to ${this.userStreams.size} active streams`,
     );
-    for (const [userId, subject] of this.userStreams) {
-      subject.next({ event: 'system_notification', data: payload });
-      this.logger.log(`SSE system_notification sent to user ${userId}`);
+    for (const [userId, streamInfo] of this.userStreams) {
+      if (streamInfo.isActive) {
+        streamInfo.lastActivity = new Date();
+        streamInfo.subject.next({
+          event: 'system_notification',
+          data: payload,
+        });
+        this.logger.log(`SSE system_notification sent to user ${userId}`);
+      }
     }
   }
 
   // Method to get active streams count for monitoring
   getActiveStreamsCount(): number {
-    return this.userStreams.size;
+    return Array.from(this.userStreams.values()).filter(
+      (stream) => stream.isActive,
+    ).length;
   }
 
   // Method to get list of active user IDs for debugging
   getActiveUserIds(): number[] {
-    return Array.from(this.userStreams.keys());
+    return Array.from(this.userStreams.entries())
+      .filter(([, stream]) => stream.isActive)
+      .map(([userId]) => userId);
+  }
+
+  // Method to get detailed stream info for debugging
+  getStreamInfo(userId: number): UserStreamInfo | null {
+    return this.userStreams.get(userId) || null;
+  }
+
+  // Method to manually mark user as active (for testing/debugging)
+  markUserActive(userId: number): void {
+    const streamInfo = this.userStreams.get(userId);
+    if (streamInfo) {
+      streamInfo.isActive = true;
+      streamInfo.lastActivity = new Date();
+      this.logger.log(`Manually marked user ${userId} as active`);
+    }
   }
 }

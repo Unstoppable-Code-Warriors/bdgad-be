@@ -3377,6 +3377,9 @@ export class StaffService {
         labSession?.labcodes || [],
       );
 
+      // Get patient information
+      const patientInfo = await this.getPatientById(patientId);
+
       const airflowUrl = this.configService.get<string>('AIRFLOW_URL');
       const airflowUsername =
         this.configService.get<string>('AIRFLOW_USERNAME');
@@ -3400,6 +3403,7 @@ export class StaffService {
           doctor_id: doctorId.toString(),
           lab_session_id: labSessionId.toString(),
           test_entries: testEntries,
+          patient_info: patientInfo,
         },
         logical_date: new Date().toISOString(),
       };

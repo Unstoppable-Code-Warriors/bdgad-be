@@ -6,5 +6,7 @@ export function zMidnightToVNStartUtc(z: string): string {
 }
 
 export function zMidnightToVNEndUtc(z: string): string {
-  return new Date(new Date(z).getTime() - VN_OFFSET_MS + (DAY_MS - 1)).toISOString();
+  return new Date(
+    new Date(z).getTime() - VN_OFFSET_MS + (DAY_MS - 1),
+  ).toISOString();
 }

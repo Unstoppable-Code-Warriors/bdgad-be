@@ -12,7 +12,6 @@ import {
 import { LabCodeLabSession } from './labcode-lab-session.entity';
 import { User } from './user.entity';
 
-
 @Entity('assign_lab_sessions')
 export class AssignLabSession {
   @PrimaryGeneratedColumn()

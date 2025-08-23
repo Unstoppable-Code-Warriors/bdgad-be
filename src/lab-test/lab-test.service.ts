@@ -41,7 +41,10 @@ import { CreateNotificationReqDto } from 'src/notification/dto/create-notificati
 import { Notifications } from 'src/entities/notification.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { generateShortId } from 'src/utils/generateShortId';
-import { zMidnightToVNStartUtc, zMidnightToVNEndUtc } from '../utils/helperDate';
+import {
+  zMidnightToVNStartUtc,
+  zMidnightToVNEndUtc,
+} from '../utils/helperDate';
 
 @Injectable()
 export class LabTestService {

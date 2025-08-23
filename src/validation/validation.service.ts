@@ -546,7 +546,11 @@ export class ValidationService {
             labcodeSession?.labSession?.patient?.citizenId || 'unknown',
           info: {
             type: testType,
-            commentResult: reasonApprove || '',
+            validationInfo: {
+              name: user.name,
+              email: user.email,
+              commentResult: reasonApprove || '',
+            },
             etlCompletedAt: etlResult.etlCompletedQueueAt,
             excelResult: etlResult.excelResult,
             fastqR1Path: etlResult.fastqPair.fastqFileR1.filePath

@@ -13,6 +13,8 @@ export interface SseMessage<T = unknown> {
 export class NotificationSseService {
   private readonly logger = new Logger(NotificationSseService.name);
   private readonly userStreams = new Map<number, Subject<SseMessage>>();
+  private readonly notificationBuffer = new Map<number, SseMessage[]>();
+  private readonly maxBufferSize = 10; // Keep last 10 notifications
 
   private getOrCreateUserSubject(userId: number): Subject<SseMessage> {
     let subject = this.userStreams.get(userId);
@@ -20,6 +22,21 @@ export class NotificationSseService {
       subject = new Subject<SseMessage>();
       this.userStreams.set(userId, subject);
       this.logger.log(`Created new SSE stream for user ${userId}`);
+
+      // Send buffered notifications when user connects
+      const bufferedNotifications = this.notificationBuffer.get(userId);
+      if (bufferedNotifications && bufferedNotifications.length > 0) {
+        this.logger.log(
+          `Sending ${bufferedNotifications.length} buffered notifications to user ${userId}`,
+        );
+        bufferedNotifications.forEach((notification) => {
+          if (subject) {
+            subject.next(notification);
+          }
+        });
+        // Clear buffer after sending
+        this.notificationBuffer.delete(userId);
+      }
     }
     return subject;
   }
@@ -63,31 +80,89 @@ export class NotificationSseService {
   }
 
   emitNotificationCreated<T = unknown>(userId: number, payload: T): void {
+    const streamExists = this.userStreams.has(userId);
     this.logger.log(
-      `SSE emit notification_created to user ${userId}. Stream exists: ${this.userStreams.has(userId)}`,
+      `SSE emit notification_created to user ${userId}. Stream exists: ${streamExists}`,
     );
-    const subject = this.getOrCreateUserSubject(userId);
-    subject.next({
-      event: 'notification_created',
-      data: payload,
-    });
-    this.logger.log(
-      `SSE notification_created emitted successfully to user ${userId}`,
-    );
+
+    if (streamExists) {
+      // User is connected, emit directly
+      const subject = this.userStreams.get(userId);
+      if (subject) {
+        subject.next({
+          event: 'notification_created',
+          data: payload,
+        });
+        this.logger.log(
+          `SSE notification_created emitted successfully to user ${userId}`,
+        );
+      }
+    } else {
+      // User not connected, buffer the notification
+      const notification: SseMessage = {
+        event: 'notification_created',
+        data: payload,
+      };
+
+      let userBuffer = this.notificationBuffer.get(userId);
+      if (!userBuffer) {
+        userBuffer = [];
+      }
+
+      // Add to buffer and maintain max size
+      userBuffer.push(notification);
+      if (userBuffer.length > this.maxBufferSize) {
+        userBuffer.shift(); // Remove oldest notification
+      }
+
+      this.notificationBuffer.set(userId, userBuffer);
+      this.logger.log(
+        `Notification buffered for user ${userId}. Buffer size: ${userBuffer.length}`,
+      );
+    }
   }
 
   emitNotificationUpdated<T = unknown>(userId: number, payload: T): void {
+    const streamExists = this.userStreams.has(userId);
     this.logger.log(
-      `SSE emit notification_updated to user ${userId}. Stream exists: ${this.userStreams.has(userId)}`,
+      `SSE emit notification_updated to user ${userId}. Stream exists: ${streamExists}`,
     );
-    const subject = this.getOrCreateUserSubject(userId);
-    subject.next({
-      event: 'notification_updated',
-      data: payload,
-    });
-    this.logger.log(
-      `SSE notification_updated emitted successfully to user ${userId}`,
-    );
+
+    if (streamExists) {
+      // User is connected, emit directly
+      const subject = this.userStreams.get(userId);
+      if (subject) {
+        subject.next({
+          event: 'notification_updated',
+          data: payload,
+        });
+        this.logger.log(
+          `SSE notification_updated emitted successfully to user ${userId}`,
+        );
+      }
+    } else {
+      // User not connected, buffer the notification
+      const notification: SseMessage = {
+        event: 'notification_updated',
+        data: payload,
+      };
+
+      let userBuffer = this.notificationBuffer.get(userId);
+      if (!userBuffer) {
+        userBuffer = [];
+      }
+
+      // Add to buffer and maintain max size
+      userBuffer.push(notification);
+      if (userBuffer.length > this.maxBufferSize) {
+        userBuffer.shift(); // Remove oldest notification
+      }
+
+      this.notificationBuffer.set(userId, userBuffer);
+      this.logger.log(
+        `Notification buffered for user ${userId}. Buffer size: ${userBuffer.length}`,
+      );
+    }
   }
 
   emitSystem<T = unknown>(payload: T): void {

@@ -21,8 +21,40 @@ export class NotificationSseController {
   stream(
     @Query('userId', ParseIntPipe) userId: number,
   ): Observable<SseMessage> {
-    this.logger.log(`SSE stream subscribed for user ${userId}`);
-    return this.sseService.subscribeToUser(userId);
+    this.logger.log(
+      `🔗 SSE stream subscribed for user ${userId} - Starting subscription...`,
+    );
+
+    // Log current streams before subscription
+    const currentStreams = this.sseService.getActiveStreamsCount();
+    const currentUserIds = this.sseService.getActiveUserIds();
+    this.logger.log(
+      `📊 Current SSE state - Active streams: ${currentStreams}, User IDs: [${currentUserIds.join(', ')}]`,
+    );
+
+    const subscription = this.sseService.subscribeToUser(userId);
+
+    // Log after subscription
+    setTimeout(() => {
+      const newStreams = this.sseService.getActiveStreamsCount();
+      const newUserIds = this.sseService.getActiveUserIds();
+      this.logger.log(
+        `📊 After subscription - Active streams: ${newStreams}, User IDs: [${newUserIds.join(', ')}]`,
+      );
+
+      // Check if user 52 is in the streams
+      if (userId === 52) {
+        const userStreamInfo = this.sseService.getStreamInfo(52);
+        this.logger.log(`🔍 User 52 stream info:`, {
+          hasStream: !!userStreamInfo,
+          isActive: userStreamInfo?.isActive,
+          lastActivity: userStreamInfo?.lastActivity?.toISOString(),
+          subjectClosed: userStreamInfo?.subject.closed,
+        });
+      }
+    }, 100);
+
+    return subscription;
   }
 
   // Debug endpoint: GET /api/v1/notification/sse-debug

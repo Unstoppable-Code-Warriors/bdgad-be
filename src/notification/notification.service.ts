@@ -468,4 +468,56 @@ export class NotificationService {
       );
     }
   }
+
+  /**
+   * Get initial notifications for user when connecting to SSE
+   * This method fetches the most recent notifications from DB
+   */
+  async getInitialNotifications(userId: number, limit: number = 50) {
+    this.logger.log(
+      `Start fetching initial notifications for user ${userId}, limit: ${limit}`,
+    );
+    try {
+      const queryBuilder = this.notificationRepository
+        .createQueryBuilder('notification')
+        .leftJoinAndSelect('notification.sender', 'sender')
+        .leftJoinAndSelect('notification.receiver', 'receiver')
+        .select([
+          'notification.id',
+          'notification.title',
+          'notification.message',
+          'notification.taskType',
+          'notification.type',
+          'notification.subType',
+          'notification.labcode',
+          'notification.barcode',
+          'sender.id',
+          'sender.name',
+          'sender.email',
+          'receiver.id',
+          'receiver.name',
+          'receiver.email',
+          'notification.isRead',
+          'notification.createdAt',
+        ])
+        .where('notification.receiverId = :userId', { userId })
+        .orderBy('notification.createdAt', 'DESC')
+        .limit(limit);
+
+      const notifications = await queryBuilder.getMany();
+
+      this.logger.log(
+        `Successfully fetched ${notifications.length} initial notifications for user ${userId}`,
+      );
+      return notifications;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get initial notifications for user ${userId}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to get initial notifications',
+      );
+    }
+  }
 }

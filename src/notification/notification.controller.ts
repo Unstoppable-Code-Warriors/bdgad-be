@@ -1,10 +1,8 @@
 import {
-  Body,
   Controller,
   Get,
   Logger,
   Param,
-  Post,
   Put,
   Query,
   UseGuards,
@@ -12,12 +10,12 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import {
-  ApiBody,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiSecurity,
   ApiTags,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { QueryNotificaiton } from './dto/query-notification.req.dto';
@@ -27,8 +25,8 @@ import {
   SubTypeNotification,
 } from 'src/utils/constant';
 import { AuthGuard } from 'src/auth';
-import { CreateNotificationReqDto } from './dto/create-notification.req.dto';
-import { Transform } from 'class-transformer';
+import { GetInitialNotificationsReqDto } from './dto/get-initial-notifications.req.dto';
+import { GetInitialNotificationsResDto } from './dto/get-initial-notifications.res.dto';
 
 @ApiTags('Notification')
 @UseGuards(AuthGuard)
@@ -102,6 +100,61 @@ export class NotificationController {
   @UsePipes(new ValidationPipe({ transform: true }))
   getNotifications(@Query() query: QueryNotificaiton) {
     return this.notificationService.getNotifications(query);
+  }
+
+  @Get('initial')
+  @ApiOperation({
+    summary: 'Get initial notifications for user when connecting to SSE',
+    description:
+      'Fetches the most recent notifications from DB for initial load',
+  })
+  @ApiQuery({
+    name: 'userId',
+    type: Number,
+    required: true,
+    description: 'ID of the user requesting notifications',
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: Number,
+    required: false,
+    description:
+      'Maximum number of notifications to fetch (default: 50, max: 100)',
+    example: 50,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Initial notifications retrieved successfully',
+    type: GetInitialNotificationsResDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid parameters',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getInitialNotifications(@Query() query: GetInitialNotificationsReqDto) {
+    this.logger.log(
+      `Getting initial notifications for user ${query.userId}, limit: ${query.limit}`,
+    );
+
+    const notifications =
+      await this.notificationService.getInitialNotifications(
+        query.userId,
+        query.limit,
+      );
+
+    const response: GetInitialNotificationsResDto = {
+      notifications,
+      totalCount: notifications.length,
+      userId: query.userId,
+      limit: query.limit || 50,
+    };
+
+    return response;
   }
 
   @Put(':notificationId')

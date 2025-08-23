@@ -101,6 +101,7 @@ export class AnalysisService {
         .leftJoinAndSelect('labSession.patient', 'patient')
         .leftJoinAndSelect('labcode.assignment', 'assignment')
         .leftJoinAndSelect('assignment.doctor', 'doctor')
+        .leftJoinAndSelect('assignment.labTesting', 'labTesting')
         .leftJoinAndSelect('assignment.validation', 'validation')
         .select([
           'labcode.id',
@@ -133,6 +134,10 @@ export class AnalysisService {
           'doctor.name',
           'doctor.email',
           'doctor.metadata',
+          'labTesting.id',
+          'labTesting.name',
+          'labTesting.email',
+          'labTesting.metadata',
           'validation.id',
           'validation.name',
           'validation.email',
@@ -310,6 +315,7 @@ export class AnalysisService {
           metadata: {}, // Empty object for backward compatibility
           patient: labcode.labSession.patient,
           doctor: labcode.assignment?.doctor || null,
+          labTesting: labcode.assignment?.labTesting || null,
           validation: labcode.assignment?.validation || null,
           latestFastqPairFile: latestFastqFilePair,
           latestEtlResult,

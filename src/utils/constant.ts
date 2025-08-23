@@ -57,6 +57,9 @@ export enum TypeNotification {
   ACTION = 'ACTION',
   PROCESS = 'PROCESS',
   INFO = 'INFO',
+  WARNING = 'WARNING',
+  ERROR = 'ERROR',
+  SUCCESS = 'SUCCESS',
 }
 
 export enum SubTypeNotification {

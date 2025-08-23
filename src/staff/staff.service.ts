@@ -2362,7 +2362,7 @@ export class StaffService {
             title: 'Chỉ định xét nghiệm.',
             message: `Bạn đã được chỉ định lần khám với mã labcode ${labcode} và mã barcode ${labSession.patient.barcode}`,
             taskType: TypeTaskNotification.LAB_TASK,
-            type: TypeNotification.ACTION,
+            type: TypeNotification.INFO,
             subType: SubTypeNotification.ASSIGN,
             labcode: [labcode],
             barcode: labSession.patient.barcode,

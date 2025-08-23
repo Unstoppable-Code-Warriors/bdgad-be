@@ -1020,7 +1020,7 @@ Processing time: ${Math.floor(Math.random() * 300 + 60)} seconds
       title: `Chỉ định thẩm định.`,
       message: `Bạn đã được chỉ định thẩm định lần khám với mã labcode ${formattedLabcodes} và mã barcode ${barcode}`,
       taskType: TypeTaskNotification.VALIDATION_TASK,
-      type: TypeNotification.ACTION,
+      type: TypeNotification.INFO,
       subType: SubTypeNotification.ASSIGN,
       labcode: labcode,
       barcode: barcode,

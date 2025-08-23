@@ -740,7 +740,7 @@ export class LabTestService {
       title: `Chỉ định task phân tích`,
       message: `Bạn đã được chỉ định phân tích lần khám với mã labcode ${formattedLabcode} và mã barcode ${session.patient.barcode}`,
       taskType: TypeTaskNotification.ANALYSIS_TASK,
-      type: TypeNotification.ACTION,
+      type: TypeNotification.INFO,
       subType: SubTypeNotification.ASSIGN,
       labcode: [formattedLabcode],
       barcode: session.patient.barcode,

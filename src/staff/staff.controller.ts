@@ -1582,10 +1582,13 @@ export class StaffController {
    * @param expiresIn - URL expiration time in seconds (default: 3600)
    * @returns Pre-signed download URL
    */
-  @Get('general-file-presigned-url')
+  @Post('general-file-presigned-url')
   async getGeneralFilePresignedUrl(
-    @Query('filePath') filePath: string,
+    @Body() generalFileDto: { filePath: string; expiresIn?: number },
   ): Promise<string> {
-    return this.staffService.getGeneralFilePresignedUrl(filePath);
+    return this.staffService.getGeneralFilePresignedUrl(
+      generalFileDto.filePath,
+      generalFileDto.expiresIn,
+    );
   }
 }

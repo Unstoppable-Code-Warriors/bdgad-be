@@ -1575,4 +1575,17 @@ export class StaffController {
   async extractBioLinkFromS3Url(@Body() extractBioLinkDto: { s3url: string }) {
     return this.staffService.extractBioLinkFromS3Url(extractBioLinkDto.s3url);
   }
+
+  /**
+   * Endpoint to generate pre-signed URL for general file access
+   * @param filePath - General file path (S3 URL or key path)
+   * @param expiresIn - URL expiration time in seconds (default: 3600)
+   * @returns Pre-signed download URL
+   */
+  @Get('general-file-presigned-url')
+  async getGeneralFilePresignedUrl(
+    @Query('filePath') filePath: string,
+  ): Promise<string> {
+    return this.staffService.getGeneralFilePresignedUrl(filePath);
+  }
 }

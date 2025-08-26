@@ -2179,30 +2179,6 @@ export class StaffService {
         await queryRunner.commitTransaction();
         this.logger.log('Transaction committed successfully');
 
-        // Send notification after successful upload
-        try {
-          const notificationReq: CreateNotificationReqDto = {
-            title: 'Đã tải lên kết quả xét nghiệm',
-            message: `Đã tải lên ${files.length} tệp kết quả xét nghiệm cho bệnh nhân ID ${patientId}`,
-            type: TypeNotification.INFO,
-            subType: SubTypeNotification.ACCEPT,
-            taskType: TypeTaskNotification.LAB_TASK,
-            senderId: user.id,
-            receiverId: user.id, // Self notification for now
-            labcode: sessionLabcodes,
-            barcode: patient.barcode,
-          };
-
-          await this.notificationService.createNotification(notificationReq);
-          this.logger.log('Result test upload notification sent successfully');
-        } catch (notificationError) {
-          this.logger.warn(
-            'Failed to send result test upload notification:',
-            notificationError,
-          );
-          // Don't throw here - notification failure shouldn't break the upload
-        }
-
         return {
           success: true,
           message: 'Categorized patient files uploaded successfully',

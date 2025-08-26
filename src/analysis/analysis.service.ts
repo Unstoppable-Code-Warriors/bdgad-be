@@ -695,6 +695,15 @@ export class AnalysisService {
         3600, // 1 hour
       );
 
+      console.log('ETL Analysis API called successfully:', {
+        etlResultId: etlResult.id,
+        labcode: labcode[0] || 'unknown',
+        barcode: barcode,
+        lane: 'L1',
+        fastq_1_url: fastqFileR1Url,
+        fastq_2_url: fastqFileR2Url,
+        genome: 'GATK.GRCh38',
+      });
       // Call ETL service API
       await this.callEtlAnalyzeApi({
         etlResultId: etlResult.id,
@@ -705,6 +714,7 @@ export class AnalysisService {
         fastq_2_url: fastqFileR2Url,
         genome: 'GATK.GRCh38',
       });
+
 
       notificationReqs.push({
         title: `Trạng thái file kết quả ETL #${etlResult.id}.`,
@@ -761,6 +771,7 @@ export class AnalysisService {
 
     const analyzeEndpoint = `${etlServiceUrl}/analyze`;
 
+    console.log('ETL Analysis API called successfully:', payload);
     try {
       const response = await firstValueFrom(
         this.httpService.post(analyzeEndpoint, payload, {

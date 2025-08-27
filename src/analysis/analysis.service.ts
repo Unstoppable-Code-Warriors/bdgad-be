@@ -668,6 +668,34 @@ export class AnalysisService {
       etlResult.status = EtlResultStatus.PROCESSING;
       await this.etlResultRepository.save(etlResult);
 
+      // Query etlResult to get patient ID
+      const etlResultWithPatient = await this.etlResultRepository.findOne({
+        where: { id: etlResult.id },
+        relations: {
+          labcodeLabSession: {
+            labSession: {
+              patient: true,
+            },
+          },
+        },
+        select: {
+          id: true,
+          labcodeLabSession: {
+            labSession: {
+              patient: {
+                id: true,
+              },
+            },
+          },
+        },
+      });
+
+      if (!etlResultWithPatient) {
+        throw new Error(`ETL result with ID ${etlResult.id} not found`);
+      }
+
+      const patientId = etlResultWithPatient.labcodeLabSession.labSession.patient.id;
+
       // Validate FastQ files exist
       if (!fastqFilePair.fastqFileR1 || !fastqFilePair.fastqFileR1.filePath) {
         throw new Error('FastQ file R1 is missing or has no file path');
@@ -695,6 +723,7 @@ export class AnalysisService {
         3600, // 1 hour
       );
 
+      
       console.log('ETL Analysis API called successfully:', {
         etlResultId: etlResult.id,
         labcode: labcode[0] || 'unknown',
@@ -703,7 +732,7 @@ export class AnalysisService {
         fastq_1_url: fastqFileR1Url,
         fastq_2_url: fastqFileR2Url,
         genome: 'GATK.GRCh38',
-        analysis_id: fastqFilePair.labcodeLabSession.labSession.patient.id,
+        analysis_id: patientId,
         patient_id: barcode,
         sample_name: labcode[0] || 'unknown',
       });
@@ -716,7 +745,7 @@ export class AnalysisService {
         fastq_1_url: fastqFileR1Url,
         fastq_2_url: fastqFileR2Url,
         genome: 'GATK.GRCh38',
-        analysis_id: fastqFilePair.labcodeLabSession.labSession.patient.id,
+        analysis_id: patientId,
         patient_id: barcode,
         sample_name: labcode[0] || 'unknown',
       });

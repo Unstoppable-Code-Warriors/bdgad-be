@@ -716,6 +716,7 @@ export class AnalysisService {
         fastq_1_url: fastqFileR1Url,
         fastq_2_url: fastqFileR2Url,
         genome: 'GATK.GRCh38',
+        analysis_id: Math.floor(Math.random() * 100) + 1,
         patient_id: barcode,
         sample_name: labcode[0] || 'unknown',
       });
@@ -764,6 +765,7 @@ export class AnalysisService {
     fastq_1_url: string;
     fastq_2_url: string;
     genome: string;
+    analysis_id: number;
     patient_id: string;
     sample_name: string;
   }): Promise<void> {

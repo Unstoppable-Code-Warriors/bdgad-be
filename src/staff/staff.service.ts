@@ -133,7 +133,7 @@ export class StaffService {
     this.logger.log('Starting OCR file processing');
     const shortId = generateShortId();
 
-    // Properly decode UTF-8 filename
+    // Properly decode UTF-8 filenameE
     const originalFileName = Buffer.from(file.originalname, 'binary').toString(
       'utf8',
     );
